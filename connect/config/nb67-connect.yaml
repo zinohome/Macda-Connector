@@ -23,13 +23,13 @@ pipeline:
         
         # 时间戳标准化
         root.timestamp = (
-          "%04d-%02d-%02d %02d:%02d:%02d".format(
+          "%04d-%02.0f-%02.0f %02.0f:%02.0f:%02.0f".format(
             this.src_year + 2000,
-            this.src_month,
-            this.src_day,
-            this.src_hour,
-            this.src_minute,
-            this.src_second
+            this.src_month.number(),
+            this.src_day.number(),
+            this.src_hour.number(),
+            this.src_minute.number(),
+            this.src_second.number()
           )
         ).parse_timestamp("2006-01-02 15:04:05")
         
