@@ -146,7 +146,9 @@ services:
     entrypoint: /bin/sh
     command: >-
       -c "rpk topic create signal-in --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
-      rpk topic alter-config signal-in --set retention.ms=604800000 -X brokers=redpanda-1:9092"
+      rpk topic create signal-parsed --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
+      rpk topic alter-config signal-in --set retention.ms=604800000 -X brokers=redpanda-1:9092 &&
+      rpk topic alter-config signal-parsed --set retention.ms=604800000 -X brokers=redpanda-1:9092"
     depends_on:
       redpanda-1:
         condition: service_healthy
@@ -164,14 +166,14 @@ services:
       CONFIG_FILEPATH: /tmp/config.yml
       CONSOLE_CONFIG_FILE: |
         kafka:
-          brokers: ["redpanda-1:9092"]
+          brokers: ["redpanda-1:9092", "redpanda-2:9092", "redpanda-3:9092"]
         schemaRegistry:
           enabled: true
           urls: ["http://redpanda-1:8081"]
         redpanda:
           adminApi:
             enabled: true
-            urls: ["http://redpanda-1:9644"]
+            urls: ["http://redpanda-1:9644", "http://redpanda-2:9644", "http://redpanda-3:9644"]
     ports:
       - 28080:8080
     depends_on:
@@ -201,6 +203,8 @@ services:
           kafka:
             addresses:
               - redpanda-1:9092
+              - redpanda-2:9092
+              - redpanda-3:9092
             topic: signal-in
             max_in_flight: 64
             compression: snappy
@@ -218,6 +222,23 @@ services:
           format: json
     ports:
       - 45195:4195
+    depends_on:
+      dev-create-topic:
+        condition: service_completed_successfully
+    networks:
+      - macdanet
+
+  topic-parse-connect:
+    build:
+      context: ../connect
+      dockerfile: Dockerfile.connect
+    image: connect-nb67:dev
+    container_name: topic-parse-connect
+    hostname: topic-parse-connect
+    restart: on-failure
+    command: ["-c", "/etc/connect/nb67-connect.yaml"]
+    volumes:
+      - "../connect/config/nb67-connect.yaml:/etc/connect/nb67-connect.yaml:ro"
     depends_on:
       dev-create-topic:
         condition: service_completed_successfully
