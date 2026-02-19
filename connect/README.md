@@ -94,6 +94,38 @@ docker compose -f docker-compose-Dev.yml logs -f topic-parse-connect
 - 同一个 `consumer_group` 的多实例会自动分配 partitions 并行消费
 - scale 建议遵循：实例数 $\le$ partitions 数（多出来的实例会空闲，这是正常的）
 
+### 5）常见启动报错：`exec /app/connect-nb67: no such file or directory`
+
+这个报错经常不是“文件真的不存在”，而是 Linux 在加载可执行文件时找不到对应的动态链接器（loader），典型原因是：
+
+- 在 Alpine（musl）里用 `CGO_ENABLED=1` 编译了动态链接二进制
+- 运行时镜像使用 Debian/Ubuntu（glibc）
+
+此时即便容器里确实存在 `/app/connect-nb67`，也会报：`no such file or directory`。
+
+解决方式（推荐）：改为静态编译（`CGO_ENABLED=0`）后重新构建并推送镜像。
+
+重新构建与推送（在仓库根目录执行）：
+
+```bash
+docker login harbor.naivehero.top:8443
+
+docker build \
+  -f connect/Dockerfile.connect \
+  -t harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1 \
+  connect
+
+docker push harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1
+```
+
+重新拉取并重建服务（在 compose 目录执行）：
+
+```bash
+cd baseEnv
+docker compose -f docker-compose-Dev.yml pull topic-parse-connect
+docker compose -f docker-compose-Dev.yml up -d --force-recreate topic-parse-connect
+```
+
 ## 📂 目录结构说明
 
 ```
