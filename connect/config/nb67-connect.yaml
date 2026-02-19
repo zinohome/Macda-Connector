@@ -7,8 +7,8 @@ input:
       - redpanda-3:9092
     topics:
       - signal-in
-    consumer_group: macda-phase1-parser-replay
-    start_from_oldest: true
+    consumer_group: macda-parser
+    start_from_oldest: false
     commit_period: 1s
     max_processing_period: 30s
 
