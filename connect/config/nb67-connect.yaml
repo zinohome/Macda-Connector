@@ -2,9 +2,9 @@
 input:
   kafka:
     addresses:
-      - 192.168.32.17:19092
-      - 192.168.32.17:29092
-      - 192.168.32.17:39092
+      - redpanda-1:9092
+      - redpanda-2:9092
+      - redpanda-3:9092
     topics:
       - signal-in
     consumer_group: macda-phase1-parser
@@ -120,9 +120,9 @@ pipeline:
 output:
   kafka:
     addresses:
-      - 192.168.32.17:19092
-      - 192.168.32.17:29092
-      - 192.168.32.17:39092
+      - redpanda-1:9092
+      - redpanda-2:9092
+      - redpanda-3:9092
     topic: signal-parsed
     partitioner: round_robin
     key: ${! meta("kafka_key") }
