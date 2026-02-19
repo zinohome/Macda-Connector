@@ -2,7 +2,7 @@
 FROM golang:1.23-alpine AS builder
 
 # 安装必要的构建工具
-RUN apk add --no-cache git gcc musl-dev
+RUN apk add --no-cache git
 
 WORKDIR /build
 
@@ -16,9 +16,8 @@ RUN go mod download
 # 复制源代码
 COPY cmd/connect-nb67/*.go ./
 
-# 编译二进制
-# CGO_ENABLED=1 用于支持数据库连接等
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+# 编译二进制（静态编译，避免 Alpine/musl → Debian/glibc 运行时报 "no such file or directory"）
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -o connect-nb67 \
     -ldflags="-s -w" \
     .
