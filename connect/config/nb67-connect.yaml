@@ -14,6 +14,7 @@ input:
 
 # ===== PROCESSORS: 处理管道 =====
 pipeline:
+  threads: 8
   processors:
     # 第一层：二进制解析（Kaitai生成的Go parser）
     - nb67_parser:
@@ -125,6 +126,11 @@ output:
     topic: signal-parsed
     partitioner: round_robin
     key: ${! meta("kafka_key") }
+    max_in_flight: 64
+    compression: snappy
+    batching:
+      count: 200
+      period: 100ms
     static_headers:
       x-parser-version: nb67-v1
       x-processor: connect-nb67
