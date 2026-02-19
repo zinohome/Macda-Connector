@@ -4,6 +4,96 @@
 
 ---
 
+## 🚀 构建与部署（Docker / Harbor / docker-compose）
+
+本模块最终运行形态是一个容器镜像（内置 `connect-nb67` 二进制），启动时通过 `-c` 指定配置文件（通常挂载到容器内 `/etc/connect/nb67-connect.yaml`）。
+
+### 1）构建并推送 Harbor 镜像
+
+镜像名（按当前约定）：
+
+```bash
+harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1
+```
+
+在 macOS（尤其 Apple Silicon）推荐用 buildx 显式构建 `linux/amd64`：
+
+```bash
+docker login harbor.naivehero.top:8443
+
+# 注意：build context 必须是 connect/ 目录
+docker buildx build \
+  --platform linux/amd64 \
+  -f connect/Dockerfile.connect \
+  -t harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1 \
+  --push \
+  connect
+```
+
+如果你在 `linux/amd64` 机器上构建，也可以：
+
+```bash
+docker login harbor.naivehero.top:8443
+docker build -f connect/Dockerfile.connect -t harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1 connect
+docker push harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1
+```
+
+### 2）启动（docker-compose Dev 环境）
+
+Dev 环境编排在 `baseEnv/docker-compose-Dev.yml`，其中：
+
+- 解析服务：`topic-parse-connect`（消费 `signal-in` → 输出 `signal-parsed`）
+- 同步服务：`topic-in-connect`（测试环境使用，从 mock topic 同步到集群 topic）
+
+启动：
+
+```bash
+cd baseEnv
+docker compose -f docker-compose-Dev.yml up -d
+```
+
+配置挂载路径（当前约定）：
+
+- 宿主机：`/data/MACDA2/connect/config/nb67-connect.yaml`
+- 容器内：`/etc/connect/nb67-connect.yaml`
+
+### 3）动态调整 scale（运行中扩/缩容）
+
+`docker compose` 支持在运行中动态调整副本数量：
+
+```bash
+cd baseEnv
+
+# 扩容到 3 个实例（适配 3 partitions 并行处理）
+docker compose -f docker-compose-Dev.yml up -d --scale topic-parse-connect=3
+
+# topic-in-connect 也支持 scale
+docker compose -f docker-compose-Dev.yml up -d --scale topic-in-connect=3
+
+# 缩容回 1
+docker compose -f docker-compose-Dev.yml up -d --scale topic-parse-connect=1
+```
+
+查看日志：
+
+```bash
+docker compose -f docker-compose-Dev.yml logs -f topic-parse-connect
+```
+
+### 4）客户环境 input topic 分区数不确定，配置怎么写？
+
+不需要在配置里写 partition 数。
+
+核心规则：
+
+- `input.kafka.topics` 指向目标 topic
+- `input.kafka.consumer_group` 固定为同一个值
+
+当客户环境 partitions 变多时：
+
+- 同一个 `consumer_group` 的多实例会自动分配 partitions 并行消费
+- scale 建议遵循：实例数 $\le$ partitions 数（多出来的实例会空闲，这是正常的）
+
 ## 📂 目录结构说明
 
 ```
