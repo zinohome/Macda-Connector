@@ -11,9 +11,12 @@
 
 set -e
 
-BROKER="192.168.32.17:19092"
+BROKER="${BROKER:-192.168.32.17:19092}"
 SIGNAL_IN="signal-in"
 SIGNAL_PARSED="signal-parsed"
+
+BROKER_HOST="${BROKER%%:*}"
+BROKER_PORT="${BROKER##*:}"
 
 echo "════════════════════════════════════════════════════════════════════════"
 echo "🧪 Test 1: Kafka连接和Topic验证"
@@ -22,7 +25,15 @@ echo ""
 
 # Step 1: 检查broker连接
 echo "Step 1️⃣  检查Broker连接... ($BROKER)"
-if timeout 5 bash -c "cat < /dev/null > /dev/tcp/192.168.32.17/19092" 2>/dev/null; then
+check_port() {
+    if command -v nc &> /dev/null; then
+        nc -vz -w 5 "${BROKER_HOST}" "${BROKER_PORT}" >/dev/null 2>&1
+        return $?
+    fi
+    timeout 5 bash -c "cat < /dev/null > /dev/tcp/${BROKER_HOST}/${BROKER_PORT}" 2>/dev/null
+}
+
+if check_port; then
     echo "  ✅ Broker可达"
 else
     echo "  ❌ Broker不可达: $BROKER"
@@ -30,6 +41,7 @@ else
     echo "    1. 检查192.168.32.17是否在线"
     echo "    2. 检查防火墙是否允许19092端口"
     echo "    3. 检查Redpanda是否已启动: docker-compose ps"
+    echo "    4. 本机执行: nc -vz 192.168.32.17 19092"
     exit 1
 fi
 echo ""

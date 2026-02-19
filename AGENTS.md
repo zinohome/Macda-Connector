@@ -150,17 +150,13 @@ bd sync               # 与 git 同步状态
 
 - 优先使用仓库感知的检索/读取/编辑流程，避免过度依赖 shell。
 - 优先使用补丁方式编辑，保证 diff 可审计。
-- 复杂任务需要保留本地执行痕迹：
-  - `.codex/operations-log.md`
-  - `.codex/testing.md`
-  - `.codex/review-report.md`
+- 复杂任务需要保留本地执行痕迹
 
 ### 5）优先级与冲突处理
 
 - 指令冲突时，按以下顺序执行：
   1. 当前用户明确请求
   2. 本文件 `AGENTS.md`
-  3. `AGENTS-reference.md`（补充参考）
   4. 其他项目文档
 
 

@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"os"
 
-	"github.com/redpanda-data/connect/v4/public/service"
+	_ "github.com/benthosdev/benthos/v4/public/components/kafka"
+	_ "github.com/benthosdev/benthos/v4/public/components/prometheus"
+	_ "github.com/benthosdev/benthos/v4/public/components/pure"
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 // 初始化函数 - 注册自定义处理器
@@ -22,11 +23,12 @@ func init() {
 					"包含字段：头部信息、时间戳、温度/湿度/压力传感器、故障诊断、新增车站信息(452-460偏移)\n",
 			).
 			Field(
-				service.NewInt64Field("log_sample_every").
+				service.NewIntField("log_sample_every").
 					Description("每处理N条消息输出日志采样（0=不采样）").
 					Default(100),
 			),
-		func(ctx context.Context, conf *service.ParsedConfig) (service.Processor, error) {
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+			_ = mgr
 			return NewNB67Processor(conf)
 		},
 	)
@@ -36,15 +38,12 @@ func init() {
 }
 
 func main() {
-	// 使用Redpanda Connect官方的CLI启动器
+	// 使用 Benthos CLI 启动器（Redpanda Connect 基于 Benthos）
 	// 这个会处理：
 	// - 命令行参数解析
 	// - 配置文件加载
 	// - 优雅关闭信号处理
 	// - Prometheus metrics导出
 	// - 日志配置
-	if err := service.Run(context.Background()); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
+	service.RunCLI(context.Background())
 }

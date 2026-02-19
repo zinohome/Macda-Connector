@@ -13,12 +13,15 @@
 
 set -e
 
-BROKER="192.168.32.17:19092"
+BROKER="${BROKER:-192.168.32.17:19092}"
 SIGNAL_IN="signal-in"
 SIGNAL_PARSED="signal-parsed"
-COMPOSE_FILE="deploy/docker-compose.stage1.yml"
 TEST_DIR="/tmp/e2e-test-$$"
 TEST_DURATION=30  # 秒
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SAMPLE_BIN_DEFAULT="$REPO_ROOT/docs/requirements/whole_frame-260203"
+SAMPLE_BIN="${SAMPLE_BIN:-$SAMPLE_BIN_DEFAULT}"
 
 echo "════════════════════════════════════════════════════════════════════════"
 echo "🧪 Test 3: 端到端完整测试"
@@ -28,18 +31,8 @@ echo ""
 mkdir -p "$TEST_DIR"
 trap "rm -rf $TEST_DIR" EXIT
 
-# Step 1: 验证Docker Compose配置
-echo "Step 1️⃣  验证Docker Compose配置..."
-
-if [ ! -f "$COMPOSE_FILE" ]; then
-    echo "  ❌ Compose文件不存在: $COMPOSE_FILE"
-    exit 1
-fi
-echo "  ✅ Compose文件存在"
-echo ""
-
-# Step 2: 检查服务状态
-echo "Step 2️⃣  检查Docker服务状态..."
+# Step 1: 检查服务状态（可选）
+echo "Step 1️⃣  检查Connect服务状态（可选）..."
 
 if command -v docker-compose &> /dev/null || command -v docker &> /dev/null; then
     echo "  ℹ️  检查connect-nb67容器状态..."
@@ -52,8 +45,7 @@ if command -v docker-compose &> /dev/null || command -v docker &> /dev/null; the
     else
         echo "  ⚠️  connect-nb67 容器未运行"
         echo ""
-        echo "    请先在192.168.32.17上执行："
-        echo "    docker-compose -f deploy/docker-compose.stage1.yml up -d"
+        echo "    请先在 192.168.32.17 上启动 connect-nb67（按你的部署方式）。"
         exit 0
     fi
 else
@@ -61,8 +53,52 @@ else
 fi
 echo ""
 
-# Step 3: 推送测试数据
-echo "Step 3️⃣  推送测试数据到signal-in..."
+# Step 2: 推送测试数据
+echo "Step 2️⃣  推送测试数据到signal-in..."
+
+if command -v python3 >/dev/null 2>&1 && [ -f "$SAMPLE_BIN" ]; then
+    echo "  ℹ️  尝试使用 Python(kafka-python) 发送二进制样本: $SAMPLE_BIN"
+    export BROKER SIGNAL_IN SAMPLE_BIN
+    if python3 - << 'PY'
+import os
+import sys
+
+broker = os.environ.get('BROKER')
+topic = os.environ.get('SIGNAL_IN')
+path = os.environ.get('SAMPLE_BIN')
+
+try:
+    from kafka import KafkaProducer
+except Exception as e:
+    print(f"kafka-python not available: {e}")
+    sys.exit(3)
+
+with open(path, 'rb') as f:
+    data = f.read()
+
+producer = KafkaProducer(bootstrap_servers=[broker])
+producer.send(topic, data)
+producer.flush(30)
+print(f"sent_bytes={len(data)}")
+PY
+    then
+        echo "  ✅ 已发送二进制样本到 $SIGNAL_IN"
+        echo ""
+    else
+        if [ "$?" = "3" ]; then
+            echo "  ⚠️  未安装 kafka-python，无法直接发送二进制 payload"
+            echo "    安装：python3 -m pip install kafka-python"
+        else
+            echo "  ⚠️  Python 发送失败（请检查 broker/topic/网络）"
+        fi
+    fi
+else
+    if [ ! -f "$SAMPLE_BIN" ]; then
+        echo "  ⚠️  未找到二进制样本文件：$SAMPLE_BIN"
+    else
+        echo "  ⚠️  未找到 python3，无法用 Python 发送二进制样本"
+    fi
+fi
 
 # 生成测试NB67二进制（462字节）
 # 这是一个示例NB67帧（简化版）
@@ -117,7 +153,8 @@ echo ""
 echo "Step 4️⃣  验证signal-parsed输出..."
 
 if command -v kafka-console-consumer &> /dev/null; then
-    echo "  等待10秒以允许处理..."
+        # 注意：kafka-console-producer 本质发送文本行，不适合严格的二进制 payload。
+        # 这里作为兜底手段（可能无法被 nb67_parser 正确解析）。
     sleep 10
     
     echo "  消费signal-parsed消息..."

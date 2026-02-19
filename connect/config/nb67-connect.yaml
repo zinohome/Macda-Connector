@@ -1,6 +1,3 @@
-version: 3
-label: macda-phase1-nb67-parser
-
 # ===== INPUT: 从Redpanda消费原始二进制数据 =====
 input:
   kafka:
@@ -12,8 +9,6 @@ input:
     start_from_oldest: false
     commit_period: 1s
     max_processing_period: 30s
-    fetch_max: 100
-    fetch_default: 10
 
 # ===== PROCESSORS: 处理管道 =====
 pipeline:
@@ -126,17 +121,16 @@ output:
     topic: signal-parsed
     partitioner: round_robin
     key: ${! meta("kafka_key") }
-    metadata:
-      - name: x-parser-version
-        value: nb67-v1
-      - name: x-processor
-        value: connect-nb67
+    static_headers:
+      x-parser-version: nb67-v1
+      x-processor: connect-nb67
 
 # ===== 日志和监控 =====
 logger:
-  level: info
+  level: INFO
   format: json
 
 metrics:
   prometheus:
-    namespace: macda
+    add_process_metrics: false
+    add_go_metrics: false
