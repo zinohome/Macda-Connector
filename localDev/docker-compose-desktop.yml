@@ -1,0 +1,27 @@
+services:
+  macdatop:
+    image: harbor.naivehero.top:8443/macda2/webtop:zino-xfce
+    container_name: macdatop
+    hostname: macdatop
+    shm_size: '1gb'
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Shanghai
+      - CUSTOM_USER=macda
+      - PASSWORD=Passw0rd
+      - LC_ALL=zh_CN.UTF-8
+      - NO_GAMEPAD=true
+    volumes:
+      - /data/MACDA2/macdatop/config:/config
+    ports:
+      - 10001:3001
+    restart: unless-stopped
+    networks:
+      - macdanet
+networks:
+  macdanet:
+    name: macdanet
+    driver: bridge
