@@ -1,0 +1,230 @@
+version: '3.8'
+services:
+  dev-init:
+    image: harbor.naivehero.top:8443/macda2/alpine:3.20
+    container_name: dev-init
+    user: "0:0"
+    command: >
+      /bin/sh -c "
+      mkdir -p /host-redpanda-1 /host-redpanda-2 /host-redpanda-3;
+      chown -R 101:101 /host-redpanda-1 /host-redpanda-2 /host-redpanda-3;
+      chmod -R ug+rwX /host-redpanda-1 /host-redpanda-2 /host-redpanda-3;
+      "
+    volumes:
+      - "/data/MACDA2/redpanda/redpanda1:/host-redpanda-1"
+      - "/data/MACDA2/redpanda/redpanda2:/host-redpanda-2"
+      - "/data/MACDA2/redpanda/redpanda3:/host-redpanda-3"
+    networks:
+      - macdanet
+
+  redpanda-1:
+    # NOTE: Please use the latest version here!
+    image: harbor.naivehero.top:8443/macda2/redpanda:v25.3.7
+    container_name: redpanda-1
+    hostname: redpanda-1
+    restart: unless-stopped
+    depends_on:
+      dev-init:
+        condition: service_completed_successfully
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda-1:9092,external://192.168.32.17:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda-1:8082,external://192.168.32.17:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr redpanda-1:33145
+      - --advertise-rpc-addr redpanda-1:33145
+      - --mode dev-container
+      - --smp 1
+      - --default-log-level=info
+      - --set redpanda.cloud_storage_enabled=false
+      - --set redpanda.cloud_storage_enable_remote_read=false
+      - --set redpanda.audit_enabled=false
+      - --set redpanda.partition_autobalancing_mode=node_add
+      - --set redpanda.core_balancing_continuous=false
+      - --set redpanda.enable_schema_id_validation=false
+    volumes:
+      - "/data/MACDA2/redpanda/redpanda1:/var/lib/redpanda/data"
+    ports:
+      - 18081:18081
+      - 18082:18082
+      - 19092:19092
+      - 19644:9644
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "info", "-X", "brokers=localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks:
+      - macdanet
+
+  redpanda-2:
+    image: harbor.naivehero.top:8443/macda2/redpanda:v25.3.7
+    container_name: redpanda-2
+    hostname: redpanda-2
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:29092
+      - --advertise-kafka-addr internal://redpanda-2:9092,external://192.168.32.17:29092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:28082
+      - --advertise-pandaproxy-addr internal://redpanda-2:8082,external://192.168.32.17:28082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:28081
+      - --rpc-addr redpanda-2:33145
+      - --advertise-rpc-addr redpanda-2:33145
+      - --mode dev-container
+      - --smp 1
+      - --default-log-level=info
+      - --seeds redpanda-1:33145
+      - --set redpanda.cloud_storage_enabled=false
+      - --set redpanda.cloud_storage_enable_remote_read=false
+      - --set redpanda.audit_enabled=false
+      - --set redpanda.partition_autobalancing_mode=node_add
+      - --set redpanda.core_balancing_continuous=false
+      - --set redpanda.enable_schema_id_validation=false
+    volumes:
+      - "/data/MACDA2/redpanda/redpanda2:/var/lib/redpanda/data"
+    ports:
+      - 28081:28081
+      - 28082:28082
+      - 29092:29092
+      - 29644:9644
+    depends_on:
+      dev-init:
+        condition: service_completed_successfully
+      redpanda-1:
+        condition: service_healthy
+    networks:
+      - macdanet
+
+  redpanda-3:
+    image: harbor.naivehero.top:8443/macda2/redpanda:v25.3.7
+    container_name: redpanda-3
+    hostname: redpanda-3
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:39092
+      - --advertise-kafka-addr internal://redpanda-3:9092,external://192.168.32.17:39092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:38082
+      - --advertise-pandaproxy-addr internal://redpanda-3:8082,external://192.168.32.17:38082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:38081
+      - --rpc-addr redpanda-3:33145
+      - --advertise-rpc-addr redpanda-3:33145
+      - --mode dev-container
+      - --smp 1
+      - --default-log-level=info
+      - --seeds redpanda-1:33145
+      - --set redpanda.cloud_storage_enabled=false
+      - --set redpanda.cloud_storage_enable_remote_read=false
+      - --set redpanda.audit_enabled=false
+      - --set redpanda.partition_autobalancing_mode=node_add
+      - --set redpanda.core_balancing_continuous=false
+      - --set redpanda.enable_schema_id_validation=false
+    volumes:
+      - "/data/MACDA2/redpanda/redpanda3:/var/lib/redpanda/data"
+    ports:
+      - 38081:38081
+      - 38082:38082
+      - 39092:39092
+      - 39644:9644
+    depends_on:
+      dev-init:
+        condition: service_completed_successfully
+      redpanda-1:
+        condition: service_healthy
+    networks:
+      - macdanet
+
+  dev-create-topic:
+    image: harbor.naivehero.top:8443/macda2/redpanda:v25.3.7
+    container_name: dev-create-topic
+    entrypoint: /bin/sh
+    command: >-
+      -c "rpk topic create signal-in --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
+      rpk topic alter-config signal-in --set retention.ms=604800000 -X brokers=redpanda-1:9092"
+    depends_on:
+      redpanda-1:
+        condition: service_healthy
+    networks:
+      - macdanet
+
+  redpanda-console:
+    image: harbor.naivehero.top:8443/macda2/redpanda-console:v3.5.2
+    container_name: redpanda-console
+    hostname: redpanda-console
+    restart: on-failure
+    entrypoint: /bin/sh
+    command: -c "echo \"$$CONSOLE_CONFIG_FILE\" > /tmp/config.yml; /app/console"
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda-1:9092"]
+        schemaRegistry:
+          enabled: true
+          urls: ["http://redpanda-1:8081"]
+        redpanda:
+          adminApi:
+            enabled: true
+            urls: ["http://redpanda-1:9644"]
+    ports:
+      - 28080:8080
+    depends_on:
+      redpanda-1:
+        condition: service_healthy
+    networks:
+      - macdanet
+
+  topic-in-connect:
+    image: harbor.naivehero.top:8443/macda2/connect:latest
+    container_name: topic-in-connect
+    hostname: topic-in-connect
+    restart: on-failure
+    entrypoint: /bin/sh
+    command: -c "echo \"$$CONNECT_CONFIG\" > /tmp/connect.yaml && /redpanda-connect -c /tmp/connect.yaml"
+    environment:
+      CONNECT_CONFIG: |
+        input:
+          kafka:
+            addresses:
+              - mock-redpanda:9092
+            topics:
+              - signal-in
+            consumer_group: topic-in-sync
+        
+        output:
+          kafka:
+            addresses:
+              - redpanda-1:9092
+            topic: signal-in
+            max_in_flight: 64
+            compression: snappy
+            batching:
+              count: 100
+              period: 100ms
+        
+        http:
+          address: 0.0.0.0:4195
+          enabled: true
+          root_path: /
+          
+        logger:
+          level: INFO
+          format: json
+    ports:
+      - 45195:4195
+    depends_on:
+      dev-create-topic:
+        condition: service_completed_successfully
+    networks:
+      - macdanet
+
+networks:
+  macdanet:
+    name: macdanet
+    driver: bridge

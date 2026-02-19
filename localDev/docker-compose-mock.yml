@@ -29,11 +29,11 @@ services:
     - redpanda
     - start
     - --smp 1
-    - --kafka-addr internal://0.0.0.0:29092,external://0.0.0.0:9092
-    - --advertise-kafka-addr internal://mock-redpanda:29092,external://192.168.32.17:39092
-    - --pandaproxy-addr internal://0.0.0.0:28082,external://0.0.0.0:8082
-    - --advertise-pandaproxy-addr internal://mock-redpanda:28082,external://mock-redpanda:8082
-    - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+    - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:49092
+    - --advertise-kafka-addr internal://mock-redpanda:9092,external://192.168.32.17:49092
+    - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:48082
+    - --advertise-pandaproxy-addr internal://mock-redpanda:8082,external://192.168.32.17:48082
+    - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:48081
     - --rpc-addr mock-redpanda:33145
     - --advertise-rpc-addr mock-redpanda:33145
     - --mode dev-container
@@ -47,14 +47,12 @@ services:
     volumes:
       - "/data/MACDA2/mock/redpanda/data:/var/lib/redpanda/data"
     ports:
-    # - 38081:8081
-    # - 38082:8082
-      - 39092:9092
-    # - 39644:9644
-    # - 48082:28082
-    # - 49092:29092
+      - 48081:8081
+      - 48082:8082
+      - 49092:9092
+      - 49644:9644
     healthcheck:
-      test: ["CMD", "rpk", "cluster", "info", "-X", "brokers=localhost:29092"]
+      test: ["CMD", "rpk", "cluster", "info", "-X", "brokers=mock-redpanda:9092"]
       interval: 10s
       timeout: 10s
       retries: 10
@@ -71,7 +69,7 @@ services:
       CONFIG_FILEPATH: /tmp/config.yml
       CONSOLE_CONFIG_FILE: |
         kafka:
-          brokers: ["mock-redpanda:29092"]
+          brokers: ["mock-redpanda:9092"]
         schemaRegistry:
           enabled: true
           urls: ["http://mock-redpanda:8081"]
@@ -80,7 +78,7 @@ services:
             enabled: true
             urls: ["http://mock-redpanda:9644"]
     ports:
-      - 38080:8080
+      - 48080:8080
     depends_on:
       mock-redpanda:
         condition: service_healthy
@@ -96,8 +94,8 @@ services:
     container_name: mock-create-topic
     entrypoint: /bin/sh
     command: >-
-      -c "rpk topic create signal-in --if-not-exists --partitions 3 --replicas 1 -X brokers=mock-redpanda:29092 &&
-      rpk topic alter-config signal-in --set retention.ms=86400000 -X brokers=mock-redpanda:29092"
+      -c "rpk topic create signal-in --if-not-exists --partitions 3 --replicas 1 -X brokers=mock-redpanda:9092 &&
+      rpk topic alter-config signal-in --set retention.ms=86400000 -X brokers=mock-redpanda:9092"
     networks:
       - macdanet
     depends_on:
@@ -130,7 +128,7 @@ services:
         output:
           kafka:
             addresses:
-              - mock-redpanda:29092
+              - mock-redpanda:9092
             topic: signal-in
             max_in_flight: 64
             compression: snappy
@@ -147,7 +145,7 @@ services:
           level: INFO
           format: json
     ports:
-      - 34195:4195
+      - 44195:4195
     #healthcheck:
     #    test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:4195/ping"]
     #    interval: 30s
