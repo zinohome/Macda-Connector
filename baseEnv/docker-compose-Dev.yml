@@ -230,8 +230,6 @@ services:
 
   topic-parse-connect:
     image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1
-    container_name: topic-parse-connect
-    hostname: topic-parse-connect
     restart: on-failure
     command: ["-c", "/etc/connect/nb67-connect.yaml"]
     volumes:
