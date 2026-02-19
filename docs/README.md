@@ -41,7 +41,7 @@
 
 ## 文档目录
 
-### [01. Redpanda Connect 概览](./01-redpanda-connect-overview.md)
+### [01. Redpanda Connect 概览](./research/01-redpanda-connect-overview.md)
 
 **内容**:
 - Redpanda Connect 核心特性
@@ -53,7 +53,7 @@
 
 **适合阅读者**: 所有团队成员
 
-### [02. 二进制数据处理分析](./02-binary-data-processing-analysis.md)
+### [02. 二进制数据处理分析](./research/02-binary-data-processing-analysis.md)
 
 **内容**:
 - 二进制数据处理能力分析
@@ -65,7 +65,7 @@
 
 **适合阅读者**: 开发工程师
 
-### [03. TimescaleDB 集成方案](./03-timescaledb-integration.md)
+### [03. TimescaleDB 集成方案](./research/03-timescaledb-integration.md)
 
 **内容**:
 - TimescaleDB 核心特性
@@ -78,7 +78,7 @@
 
 **适合阅读者**: DBA、运维工程师
 
-### [04. 架构可行性评估](./04-architecture-feasibility-assessment.md)
+### [04. 架构可行性评估](./research/04-architecture-feasibility-assessment.md)
 
 **内容**:
 - 整体架构设计
@@ -92,7 +92,7 @@
 
 **适合阅读者**: 架构师、项目经理、决策者
 
-### [10. Redpanda 社区版可行性清单](./10-community-edition-feasibility-checklist.md)
+### [10. Redpanda 社区版可行性清单](./research/10-community-edition-feasibility-checklist.md)
 
 **内容**:
 - 社区版是否满足当前需求的结论
