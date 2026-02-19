@@ -229,16 +229,13 @@ services:
       - macdanet
 
   topic-parse-connect:
-    build:
-      context: ../connect
-      dockerfile: Dockerfile.connect
-    image: connect-nb67:dev
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1
     container_name: topic-parse-connect
     hostname: topic-parse-connect
     restart: on-failure
     command: ["-c", "/etc/connect/nb67-connect.yaml"]
     volumes:
-      - "../connect/config/nb67-connect.yaml:/etc/connect/nb67-connect.yaml:ro"
+      - "/data/MACDA2/connect/config/nb67-connect.yaml:/etc/connect/nb67-connect.yaml:ro"
     depends_on:
       dev-create-topic:
         condition: service_completed_successfully
