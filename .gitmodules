@@ -1,0 +1,3 @@
+[submodule "localDev/redpanda-labs"]
+	path = localDev/redpanda-labs
+	url = https://github.com/redpanda-data/redpanda-labs.git
