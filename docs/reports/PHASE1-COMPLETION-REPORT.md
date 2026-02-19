@@ -72,7 +72,6 @@ Macda-Connector/
     │
     ├── config/                    ← 配置文件
     │   ├── nb67-connect.yaml       (完整版500+行)
-    │   └── phase1-connect.yaml     (简化版)
     │
     └── tests/                     ← 测试脚本
         ├── test-kafka-connection.sh   (验证Kafka连接)
@@ -160,7 +159,6 @@ Macda-Connector/
 | 文件 | 用途 |
 |------|------|
 | nb67-connect.yaml | 完整配置 |
-| phase1-connect.yaml | 简化配置 |
 
 ---
 

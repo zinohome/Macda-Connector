@@ -24,7 +24,6 @@ connect/
 │
 ├── config/                    ← ⚙️ 配置文件
 │   ├── nb67-connect.yaml      ← Redpanda Connect连接器配置（完整版）
-│   └── phase1-connect.yaml    ← 阶段1简化版配置
 │
 └── tests/                     ← 🧪 自动化测试脚本
     ├── test-kafka-connection.sh    ← 验证Kafka/Redpanda连接
@@ -170,16 +169,6 @@ connect/
   signal-parsed (Kafka)
 ```
 
-#### 2. **phase1-connect.yaml** (简化版)
-```
-⚙️ 阶段1测试配置
-用途：
-  • 最小可用的NB67解析管道（包含 nb67_parser）
-  • 用于快速验证“能解析/能出JSON/新增车站字段可用”
-  • 映射只保留最关键的 timestamp / device_id / route_info
-  • 输出到独立 topic：signal-parsed-phase1（避免和完整版混用）
-```
-
 ---
 
 ### tests/
@@ -280,7 +269,7 @@ Kafka (signal-parsed topic)
 | **main.go行数** | 47行 | 非常简洁 |
 | **nb67_processor.go行数** | 250行 | 核心业务逻辑 |
 | **nb67.go行数** | 1936行 | Kaitai生成 |
-| **配置文件** | 2个 | nb67-connect.yaml + phase1-connect.yaml |
+| **配置文件** | 1个 | nb67-connect.yaml |
 | **测试脚本** | 3个 | 完整覆盖 |
 
 ---
@@ -334,7 +323,6 @@ docker build -f Dockerfile.connect -t connect-nb67:v1 .
 | nb67.go(codec/) | 程序 | - | ⚠️ | AUTO-GENERATED |
 | NB67.ksy | 规格 | - | ✅ | 协议定义 |
 | nb67-connect.yaml | 配置 | 500+ | ✅ | 完整配置 |
-| phase1-connect.yaml | 配置 | - | ✅ | 简化配置 |
 | Dockerfile.connect | 配置 | - | ✅ | Docker构建 |
 | test-*.sh | 脚本 | - | ✅ | 测试脚本(3个) |
 
