@@ -184,8 +184,6 @@ services:
 
   topic-in-connect:
     image: harbor.naivehero.top:8443/macda2/connect:latest
-    container_name: topic-in-connect
-    hostname: topic-in-connect
     restart: on-failure
     entrypoint: /bin/sh
     command: -c "echo \"$$CONNECT_CONFIG\" > /tmp/connect.yaml && /redpanda-connect -c /tmp/connect.yaml"
@@ -220,8 +218,6 @@ services:
         logger:
           level: INFO
           format: json
-    ports:
-      - 45195:4195
     depends_on:
       dev-create-topic:
         condition: service_completed_successfully
