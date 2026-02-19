@@ -1,0 +1,57 @@
+# Stage 1: Builder - 编译自定义Connect
+FROM golang:1.21-alpine AS builder
+
+# 安装必要的构建工具
+RUN apk add --no-cache git gcc musl-dev
+
+WORKDIR /build
+
+# 复制go模块文件
+COPY go.mod ./
+
+# 下载依赖
+RUN go mod download
+
+# 复制源代码
+COPY *.go ./
+
+# 编译二进制
+# CGO_ENABLED=1 用于支持数据库连接等
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+    -o connect-nb67 \
+    -ldflags="-s -w" \
+    .
+
+# Stage 2: Runtime - 最小化运行时镜像
+FROM debian:bookworm-slim
+
+# 仅安装运行时依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 从builder复制编译的二进制
+COPY --from=builder /build/connect-nb67 /app/
+
+# 创建配置目录
+RUN mkdir -p /etc/connect
+
+# 暴露Connect管理端口
+EXPOSE 4195
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:4195/ping || exit 1
+
+# 默认启动命令
+# 传入配置文件路径作为参数
+ENTRYPOINT ["/app/connect-nb67"]
+CMD ["run", "/etc/connect/nb67-connect.yaml"]
+
+# 标签
+LABEL maintainer="MACDA Project" \
+      description="Redpanda Connect with NB67 Parser Plugin" \
+      version="1.0"

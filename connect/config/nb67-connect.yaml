@@ -1,0 +1,142 @@
+version: 3
+label: macda-phase1-nb67-parser
+
+# ===== INPUT: 从Redpanda消费原始二进制数据 =====
+input:
+  kafka:
+    addresses:
+      - 192.168.32.17:19092
+    topics:
+      - signal-in
+    consumer_group: macda-phase1-parser
+    start_from_oldest: false
+    commit_period: 1s
+    max_processing_period: 30s
+    fetch_max: 100
+    fetch_default: 10
+
+# ===== PROCESSORS: 处理管道 =====
+pipeline:
+  processors:
+    # 第一层：二进制解析（Kaitai生成的Go parser）
+    - nb67_parser:
+        log_sample_every: 100
+
+    # 第二层：Bloblang映射（单位转换、特征提取、故障聚合）
+    - mapping: |
+        root = this
+        
+        # 时间戳标准化
+        root.timestamp = (
+          "%04d-%02d-%02d %02d:%02d:%02d".format(
+            this.src_year + 2000,
+            this.src_month,
+            this.src_day,
+            this.src_hour,
+            this.src_minute,
+            this.src_second
+          )
+        ).parse_timestamp("2006-01-02 15:04:05")
+        
+        # 设备标识
+        root.device_id = "HVAC-%05d-%02d".format(this.train_no, this.carriage_no)
+        root.line_id = this.line_no
+        root.train_id = this.train_no
+        
+        # 环境参数（单位转换）
+        root.environment = {
+          "temp_cabin_u1": (this.tveh_1 / 10.0),
+          "humidity_cabin_u1": (this.humdity_1 / 10.0),
+          "temp_cabin_u2": (this.tveh_2 / 10.0),
+          "humidity_cabin_u2": (this.humdity_2 / 10.0)
+        }
+        
+        # 空气质量数据（U1单元）
+        root.air_quality_u1 = {
+          "temperature": (this.aq_t_u1 / 10.0),
+          "humidity": (this.aq_h_u1 / 10.0),
+          "co2": this.aq_co2_u1,
+          "tvoc": this.aq_tvoc_u1,
+          "pm2_5": this.aq_pm2_5_u1,
+          "pm10": this.aq_pm10_u1
+        }
+        
+        # 压缩机状态与性能（U11）
+        root.compressor_u11 = {
+          "frequency": (this.f_cp_u11 / 10.0),
+          "current": (this.i_cp_u11 / 10.0),
+          "voltage": (this.v_cp_u11 / 10.0),
+          "power": this.p_cp_u11,
+          "suction_temp": (this.suckt_u11 / 10.0),
+          "high_pressure": (this.highpress_u11 / 10.0)
+        }
+        
+        # ===== 新增字段：车站信息（Offset 452-460）=====
+        root.route_info = {
+          "start_station": this.start_station,
+          "terminal_station": this.terminal_station,
+          "current_station": this.cur_station,
+          "next_station": this.next_station,
+          "exhaust_damper_position": this.dmp_exu_pos
+        }
+        
+        # 系统运行状态标志
+        root.system_status = {
+          "ventilation_u1": this.status_ventilation_u1,
+          "cooling_u1": this.status_cooling_u1,
+          "compressor_u11": this.status_compressor_u11,
+          "compressor_u12": this.status_compressor_u12,
+          "air_purifier_u1": this.status_air_purifier_u1
+        }
+        
+        # ===== 故障检测 =====
+        root.fault_detection = {
+          "low_pressure_u11": this.blpflt_comp_u11,
+          "high_pressure_u11": this.bscflt_comp_u11,
+          "exhaust_fault_u11": this.bscflt_vent_u11,
+          "new_air_valve_fault_u11": this.bflt_fad_u11,
+          "return_air_valve_fault_u11": this.bflt_rad_u11
+        }
+        
+        # 故障等级判定
+        root.has_critical_fault = (
+          this.blpflt_comp_u11 ||
+          this.bscflt_comp_u11
+        )
+        
+        root.alert_level = if this.has_critical_fault {
+          "CRITICAL"
+        } else {
+          "OK"
+        }
+        
+        # ===== 元数据 =====
+        root.metadata = {
+          "parser_version": this.parser_version,
+          "quality_status": this.quality_status,
+          "frame_size": this.frame_size,
+          "parsed_at_ms": this.parsed_at_unix_ms
+        }
+
+# ===== OUTPUT: 写入解析后的数据到新topic =====
+output:
+  kafka:
+    addresses:
+      - 192.168.32.17:19092
+    topic: signal-parsed
+    partitioner: round_robin
+    key: ${! meta("kafka_key") }
+    metadata:
+      - name: x-parser-version
+        value: nb67-v1
+      - name: x-processor
+        value: connect-nb67
+
+# ===== 日志和监控 =====
+logger:
+  level: info
+  format: json
+
+metrics:
+  prometheus:
+    namespace: macda

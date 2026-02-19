@@ -1,40 +1,146 @@
-# Agent Instructions
+# Agent 操作说明
 
-This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
+本项目使用 **bd**（beads）进行任务跟踪。请先运行 `bd onboard` 完成初始化。
 
-## Quick Reference
+## 快速参考
 
 ```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --status in_progress  # Claim work
-bd close <id>         # Complete work
-bd sync               # Sync with git
+bd ready              # 查找可执行任务
+bd show <id>          # 查看任务详情
+bd update <id> --status in_progress  # 认领任务
+bd close <id>         # 完成任务
+bd sync               # 与 git 同步状态
 ```
 
-## Landing the Plane (Session Completion)
+## 收尾流程（会话结束前）
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+**当结束一个工作会话时**，必须完成以下全部步骤；在 `git push` 成功前，工作不算完成。
 
-**MANDATORY WORKFLOW:**
+**强制流程：**
 
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
+1. **补齐未完成事项的 issue**：为后续工作创建任务。
+2. **执行质量门禁**（如有代码变更）：测试、lint、构建。
+3. **更新任务状态**：关闭已完成任务，更新进行中任务。
+4. **推送到远端（必须）**：
    ```bash
    git pull --rebase
    bd sync
    git push
-   git status  # MUST show "up to date with origin"
+   git status  # 必须显示 "up to date with origin"
    ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
+5. **清理环境**：清理 stash、修剪远端分支。
+6. **最终核验**：确认所有改动已提交且已推送。
+7. **交接说明**：提供下一次会话所需上下文。
 
-**CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
+**关键规则：**
+- 在 `git push` 成功之前，工作一律不算完成。
+- 绝不能在推送前停止，避免改动滞留本地。
+- 不能说“等你来 push”，必须由代理完成 push。
+- 如 push 失败，需自行排查并重试直至成功。
+
+## 项目执行策略（MACDA 重构）
+
+本仓库后续所有工作必须遵循以下重构基线：
+
+- `docs/11-macda-refactor-execution-plan.md`
+
+### 主程序范围（按优先级）
+
+1. **Kafka Connect 开发**
+   - NB67 二进制解析
+   - 数据标准化
+   - 故障告警
+   - 故障预测
+   - 数据存储
+
+2. **展示数据 API 开发（通用/可配置）**
+   - 配置驱动 SQL API 生成
+   - 提供 REST + WebSocket 给前端消费
+   - 参数校验、限流、查询安全
+
+3. **前端适配与优化**
+   - 先适配
+   - 后优化
+
+### 强制实现优先级
+
+- NB67 二进制解析优先采用 **Go/Kaitai** 解析路径。
+- 协议与解析器必须始终同步：
+  - `docs/requirements/binary-spec.md`
+  - `oldproj/MACDA-NB67/codec/NB67.ksy`
+- 适用场景下必须采用**双轨流水线**：
+  - 全量轨用于实时告警
+  - 采样轨用于长期存储与查询成本控制
+- 后端 API 必须 **契约优先 + 配置驱动**，禁止按页面临时拼接端点。
+- `web-nb67.250513` 是前端集成主目标，禁止以 Grafana 为优先设计。
+
+### 不可协商交付规则
+
+- 任意 schema/字段变更必须同时包含：
+  - 解析器更新
+  - 存储映射更新
+  - API 契约更新
+  - 文档更新
+- 重大功能 PR 必须尽可能给出可量化验收：
+  - 解析正确性
+  - 端到端延迟
+  - 写入成功率
+  - 关键查询性能
+- 若范围不清晰，默认以 `docs/11-macda-refactor-execution-plan.md` 为准。
+
+## 执行方法（参考 AGENTS-reference）
+
+以下规则在本仓库中视为强制执行行为。
+
+### 1）四阶段工作流
+
+1. **上下文收集**
+   - 先做结构化扫描（位置、现状实现、相似案例、测试入口）。
+   - 在实现前识别高优先级未知项。
+   - 仅补充足以消除阻塞未知项的上下文。
+
+2. **任务规划**
+   - 将任务拆分为可执行子任务，并定义明确验收标准。
+   - 编码前先明确接口契约、边界和验证方案。
+
+3. **实现执行**
+   - 小步、可回滚修改；每一步都保持可构建、可验证。
+   - 优先复用仓库已有模式和工具。
+
+4. **质量验证**
+   - 先做针对性验证，再做更广覆盖验证。
+   - 记录通过/失败结果、风险与后续事项。
+
+### 2）证据驱动规则
+
+- 没有代码/文档证据时，不得假设行为。
+- 不确定时，先在仓库中检索并验证再决策。
+- 协议或 schema 相关任务必须提供字段级映射证据。
+
+### 3）执行自主规则
+
+- 默认 **自动执行**（直接实现，不等待确认）。
+- 仅在破坏性或不可逆操作时请求确认，包括：
+  - 删除关键配置文件
+  - 破坏性数据库变更（`DROP`、不兼容 `ALTER`）
+  - 远端 `git push` 冲突或高风险分支操作
+- 同类错误若连续出现 **3 次**，必须暂停并重评策略。
+
+### 4）工具与可追溯性
+
+- 优先使用仓库感知的检索/读取/编辑流程，避免过度依赖 shell。
+- 优先使用补丁方式编辑，保证 diff 可审计。
+- 复杂任务需要保留本地执行痕迹：
+  - `.codex/operations-log.md`
+  - `.codex/testing.md`
+  - `.codex/review-report.md`
+
+### 5）优先级与冲突处理
+
+- 指令冲突时，按以下顺序执行：
+  1. 当前用户明确请求
+  2. 本文件 `AGENTS.md`
+  3. `AGENTS-reference.md`（补充参考）
+  4. 其他项目文档
+
 

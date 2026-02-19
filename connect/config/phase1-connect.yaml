@@ -1,0 +1,40 @@
+input:
+  kafka:
+    addresses:
+      - 192.168.32.17:19092
+    topics:
+      - signal-in
+    consumer_group: macda-phase1-parser
+    start_from_oldest: false
+
+pipeline:
+  processors:
+    - mapping: |
+        root.source = {
+          "topic": metadata("kafka_topic"),
+          "partition": metadata("kafka_partition"),
+          "offset": metadata("kafka_offset")
+        }
+        root.ingest_time = now()
+        root.raw_hex = content().encode("hex")
+        root.payload_size = content().length()
+
+output:
+  kafka:
+    addresses:
+      - 192.168.32.17:19092
+    topic: signal-normalized-phase1
+    max_in_flight: 64
+    compression: snappy
+    batching:
+      count: 100
+      period: 200ms
+
+http:
+  address: 0.0.0.0:4195
+  enabled: true
+  root_path: /
+
+logger:
+  level: INFO
+  format: json
