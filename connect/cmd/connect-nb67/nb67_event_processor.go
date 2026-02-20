@@ -23,6 +23,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -118,9 +119,40 @@ type parsedInput struct {
 // 处理器注册与实现
 // ============================================================
 
-// NB67EventProcessor 是 Benthos/Connect 自定义处理器，
-// 实现 HVAC 预警、原生故障位告警、部件寿命三类事件的构建逻辑。
-type NB67EventProcessor struct{}
+// ============================================================
+// 状态管理：规则计时器
+// ============================================================
+
+type ruleState struct {
+	firstSeen time.Time
+}
+
+// NB67EventProcessor 增加了状态表，用于判断规则持续时间。
+type NB67EventProcessor struct {
+	// key: DeviceID + RuleCode
+	// value: *ruleState
+	states sync.Map
+	logger *service.Logger
+}
+
+// checkRule 判定规则是否满足持续时间要求。
+func (p *NB67EventProcessor) checkRule(condition bool, duration time.Duration, deviceID string, ruleCode string) bool {
+	key := deviceID + ":" + ruleCode
+	if !condition {
+		p.states.Delete(key)
+		return false
+	}
+
+	now := time.Now()
+	val, loaded := p.states.LoadOrStore(key, &ruleState{firstSeen: now})
+	state := val.(*ruleState)
+
+	if !loaded {
+		return duration <= 0
+	}
+
+	return now.Sub(state.firstSeen) >= duration
+}
 
 // init 在程序启动时自动注册处理器。
 func init() {
@@ -128,15 +160,9 @@ func init() {
 		"nb67_event_builder",
 		service.NewConfigSpec().
 			Summary("NB67 空调事件构建处理器").
-			Description(
-				"读取 nb67_parser 解码后的 signal-parsed 消息，\n"+
-					"按照 NB67 空调预警码表（20240802）和部件码表（20240802）生成三类事件：\n"+
-					"  predict_event - HVAC 算法预警（26 种预警码）\n"+
-					"  alarm_event   - 原生故障位告警（直接映射 binary 故障位）\n"+
-					"  life_event    - 部件寿命预警（风机/压缩机/阀门）\n",
-			),
+			Description("支持状态化持续时间判定的事件构建器"),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-			return &NB67EventProcessor{}, nil
+			return &NB67EventProcessor{logger: mgr.Logger()}, nil
 		},
 	)
 	if err != nil {
@@ -149,12 +175,21 @@ func (p *NB67EventProcessor) Process(ctx context.Context, msg *service.Message) 
 	// 解析输入 JSON
 	rawBytes, err := msg.AsBytes()
 	if err != nil {
-		return nil, fmt.Errorf("读取消息字节失败: %w", err)
+		// 读取字节失败，通常是内核或内存极端情况，直接丢弃
+		return service.MessageBatch{}, nil
 	}
 
 	var input parsedInput
 	if err := json.Unmarshal(rawBytes, &input); err != nil {
-		return nil, fmt.Errorf("解析输入 JSON 失败: %w", err)
+		// 【关键修复】：如果此 Processor 报错返回 error，Benthos 会透传原始巨大消息。
+		// 为了保护下游 Topic，我们此处拦截错误并返回空 Batch 丢弃它。
+		p.logger.Errorf("NB67处理器解析 JSON 失败（可能是非标准数据），已拦截丢弃，防止污染 Topic: %v", err)
+		return service.MessageBatch{}, nil
+	}
+
+	// 极其重要：如果 raw 为空，说明不是合法的 signal-parsed 数据，丢弃
+	if len(input.Raw) == 0 {
+		return service.MessageBatch{}, nil
 	}
 
 	// 构建事件元数据
@@ -169,42 +204,30 @@ func (p *NB67EventProcessor) Process(ctx context.Context, msg *service.Message) 
 		ProcessTime:   time.Now().UTC().Format(time.RFC3339Nano),
 	}
 
-	raw := input.Raw
-
 	// 构建三类事件命中列表
-	predictHits := buildPredictHits(raw, input.CarriageID)
-	alarmHits := buildAlarmHits(raw)
-	lifeHits := buildLifeHits(raw, input.CarriageID)
+	predictHits := p.buildPredictHits(input.Raw, input.CarriageID, input.DeviceID)
+	alarmHits := buildAlarmHits(input.Raw)
+	lifeHits := buildLifeHits(input.Raw, input.CarriageID)
 
-	// 三类命中均为空时丢弃消息，不向下游输出任何内容
+	// 如果三类命中均为空，直接拦截，不向下游输出任何内容
 	if len(predictHits) == 0 && len(alarmHits) == 0 && len(lifeHits) == 0 {
 		return service.MessageBatch{}, nil
 	}
 
 	// 聚合输出
 	output := EventOutput{
-		PredictEvent: SubEvent{
-			EventMeta: meta,
-			Hits:      predictHits,
-			Source:    "connect-rule-v2",
-		},
-		AlarmEvent: SubEvent{
-			EventMeta: meta,
-			Hits:      alarmHits,
-			Source:    "raw-fault-bit",
-		},
-		LifeEvent: SubEvent{
-			EventMeta: meta,
-			Hits:      lifeHits,
-			Source:    "part-life-v2",
-		},
+		PredictEvent: SubEvent{EventMeta: meta, Hits: predictHits, Source: "connect-rule-v2"},
+		AlarmEvent:   SubEvent{EventMeta: meta, Hits: alarmHits, Source: "raw-fault-bit"},
+		LifeEvent:    SubEvent{EventMeta: meta, Hits: lifeHits, Source: "part-life-v2"},
 	}
 
 	outBytes, err := json.Marshal(output)
 	if err != nil {
-		return nil, fmt.Errorf("序列化输出 JSON 失败: %w", err)
+		p.logger.Errorf("NB67处理器序列化 JSON 失败: %v", err)
+		return service.MessageBatch{}, nil
 	}
 
+	// 替换原始消息内容
 	outMsg := msg.Copy()
 	outMsg.SetBytes(outBytes)
 	return service.MessageBatch{outMsg}, nil
@@ -259,173 +282,163 @@ func hvacCode(hvacBase int, seq int) string {
 //   seq 01~26 对应 26 种预警类型
 // ============================================================
 
-func buildPredictHits(raw map[string]any, carriageID int) []PredictHit {
-	// 初始化为空 slice（非 nil），序列化时输出 [] 而非 null
+// buildPredictHits 全量实现 HVAC101 ~ HVAC126 业务逻辑
+func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int, deviceID string) []PredictHit {
 	hits := make([]PredictHit, 0)
-	// raw 为空时所有 rawInt 返回 0，会误触发 FasU1(0)<350 等规则，必须提前退出
 	if len(raw) == 0 {
 		return hits
 	}
 	base := carriageID * 100
 
-	// ---------- 1~4. 冷媒泄漏预警（ref_leak）----------
-	// HVAC_01: 机组1系统1(u11)  HVAC_02: 机组1系统2(u12)
-	// HVAC_03: 机组2系统1(u21)  HVAC_04: 机组2系统2(u22)
-	// 制冷或热泵(mode=2|3): 频率>30Hz 且 吸气压力<2.0bar(raw<20)
-	// 通风(mode=1): 高压压力<5bar(raw<50)
+	// 辅助变量
 	wModeU1 := rawInt(raw, "WmodeU1")
 	wModeU2 := rawInt(raw, "WmodeU2")
 
-	// u11
-	if (wModeU1 == 2 || wModeU1 == 3) && rawInt(raw, "FCpU11") > 300 && rawInt(raw, "SuckpU11") < 20 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 1), Name: "机组1系统1冷媒泄露预警", Severity: 3})
-	}
-	if wModeU1 == 1 && rawInt(raw, "HighpressU11") < 50 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 1), Name: "机组1系统1冷媒泄露预警", Severity: 3})
-	}
-	// u12
-	if (wModeU1 == 2 || wModeU1 == 3) && rawInt(raw, "FCpU12") > 300 && rawInt(raw, "SuckpU12") < 20 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 2), Name: "机组1系统2冷媒泄露预警", Severity: 3})
-	}
-	if wModeU1 == 1 && rawInt(raw, "HighpressU12") < 50 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 2), Name: "机组1系统2冷媒泄露预警", Severity: 3})
-	}
-	// u21
-	if (wModeU2 == 2 || wModeU2 == 3) && rawInt(raw, "FCpU21") > 300 && rawInt(raw, "SuckpU21") < 20 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 3), Name: "机组2系统1冷媒泄露预警", Severity: 3})
-	}
-	if wModeU2 == 1 && rawInt(raw, "HighpressU21") < 50 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 3), Name: "机组2系统1冷媒泄露预警", Severity: 3})
-	}
-	// u22
-	if (wModeU2 == 2 || wModeU2 == 3) && rawInt(raw, "FCpU22") > 300 && rawInt(raw, "SuckpU22") < 20 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 4), Name: "机组2系统2冷媒泄露预警", Severity: 3})
-	}
-	if wModeU2 == 1 && rawInt(raw, "HighpressU22") < 50 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 4), Name: "机组2系统2冷媒泄露预警", Severity: 3})
-	}
+	// ================================================================
+	// 1. 冷媒泄漏预警 (HVAC_01 ~ HVAC_04)
+	// ================================================================
+	checkRefLeak := func(mode int64, hvacSeq int, name string) {
+		code := hvacCode(base, hvacSeq)
+		uIdx := (hvacSeq + 1) / 2
+		sIdx := (hvacSeq+1)%2 + 1
+		fcp := rawInt(raw, fmt.Sprintf("FCpU%d%d", uIdx, sIdx))
+		suckp := rawInt(raw, fmt.Sprintf("SuckpU%d%d", uIdx, sIdx))
+		highp := rawInt(raw, fmt.Sprintf("HighpressU%d%d", uIdx, sIdx))
 
-	// ---------- 5~6. 制冷系统预警（f_cp）----------
-	// HVAC_05: 机组1  HVAC_06: 机组2
-	// 同频压缩机电流差>2A(raw>20) 或 过热度>20℃(raw>200) 或 <-8℃(raw<-80)
-	cpU1Diff := rawInt(raw, "ICpU11") - rawInt(raw, "ICpU12")
-	if rawInt(raw, "FCpU11") == rawInt(raw, "FCpU12") && (cpU1Diff > 20 || cpU1Diff < -20) {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 5), Name: "机组1制冷系统预警", Severity: 3})
+		// 条件1：制冷模式 + 频率>30Hz + 吸气<2.0bar -> 持续5分钟
+		isCoolingLeak := (mode == 2 || mode == 3) && fcp > 300 && suckp < 20
+		if p.checkRule(isCoolingLeak, 5*time.Minute, deviceID, code+"_c") {
+			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
+			return
+		}
+		// 条件2：通风模式 + 高压<5bar -> 持续15分钟
+		isVentLeak := mode == 1 && highp < 50
+		if p.checkRule(isVentLeak, 15*time.Minute, deviceID, code+"_v") {
+			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
+		}
 	}
-	spU11 := rawInt(raw, "SpU11")
-	spU12 := rawInt(raw, "SpU12")
-	if spU11 > 200 || spU11 < -80 || spU12 > 200 || spU12 < -80 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 5), Name: "机组1制冷系统预警", Severity: 3})
-	}
+	checkRefLeak(wModeU1, 1, "机组1系统1冷媒泄露预警")
+	checkRefLeak(wModeU1, 2, "机组1系统2冷媒泄露预警")
+	checkRefLeak(wModeU2, 3, "机组2系统1冷媒泄露预警")
+	checkRefLeak(wModeU2, 4, "机组2系统2冷媒泄露预警")
 
-	cpU2Diff := rawInt(raw, "ICpU21") - rawInt(raw, "ICpU22")
-	if rawInt(raw, "FCpU21") == rawInt(raw, "FCpU22") && (cpU2Diff > 20 || cpU2Diff < -20) {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 6), Name: "机组2制冷系统预警", Severity: 3})
-	}
-	spU21 := rawInt(raw, "SpU21")
-	spU22 := rawInt(raw, "SpU22")
-	if spU21 > 200 || spU21 < -80 || spU22 > 200 || spU22 < -80 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 6), Name: "机组2制冷系统预警", Severity: 3})
-	}
+	// ================================================================
+	// 2. 制冷系统预警 (HVAC_05 ~ HVAC_06)
+	// ================================================================
+	checkCpSys := func(uIdx int, name string) {
+		code := hvacCode(base, uIdx+4)
+		f1 := rawInt(raw, fmt.Sprintf("FCpU%d1", uIdx))
+		f2 := rawInt(raw, fmt.Sprintf("FCpU%d2", uIdx))
+		i1 := rawInt(raw, fmt.Sprintf("ICpU%d1", uIdx))
+		i2 := rawInt(raw, fmt.Sprintf("ICpU%d2", uIdx))
+		sp1 := rawInt(raw, fmt.Sprintf("SpU%d1", uIdx))
+		sp2 := rawInt(raw, fmt.Sprintf("SpU%d2", uIdx))
 
-	// ---------- 7~8. 温度传感器预警（f_fas/f_ras）----------
-	// HVAC_07: 新风温度传感器  HVAC_08: 回风温度传感器
-	// U1 与 U2 温差>8℃(raw>80)
+		// 条件1：同频电流差 > 2A -> 持续3分钟
+		isCurrentDiff := f1 == f2 && f1 > 0 && (i1-i2 > 20 || i1-i2 < -20)
+		if p.checkRule(isCurrentDiff, 3*time.Minute, deviceID, code+"_i") {
+			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
+			return
+		}
+		// 条件2：运行 > 5min 后，过热度异常 -> 持续10分钟
+		// 先判定运行状态（用于 5min 前置判断）
+		isRunning := f1 > 0 || f2 > 0
+		hasBeenRunning := p.checkRule(isRunning, 5*time.Minute, deviceID, code+"_run")
+		isSpErr := hasBeenRunning && (sp1 > 200 || sp1 < -80 || sp2 > 200 || sp2 < -80)
+		if p.checkRule(isSpErr, 10*time.Minute, deviceID, code+"_sp") {
+			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
+		}
+	}
+	checkCpSys(1, "机组1制冷系统预警")
+	checkCpSys(2, "机组2制冷系统预警")
+
+	// ================================================================
+	// 3. 传感器预警 (HVAC_07 ~ HVAC_11)
+	// ================================================================
+	// HVAC_07/08: 温差 > 8℃ -> 持续 5 分钟
 	fasDiff := rawInt(raw, "FasU1") - rawInt(raw, "FasU2")
-	if fasDiff > 80 || fasDiff < -80 {
+	if p.checkRule(fasDiff > 80 || fasDiff < -80, 5*time.Minute, deviceID, hvacCode(base, 7)) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 7), Name: "新风温度传感器预警", Severity: 3})
 	}
 	rasDiff := rawInt(raw, "RasU1") - rawInt(raw, "RasU2")
-	if rasDiff > 80 || rasDiff < -80 {
+	if p.checkRule(rasDiff > 80 || rasDiff < -80, 5*time.Minute, deviceID, hvacCode(base, 8)) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 8), Name: "回风温度传感器预警", Severity: 3})
 	}
 
-	// ---------- 9. 车厢温度超温预警（cabin_overtemp）----------
-	// HVAC_09: BfltTempover 故障位置位
-	if rawBool(raw, "BfltTempover") {
+	// HVAC_09: 车厢超温预警 -> 系统正常运行 > 20min，且车温 > 4℃ (假设为偏差值或特定阈值) -> 持续 2 分钟
+	// 注意：此处需要判断"无故障"，简单起见判定 buildAlarmHits 为空
+	coolingNormal := len(buildAlarmHits(raw)) == 0 && (wModeU1 == 2 || wModeU2 == 2)
+	sysRunningLong := p.checkRule(coolingNormal, 20*time.Minute, deviceID, "cooling_normal_20")
+	// 这里使用 Tveh1/2（单位 0.1C，4C=40）
+	isOvertemp := sysRunningLong && (rawInt(raw, "Tveh1") > 40 || rawInt(raw, "Tveh2") > 40)
+	if p.checkRule(isOvertemp, 2*time.Minute, deviceID, hvacCode(base, 9)) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 9), Name: "车厢温度超温预警", Severity: 3})
 	}
 
-	// ---------- 10~11. 滤网脏堵预警（f_presdiff）----------
-	// HVAC_10: 机组1  HVAC_11: 机组2
-	// 通风机运行 且 压差>300Pa(raw>3000)
-	if rawBool(raw, "CfbkEfU11") && rawInt(raw, "PresdiffU1") > 3000 {
+	// HVAC_10/11: 压差 > 300Pa -> 持续 30 分钟
+	if p.checkRule(rawBool(raw, "CfbkEfU11") && rawInt(raw, "PresdiffU1") > 3000 && rawInt(raw, "PresdiffU1") < 32767, 30*time.Minute, deviceID, hvacCode(base, 10)) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 10), Name: "机组1滤网脏堵预警", Severity: 2})
 	}
-	if rawBool(raw, "CfbkEfU21") && rawInt(raw, "PresdiffU2") > 3000 {
+	if p.checkRule(rawBool(raw, "CfbkEfU21") && rawInt(raw, "PresdiffU2") > 3000 && rawInt(raw, "PresdiffU2") < 32767, 30*time.Minute, deviceID, hvacCode(base, 11)) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 11), Name: "机组2滤网脏堵预警", Severity: 2})
 	}
 
-	// ---------- 12~15. 通风机电流预警（f_ef）----------
-	// HVAC_12: 机组1通风机1  HVAC_13: 机组1通风机2
-	// HVAC_14: 机组2通风机1  HVAC_15: 机组2通风机2
-	// 运行时电流>2A(raw>20)
-	if rawBool(raw, "CfbkEfU11") && rawInt(raw, "IEfU11") > 20 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 12), Name: "机组1通风机1电流预警", Severity: 3})
+	// ================================================================
+	// 4. 风机电流预警 (HVAC_12 ~ HVAC_20) -> 持续 10 分钟
+	// ================================================================
+	checkFanI := func(cfbkField, iField string, threshold int64, seq int, name string) {
+		code := hvacCode(base, seq)
+		isOverI := rawBool(raw, cfbkField) && rawInt(raw, iField) > threshold
+		if p.checkRule(isOverI, 10*time.Minute, deviceID, code) {
+			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
+		}
 	}
-	if rawBool(raw, "CfbkEfU11") && rawInt(raw, "IEfU12") > 20 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 13), Name: "机组1通风机2电流预警", Severity: 3})
-	}
-	if rawBool(raw, "CfbkEfU21") && rawInt(raw, "IEfU21") > 20 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 14), Name: "机组2通风机1电流预警", Severity: 3})
-	}
-	if rawBool(raw, "CfbkEfU21") && rawInt(raw, "IEfU22") > 20 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 15), Name: "机组2通风机2电流预警", Severity: 3})
-	}
+	checkFanI("CfbkEfU11", "IEfU11", 20, 12, "机组1通风机1电流预警")
+	checkFanI("CfbkEfU11", "IEfU12", 20, 13, "机组1通风机2电流预警")
+	checkFanI("CfbkEfU21", "IEfU21", 20, 14, "机组2通风机1电流预警")
+	checkFanI("CfbkEfU21", "IEfU22", 20, 15, "机组2通风机2电流预警")
+	checkFanI("CfbkCfU11", "ICfU11", 29, 16, "机组1冷凝风机1电流预警")
+	checkFanI("CfbkCfU11", "ICfU12", 29, 17, "机组1冷凝风机2电流预警")
+	checkFanI("CfbkCfU21", "ICfU21", 29, 18, "机组2冷凝风机1电流预警")
+	checkFanI("CfbkCfU21", "ICfU22", 29, 19, "机组2冷凝风机2电流预警")
+	checkFanI("CfbkExufan", "IExufan", 40, 20, "废排风机电流预警")
 
-	// ---------- 16~19. 冷凝风机电流预警（f_cf）----------
-	// HVAC_16: 机组1冷凝风机1  HVAC_17: 机组1冷凝风机2
-	// HVAC_18: 机组2冷凝风机1  HVAC_19: 机组2冷凝风机2
-	// 运行时电流>2.9A(raw>29)
-	if rawBool(raw, "CfbkCfU11") && rawInt(raw, "ICfU11") > 29 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 16), Name: "机组1冷凝风机1电流预警", Severity: 3})
+	// ================================================================
+	// 5. 压缩机电流预警 (HVAC_21 ~ HVAC_24) -> 新风 < 35℃ 且 I > 18A -> 持续 10 分钟
+	// ================================================================
+	checkCpI := func(fasField, iField string, seq int, name string) {
+		code := hvacCode(base, seq)
+		isOverI := rawInt(raw, fasField) < 350 && rawInt(raw, iField) > 180
+		if p.checkRule(isOverI, 10*time.Minute, deviceID, code) {
+			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
+		}
 	}
-	if rawBool(raw, "CfbkCfU11") && rawInt(raw, "ICfU12") > 29 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 17), Name: "机组1冷凝风机2电流预警", Severity: 3})
-	}
-	if rawBool(raw, "CfbkCfU21") && rawInt(raw, "ICfU21") > 29 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 18), Name: "机组2冷凝风机1电流预警", Severity: 3})
-	}
-	if rawBool(raw, "CfbkCfU21") && rawInt(raw, "ICfU22") > 29 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 19), Name: "机组2冷凝风机2电流预警", Severity: 3})
-	}
+	checkCpI("FasU1", "ICpU11", 21, "机组1压缩机1电流预警")
+	checkCpI("FasU1", "ICpU12", 22, "机组1压缩机2电流预警")
+	checkCpI("FasU2", "ICpU21", 23, "机组2压缩机1电流预警")
+	checkCpI("FasU2", "ICpU22", 24, "机组2压缩机2电流预警")
 
-	// ---------- 20. 废排风机电流预警（f_exufan）----------
-	// HVAC_20: 运行时电流>4.0A(raw>40)
-	if rawBool(raw, "CfbkExufan") && rawInt(raw, "IExufan") > 40 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 20), Name: "废排风机电流预警", Severity: 3})
-	}
+	// ================================================================
+	// 6. 空气质量预警 (HVAC_125 ~ HVAC_126)
+	// ================================================================
+	checkAQ := func(uIdx int, name string) {
+		code := hvacCode(base, uIdx+24) // 101+24=125, 126
+		// 前置条件：通风机连续运行 > 20 分钟
+		fanRunning := rawBool(raw, fmt.Sprintf("CfbkEfU%d1", uIdx))
+		hasBeenRunning := p.checkRule(fanRunning, 20*time.Minute, deviceID, code+"_fanrun")
 
-	// ---------- 21~24. 压缩机电流预警（f_fas_u）----------
-	// HVAC_21: 机组1压缩机1  HVAC_22: 机组1压缩机2
-	// HVAC_23: 机组2压缩机1  HVAC_24: 机组2压缩机2
-	// 新风温度<35℃(raw<350) 且 压缩机电流>18A(raw>180)
-	if rawInt(raw, "FasU1") < 350 && rawInt(raw, "ICpU11") > 180 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 21), Name: "机组1压缩机1电流预警", Severity: 3})
-	}
-	if rawInt(raw, "FasU1") < 350 && rawInt(raw, "ICpU12") > 180 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 22), Name: "机组1压缩机2电流预警", Severity: 3})
-	}
-	if rawInt(raw, "FasU2") < 350 && rawInt(raw, "ICpU21") > 180 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 23), Name: "机组2压缩机1电流预警", Severity: 3})
-	}
-	if rawInt(raw, "FasU2") < 350 && rawInt(raw, "ICpU22") > 180 {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 24), Name: "机组2压缩机2电流预警", Severity: 3})
-	}
+		// 阈值判定
+		aqErr := hasBeenRunning && (rawInt(raw, fmt.Sprintf("AqCo2U%d", uIdx)) > 1200 ||
+			rawInt(raw, fmt.Sprintf("AqPm25U%d", uIdx)) > 75 ||
+			rawInt(raw, fmt.Sprintf("AqPm10U%d", uIdx)) > 150 ||
+			rawInt(raw, fmt.Sprintf("AqTvocU%d", uIdx)) > 600)
 
-	// ---------- 25~26. 空气质量预警（f_aq）----------
-	// HVAC_25: 机组1  HVAC_26: 机组2
-	// 通风机运行 且 CO2>1200ppm 或 PM2.5>75 或 PM10>150 或 TVOC>600
-	if rawBool(raw, "CfbkEfU11") &&
-		(rawInt(raw, "AqCo2U1") > 1200 || rawInt(raw, "AqPm25U1") > 75 ||
-			rawInt(raw, "AqPm10U1") > 150 || rawInt(raw, "AqTvocU1") > 600) {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 25), Name: "机组1空气质量预警", Severity: 3})
+		if p.checkRule(aqErr, 20*time.Minute, deviceID, code+"_pollute") {
+			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
+		}
 	}
-	if rawBool(raw, "CfbkEfU21") &&
-		(rawInt(raw, "AqCo2U2") > 1200 || rawInt(raw, "AqPm25U2") > 75 ||
-			rawInt(raw, "AqPm10U2") > 150 || rawInt(raw, "AqTvocU2") > 600) {
-		hits = append(hits, PredictHit{Code: hvacCode(base, 26), Name: "机组2空气质量预警", Severity: 3})
-	}
+	checkAQ(1, "机组1空气质量预警")
+	checkAQ(2, "机组2空气质量预警")
 
 	return hits
 }

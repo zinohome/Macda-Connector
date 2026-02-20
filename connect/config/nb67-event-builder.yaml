@@ -37,7 +37,7 @@ output:
       # signal-predict: predict_event（故障预警命中列表）
       - processors:
           - mapping: |
-              root = if this.predict_event.hits.length() > 0 {
+              root = if this.exists("predict_event") && this.predict_event.hits.length() > 0 {
                 this.predict_event
               } else {
                 deleted()
@@ -56,7 +56,7 @@ output:
       # signal-alarm: alarm_event（原生故障位命中列表）
       - processors:
           - mapping: |
-              root = if this.alarm_event.hits.length() > 0 {
+              root = if this.exists("alarm_event") && this.alarm_event.hits.length() > 0 {
                 this.alarm_event
               } else {
                 deleted()
@@ -75,7 +75,7 @@ output:
       # signal-life: life_event（部件寿命命中列表）
       - processors:
           - mapping: |
-              root = if this.life_event.hits.length() > 0 {
+              root = if this.exists("life_event") && this.life_event.hits.length() > 0 {
                 this.life_event
               } else {
                 deleted()
