@@ -228,6 +228,11 @@ services:
         logger:
           level: INFO
           format: json
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4195/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     depends_on:
       dev-create-topic:
         condition: service_completed_successfully
@@ -243,8 +248,6 @@ services:
     command: ["-c", "/etc/connect/nb67-parser.yaml"]
     volumes:
       - "/data/MACDA2/connect/config/nb67-parser.yaml:/etc/connect/nb67-parser.yaml:ro"
-    ports:
-      - "4195:4195"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4195/ping"]
       interval: 30s
@@ -264,8 +267,6 @@ services:
     command: ["-c", "/etc/connect/nb67-storage-writer.yaml"]
     volumes:
       - "/data/MACDA2/connect/config/nb67-storage-writer.yaml:/etc/connect/nb67-storage-writer.yaml:ro"
-    ports:
-      - "4196:4195"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4195/ping"]
       interval: 30s
