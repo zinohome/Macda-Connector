@@ -69,7 +69,7 @@ pipeline:
         root.life_hits = []
 
         # HVAC 预警码，详见下方注释
-        let hvac_base = this.carriage_id * 100
+        let hvac_base = this.carriage_id * 100;
 
         # 冷媒泄漏预警
         if (this.raw.WmodeU1 == 2 || this.raw.WmodeU1 == 3) && this.raw.FCpU11 > 300 && this.raw.SuckpU11 < 20 {
@@ -98,14 +98,14 @@ pipeline:
         }
 
         # 制冷系统预警
-        let cp_u1_diff = this.raw.ICpU11 - this.raw.ICpU12
+        let cp_u1_diff = this.raw.ICpU11 - this.raw.ICpU12;
         if this.raw.FCpU11 == this.raw.FCpU12 && ($cp_u1_diff > 20 || $cp_u1_diff < -20) {
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+5),"name":"机组1制冷系统预警","severity":3})
         }
         if this.raw.SpU11 > 200 || this.raw.SpU11 < -80 || this.raw.SpU12 > 200 || this.raw.SpU12 < -80 {
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+5),"name":"机组1制冷系统预警","severity":3})
         }
-        let cp_u2_diff = this.raw.ICpU21 - this.raw.ICpU22
+        let cp_u2_diff = this.raw.ICpU21 - this.raw.ICpU22;
         if this.raw.FCpU21 == this.raw.FCpU22 && ($cp_u2_diff > 20 || $cp_u2_diff < -20) {
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+6),"name":"机组2制冷系统预警","severity":3})
         }
@@ -114,11 +114,11 @@ pipeline:
         }
 
         # 温度传感器预警
-        let fas_diff = this.raw.FasU1 - this.raw.FasU2
+        let fas_diff = this.raw.FasU1 - this.raw.FasU2;
         if $fas_diff > 80 || $fas_diff < -80 {
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+7),"name":"新风温度传感器预警","severity":3})
         }
-        let ras_diff = this.raw.RasU1 - this.raw.RasU2
+        let ras_diff = this.raw.RasU1 - this.raw.RasU2;
         if $ras_diff > 80 || $ras_diff < -80 {
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+8),"name":"回风温度传感器预警","severity":3})
         }
@@ -266,22 +266,22 @@ pipeline:
         }
 
         # 部件寿命预警
-        let life_base = this.carriage_id * 1000 + 50000
+        let life_base = this.carriage_id * 1000 + 50000;
 
         # 风机类阈值
-        let fan_life_s  = 90000000   # 额定寿命
-        let fan_warn_s  = 67500000   # 75% warn
-        let fan_crit_s  = 81000000   # 90% crit
+        let fan_life_s  = 90000000;   # 额定寿命
+        let fan_warn_s  = 67500000;   # 75% warn
+        let fan_crit_s  = 81000000;   # 90% crit
 
         # 压缩机阈值
-        let cp_life_s   = 180000000  # 额定寿命
-        let cp_warn_s   = 135000000  # 75% warn
-        let cp_crit_s   = 162000000  # 90% crit
+        let cp_life_s   = 180000000;  # 额定寿命
+        let cp_warn_s   = 135000000;  # 75% warn
+        let cp_crit_s   = 162000000;  # 90% crit
 
         # 阀门类阈值
-        let valve_life_n = 1000000   # 额定寿命
-        let valve_warn_n = 750000    # 75% warn
-        let valve_crit_n = 900000    # 90% crit
+        let valve_life_n = 1000000;   # 额定寿命
+        let valve_warn_n = 750000;    # 75% warn
+        let valve_crit_n = 900000;    # 90% crit
 
         # 机组1 通风机运行时间
         if this.raw.DwefOpTmU11 >= $fan_crit_s {
