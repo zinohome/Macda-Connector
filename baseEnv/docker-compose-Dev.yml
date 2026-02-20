@@ -235,7 +235,7 @@ services:
   # ── NB67 三段流水线 ──────────────────────────────────────────
   # Pipeline Stage 1: 解析NB67二进制 → signal-parsed
   connect-parser:
-    image: harbor.naivehero.top:8443//nb-parse-connect:v2.1.2
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1.2
     container_name: connect-parser
     restart: unless-stopped
     command: ["-c", "/etc/connect/nb67-parser.yaml"]
@@ -256,7 +256,7 @@ services:
 
   # Pipeline Stage 2: 写入存储 (signal-parsed → TimescaleDB)
   connect-storage-writer:
-    image: harbor.naivehero.top:8443//nb-parse-connect:v2.1.2
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1.2
     container_name: connect-storage-writer
     restart: unless-stopped
     command: ["-c", "/etc/connect/nb67-storage-writer.yaml"]
@@ -277,7 +277,7 @@ services:
 
   # Pipeline Stage 3: 事件检测 (signal-parsed → signal-predict/signal-alarm/signal-life)
   connect-event-builder:
-    image: harbor.naivehero.top:8443//nb-parse-connect:v2.1.2
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1.2
     container_name: connect-event-builder
     restart: unless-stopped
     command: ["-c", "/etc/connect/nb67-event-builder.yaml"]
