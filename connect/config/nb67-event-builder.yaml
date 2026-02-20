@@ -68,8 +68,8 @@ pipeline:
         root.alarm_hits = []
         root.life_hits = []
 
-        # HVAC 预警码，详见下方注释
-        let hvac_base = this.carriage_id * 100;
+        # HVAC 预警码
+        let hvac_base = carriage_id * 100;
 
         # 冷媒泄漏预警
         if (this.raw.WmodeU1 == 2 || this.raw.WmodeU1 == 3) && this.raw.FCpU11 > 300 && this.raw.SuckpU11 < 20 {
