@@ -6,7 +6,7 @@ input:
       - redpanda-3:9092
     topics:
       - signal-in
-    consumer_group: macda-parser-v1
+    consumer_group: macda-parser
     start_from_oldest: false
     commit_period: 1s
 
@@ -19,7 +19,7 @@ pipeline:
     - mapping: |
         root = this
 
-        root.schema_version = "nb67.parsed.v1"
+        root.schema_version = "nb67.parsed"
         root.ingest_time = now()
         root.process_time = now()
 

@@ -6,7 +6,7 @@ input:
       - redpanda-3:9092
     topics:
       - signal-parsed
-    consumer_group: macda-storage-v1
+    consumer_group: macda-storage
     start_from_oldest: false
     commit_period: 1s
 

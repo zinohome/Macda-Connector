@@ -50,7 +50,7 @@ input:
   kafka:
     addresses: ["redpanda-1:9092", "redpanda-2:9092", "redpanda-3:9092"]
     topics: ["signal-in"]
-    consumer_group: "macda-parser-v1"
+    consumer_group: "macda-parser"
     start_from_oldest: false
 
 pipeline:
@@ -63,7 +63,7 @@ pipeline:
         root = this
 
         root.meta = {
-          "schema_version": "nb67.parsed.v1",
+          "schema_version": "nb67.parsed",
           "parser_version": this.parser_version.or("nb67-go-v1"),
           "ingest_time": now(),
           "process_time": now()
@@ -118,7 +118,7 @@ input:
   kafka:
     addresses: ["redpanda-1:9092", "redpanda-2:9092", "redpanda-3:9092"]
     topics: ["signal.parsed.v1"]
-    consumer_group: "macda-storage-v1"
+    consumer_group: "macda-storage"
     start_from_oldest: false
 
 pipeline:
@@ -200,7 +200,7 @@ input:
   kafka:
     addresses: ["redpanda-1:9092", "redpanda-2:9092", "redpanda-3:9092"]
     topics: ["signal.parsed.v1"]
-    consumer_group: "macda-event-v1"
+    consumer_group: "macda-event"
     start_from_oldest: false
 
 pipeline:

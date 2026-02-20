@@ -34,7 +34,7 @@
 
 ## 2.3 元数据字段
 
-- `schema_version`：例如 `nb67.parsed.v1`
+- `schema_version`：例如 `nb67.parsed`
 - `parser_version`：例如 `nb67-go-v1`
 - `quality_code`：0 正常，>0 表示解析/质量异常
 
