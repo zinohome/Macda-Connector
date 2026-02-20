@@ -47,12 +47,12 @@ EXPOSE 4195
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:4195/ping || exit 1
 
-# 默认启动命令
-# 传入配置文件路径作为参数
+# 默认启动命令（运行时通过 command 传入具体配置文件）
+# 示例: docker run ... -c /etc/connect/nb67-parser.yaml
 ENTRYPOINT ["/app/connect-nb67"]
-CMD ["-c", "/etc/connect/nb67-connect.yaml"]
+CMD ["-c", "/etc/connect/nb67-parser.yaml"]
 
 # 标签
 LABEL maintainer="MACDA Project" \
       description="Redpanda Connect with NB67 Parser Plugin" \
-      version="1.0"
+      version="2.0"

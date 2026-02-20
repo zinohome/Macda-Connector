@@ -145,10 +145,18 @@ services:
     container_name: dev-create-topic
     entrypoint: /bin/sh
     command: >-
-      -c "rpk topic create signal-in --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
-      rpk topic create signal-parsed --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
+      -c "
+      rpk topic create signal-in --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
+      rpk topic create signal.parsed.v1 --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
+      rpk topic create signal.event.predict.v1 --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
+      rpk topic create signal.event.alarm.v1 --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
+      rpk topic create signal.event.life.v1 --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
       rpk topic alter-config signal-in --set retention.ms=604800000 -X brokers=redpanda-1:9092 &&
-      rpk topic alter-config signal-parsed --set retention.ms=604800000 -X brokers=redpanda-1:9092"
+      rpk topic alter-config signal.parsed.v1 --set retention.ms=604800000 -X brokers=redpanda-1:9092 &&
+      rpk topic alter-config signal.event.predict.v1 --set retention.ms=2592000000 -X brokers=redpanda-1:9092 &&
+      rpk topic alter-config signal.event.alarm.v1 --set retention.ms=2592000000 -X brokers=redpanda-1:9092 &&
+      rpk topic alter-config signal.event.life.v1 --set retention.ms=2592000000 -X brokers=redpanda-1:9092
+      "
     depends_on:
       redpanda-1:
         condition: service_healthy
@@ -224,15 +232,67 @@ services:
     networks:
       - macdanet
 
-  topic-parse-connect:
-    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1
-    restart: on-failure
-    command: ["-c", "/etc/connect/nb67-connect.yaml"]
+  # ── NB67 三段流水线 ──────────────────────────────────────────
+  # Pipeline Stage 1: 解析NB67二进制 → signal.parsed.v1
+  connect-parser:
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.0
+    container_name: connect-parser
+    restart: unless-stopped
+    command: ["-c", "/etc/connect/nb67-parser.yaml"]
     volumes:
-      - "/data/MACDA2/connect/config/nb67-connect.yaml:/etc/connect/nb67-connect.yaml:ro"
+      - "/data/MACDA2/connect/config/nb67-parser.yaml:/etc/connect/nb67-parser.yaml:ro"
+    ports:
+      - "4195:4195"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4195/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     depends_on:
       dev-create-topic:
         condition: service_completed_successfully
+    networks:
+      - macdanet
+
+  # Pipeline Stage 2: 写入存储 (signal.parsed.v1 → TimescaleDB)
+  connect-storage-writer:
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.0
+    container_name: connect-storage-writer
+    restart: unless-stopped
+    command: ["-c", "/etc/connect/nb67-storage-writer.yaml"]
+    volumes:
+      - "/data/MACDA2/connect/config/nb67-storage-writer.yaml:/etc/connect/nb67-storage-writer.yaml:ro"
+    ports:
+      - "4196:4195"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4195/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      connect-parser:
+        condition: service_healthy
+    networks:
+      - macdanet
+
+  # Pipeline Stage 3: 事件检测 (signal.parsed.v1 → predict/alarm/life topics)
+  connect-event-builder:
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.0
+    container_name: connect-event-builder
+    restart: unless-stopped
+    command: ["-c", "/etc/connect/nb67-event-builder.yaml"]
+    volumes:
+      - "/data/MACDA2/connect/config/nb67-event-builder.yaml:/etc/connect/nb67-event-builder.yaml:ro"
+    ports:
+      - "4197:4195"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4195/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      connect-parser:
+        condition: service_healthy
     networks:
       - macdanet
 
