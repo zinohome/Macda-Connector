@@ -11,7 +11,7 @@ input:
     commit_period: 1s
 
 pipeline:
-  threads: 4
+  threads: 8
   processors:
     - mapping: |
         root = {
