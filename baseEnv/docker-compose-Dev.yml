@@ -190,7 +190,7 @@ services:
     networks:
       - macdanet
 
-  topic-in-connect:
+  connect-topic-in:
     image: harbor.naivehero.top:8443/macda2/connect:latest
     restart: on-failure
     entrypoint: /bin/sh
