@@ -34,10 +34,13 @@ output:
     # fan_out: 每条消息复制到所有 output，各 output 的 processors 负责裁剪字段
     pattern: fan_out
     outputs:
-      # signal-predict: 只含 predict_event（故障预警命中列表）
+      # signal-predict: predict_event（故障预警命中列表）
       - processors:
           - mapping: |
               root = this.predict_event
+          # hits 为空时丢弃，不向 topic 发送任何内容
+          - mapping: |
+              root = if this.hits.length() == 0 { deleted() } else { this }
         kafka:
           addresses:
             - redpanda-1:9092
@@ -49,10 +52,13 @@ output:
           max_in_flight: 64
           compression: snappy
 
-      # signal-alarm: 只含 alarm_event（原生故障位命中列表）
+      # signal-alarm: alarm_event（原生故障位命中列表）
       - processors:
           - mapping: |
               root = this.alarm_event
+          # hits 为空时丢弃
+          - mapping: |
+              root = if this.hits.length() == 0 { deleted() } else { this }
         kafka:
           addresses:
             - redpanda-1:9092
@@ -64,10 +70,13 @@ output:
           max_in_flight: 64
           compression: snappy
 
-      # signal-life: 只含 life_event（部件寿命命中列表）
+      # signal-life: life_event（部件寿命命中列表）
       - processors:
           - mapping: |
               root = this.life_event
+          # hits 为空时丢弃
+          - mapping: |
+              root = if this.hits.length() == 0 { deleted() } else { this }
         kafka:
           addresses:
             - redpanda-1:9092

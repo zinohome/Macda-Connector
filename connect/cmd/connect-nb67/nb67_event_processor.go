@@ -176,6 +176,11 @@ func (p *NB67EventProcessor) Process(ctx context.Context, msg *service.Message) 
 	alarmHits := buildAlarmHits(raw)
 	lifeHits := buildLifeHits(raw, input.CarriageID)
 
+	// 三类命中均为空时丢弃消息，不向下游输出任何内容
+	if len(predictHits) == 0 && len(alarmHits) == 0 && len(lifeHits) == 0 {
+		return service.MessageBatch{}, nil
+	}
+
 	// 聚合输出
 	output := EventOutput{
 		PredictEvent: SubEvent{
@@ -255,7 +260,8 @@ func hvacCode(hvacBase int, seq int) string {
 // ============================================================
 
 func buildPredictHits(raw map[string]any, carriageID int) []PredictHit {
-	var hits []PredictHit
+	// 初始化为空 slice（非 nil），序列化时输出 [] 而非 null
+	hits := make([]PredictHit, 0)
 	base := carriageID * 100
 
 	// ---------- 1~4. 冷媒泄漏预警（ref_leak）----------
@@ -425,7 +431,8 @@ func buildPredictHits(raw map[string]any, carriageID int) []PredictHit {
 // ============================================================
 
 func buildAlarmHits(raw map[string]any) []AlarmHit {
-	var hits []AlarmHit
+	// 初始化为空 slice（非 nil），序列化时输出 [] 而非 null
+	hits := make([]AlarmHit, 0)
 
 	// 辅助函数：批量检查故障位
 	check := func(field, code, name string, level int) {
@@ -475,7 +482,8 @@ func buildAlarmHits(raw map[string]any) []AlarmHit {
 // ============================================================
 
 func buildLifeHits(raw map[string]any, carriageID int) []LifeHit {
-	var hits []LifeHit
+	// 初始化为空 slice（非 nil），序列化时输出 [] 而非 null
+	hits := make([]LifeHit, 0)
 	lifeBase := int64(carriageID*1000 + 50_000)
 
 	// checkFan 检查风机类寿命（单位：秒）

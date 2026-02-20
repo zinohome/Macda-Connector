@@ -246,7 +246,6 @@ services:
   # Pipeline Stage 1: 解析NB67二进制 → signal-parsed
   connect-parser:
     image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1.2
-    container_name: connect-parser
     restart: unless-stopped
     command: ["-c", "/etc/connect/nb67-parser.yaml"]
     volumes:
@@ -265,7 +264,6 @@ services:
   # Pipeline Stage 2: 写入存储 (signal-parsed → TimescaleDB)
   connect-storage-writer:
     image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1.2
-    container_name: connect-storage-writer
     restart: unless-stopped
     command: ["-c", "/etc/connect/nb67-storage-writer.yaml"]
     volumes:
@@ -286,13 +284,10 @@ services:
   # Pipeline Stage 3: 事件检测 (signal-parsed → signal-predict/signal-alarm/signal-life)
   connect-event-builder:
     image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1.2
-    container_name: connect-event-builder
     restart: unless-stopped
     command: ["-c", "/etc/connect/nb67-event-builder.yaml"]
     volumes:
       - "/data/MACDA2/connect/config/nb67-event-builder.yaml:/etc/connect/nb67-event-builder.yaml:ro"
-    ports:
-      - "4197:4195"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4195/ping"]
       interval: 30s
