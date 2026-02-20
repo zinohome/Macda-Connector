@@ -5,11 +5,7 @@ services:
     container_name: dev-init
     user: "0:0"
     command: >
-      /bin/sh -c "
-      mkdir -p /host-redpanda-1 /host-redpanda-2 /host-redpanda-3;
-      chown -R 101:101 /host-redpanda-1 /host-redpanda-2 /host-redpanda-3;
-      chmod -R ug+rwX /host-redpanda-1 /host-redpanda-2 /host-redpanda-3;
-      "
+      /bin/sh -c " mkdir -p /host-redpanda-1 /host-redpanda-2 /host-redpanda-3; chown -R 101:101 /host-redpanda-1 /host-redpanda-2 /host-redpanda-3; chmod -R ug+rwX /host-redpanda-1 /host-redpanda-2 /host-redpanda-3; "
     volumes:
       - "/data/MACDA2/redpanda/redpanda1:/host-redpanda-1"
       - "/data/MACDA2/redpanda/redpanda2:/host-redpanda-2"
@@ -54,7 +50,7 @@ services:
       - 19092:19092
       - 19644:9644
     healthcheck:
-      test: ["CMD", "rpk", "cluster", "info", "-X", "brokers=localhost:9092"]
+      test: [ "CMD", "rpk", "cluster", "info", "-X", "brokers=localhost:9092" ]
       interval: 10s
       timeout: 10s
       retries: 10
@@ -148,20 +144,7 @@ services:
     container_name: dev-create-topic
     entrypoint: /bin/sh
     command: >-
-      -c "
-      rpk topic create signal-in --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
-      rpk topic create signal-parsed --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
-      rpk topic create signal-predict --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
-      rpk topic create signal-alarm --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
-      rpk topic create signal-life --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
-      rpk topic create signal-storage --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
-      rpk topic alter-config signal-in --set retention.ms=604800000 -X brokers=redpanda-1:9092 &&
-      rpk topic alter-config signal-parsed --set retention.ms=604800000 -X brokers=redpanda-1:9092 &&
-      rpk topic alter-config signal-predict --set retention.ms=604800000 -X brokers=redpanda-1:9092 &&
-      rpk topic alter-config signal-alarm --set retention.ms=604800000 -X brokers=redpanda-1:9092 &&
-      rpk topic alter-config signal-life --set retention.ms=604800000 -X brokers=redpanda-1:9092 &&
-      rpk topic alter-config signal-storage --set retention.ms=604800000 -X brokers=redpanda-1:9092
-      "
+      -c " rpk topic create signal-in --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 && rpk topic create signal-parsed --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 && rpk topic create signal-predict --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 && rpk topic create signal-alarm --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 && rpk topic create signal-life --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 && rpk topic create signal-storage --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 && rpk topic alter-config signal-in --set retention.ms=604800000 -X brokers=redpanda-1:9092 && rpk topic alter-config signal-parsed --set retention.ms=604800000 -X brokers=redpanda-1:9092 && rpk topic alter-config signal-predict --set retention.ms=604800000 -X brokers=redpanda-1:9092 && rpk topic alter-config signal-alarm --set retention.ms=604800000 -X brokers=redpanda-1:9092 && rpk topic alter-config signal-life --set retention.ms=604800000 -X brokers=redpanda-1:9092 && rpk topic alter-config signal-storage --set retention.ms=604800000 -X brokers=redpanda-1:9092 "
     depends_on:
       redpanda-1:
         condition: service_healthy
@@ -209,7 +192,7 @@ services:
             topics:
               - signal-in
             consumer_group: topic-in-sync
-        
+
         output:
           kafka:
             addresses:
@@ -222,7 +205,7 @@ services:
             batching:
               count: 100
               period: 100ms
-        
+
         http:
           address: 0.0.0.0:4195
           enabled: true
@@ -232,7 +215,7 @@ services:
           level: INFO
           format: json
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4195/ping"]
+      test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -247,11 +230,11 @@ services:
   connect-parser:
     image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1.2
     restart: unless-stopped
-    command: ["-c", "/etc/connect/nb67-parser.yaml"]
+    command: [ "-c", "/etc/connect/nb67-parser.yaml" ]
     volumes:
       - "/data/MACDA2/connect/config/nb67-parser.yaml:/etc/connect/nb67-parser.yaml:ro"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4195/ping"]
+      test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -265,11 +248,11 @@ services:
   connect-storage-writer:
     image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1.2
     restart: unless-stopped
-    command: ["-c", "/etc/connect/nb67-storage-writer.yaml"]
+    command: [ "-c", "/etc/connect/nb67-storage-writer.yaml" ]
     volumes:
       - "/data/MACDA2/connect/config/nb67-storage-writer.yaml:/etc/connect/nb67-storage-writer.yaml:ro"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4195/ping"]
+      test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -285,11 +268,13 @@ services:
   connect-event-builder:
     image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1.2
     restart: unless-stopped
-    command: ["-c", "/etc/connect/nb67-event-builder.yaml"]
+    command: [ "-c", "/etc/connect/nb67-event-builder.yaml" ]
+    environment:
+      - RUNTIME=DEV
     volumes:
       - "/data/MACDA2/connect/config/nb67-event-builder.yaml:/etc/connect/nb67-event-builder.yaml:ro"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4195/ping"]
+      test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
       interval: 30s
       timeout: 10s
       retries: 3

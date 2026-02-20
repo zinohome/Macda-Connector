@@ -23,6 +23,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -131,27 +132,28 @@ type ruleState struct {
 type NB67EventProcessor struct {
 	// key: DeviceID + RuleCode
 	// value: *ruleState
-	states sync.Map
-	logger *service.Logger
+	states  sync.Map
+	logger  *service.Logger
+	runtime string // ENV "RUNTIME": "DEV" | "PRD"
 }
 
-// checkRule 判定规则是否满足持续时间要求。
-func (p *NB67EventProcessor) checkRule(condition bool, duration time.Duration, deviceID string, ruleCode string) bool {
+// checkRule 判定规则是否满足持续时间要求，使用消息中的 currentTime。
+func (p *NB67EventProcessor) checkRule(condition bool, duration time.Duration, deviceID string, ruleCode string, currentTime time.Time) bool {
 	key := deviceID + ":" + ruleCode
 	if !condition {
 		p.states.Delete(key)
 		return false
 	}
 
-	now := time.Now()
-	val, loaded := p.states.LoadOrStore(key, &ruleState{firstSeen: now})
+	val, loaded := p.states.LoadOrStore(key, &ruleState{firstSeen: currentTime})
 	state := val.(*ruleState)
 
 	if !loaded {
 		return duration <= 0
 	}
 
-	return now.Sub(state.firstSeen) >= duration
+	// 计算消息间的时间差，而不是系统运行时间差
+	return currentTime.Sub(state.firstSeen) >= duration
 }
 
 // init 在程序启动时自动注册处理器。
@@ -162,7 +164,14 @@ func init() {
 			Summary("NB67 空调事件构建处理器").
 			Description("支持状态化持续时间判定的事件构建器"),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-			return &NB67EventProcessor{logger: mgr.Logger()}, nil
+			rt := os.Getenv("RUNTIME")
+			if rt == "" {
+				rt = "PRD"
+			}
+			return &NB67EventProcessor{
+				logger:  mgr.Logger(),
+				runtime: rt,
+			}, nil
 		},
 	)
 	if err != nil {
@@ -204,8 +213,24 @@ func (p *NB67EventProcessor) Process(ctx context.Context, msg *service.Message) 
 		ProcessTime:   time.Now().UTC().Format(time.RFC3339Nano),
 	}
 
+	// 【核心修复】：根据 RUNTIME 环境选择时间源
+	var currentTime time.Time
+	var parseErr error
+	if p.runtime == "DEV" {
+		// DEV 模式使用入库时间（RFC3339 格式）
+		currentTime, parseErr = time.Parse(time.RFC3339, input.IngestTime)
+	} else {
+		// PRD 模式使用原始物理时间（自定义文本格式）
+		currentTime, parseErr = time.Parse("2006-01-02 15:04:05", input.EventTimeText)
+	}
+
+	if parseErr != nil {
+		p.logger.Warnf("解析时间源失败 [Mode:%s, Ingest:%s, Event:%s]: %v", p.runtime, input.IngestTime, input.EventTimeText, parseErr)
+		currentTime = time.Now()
+	}
+
 	// 构建三类事件命中列表
-	predictHits := p.buildPredictHits(input.Raw, input.CarriageID, input.DeviceID)
+	predictHits := p.buildPredictHits(input.Raw, input.CarriageID, input.DeviceID, currentTime)
 	alarmHits := buildAlarmHits(input.Raw)
 	lifeHits := buildLifeHits(input.Raw, input.CarriageID)
 
@@ -283,7 +308,7 @@ func hvacCode(hvacBase int, seq int) string {
 // ============================================================
 
 // buildPredictHits 全量实现 HVAC101 ~ HVAC126 业务逻辑
-func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int, deviceID string) []PredictHit {
+func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int, deviceID string, currentTime time.Time) []PredictHit {
 	hits := make([]PredictHit, 0)
 	if len(raw) == 0 {
 		return hits
@@ -307,13 +332,13 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 
 		// 条件1：制冷模式 + 频率>30Hz + 吸气<2.0bar -> 持续5分钟
 		isCoolingLeak := (mode == 2 || mode == 3) && fcp > 300 && suckp < 20
-		if p.checkRule(isCoolingLeak, 5*time.Minute, deviceID, code+"_c") {
+		if p.checkRule(isCoolingLeak, 5*time.Minute, deviceID, code+"_c", currentTime) {
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
 			return
 		}
 		// 条件2：通风模式 + 高压<5bar -> 持续15分钟
 		isVentLeak := mode == 1 && highp < 50
-		if p.checkRule(isVentLeak, 15*time.Minute, deviceID, code+"_v") {
+		if p.checkRule(isVentLeak, 15*time.Minute, deviceID, code+"_v", currentTime) {
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
 		}
 	}
@@ -336,16 +361,15 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 
 		// 条件1：同频电流差 > 2A -> 持续3分钟
 		isCurrentDiff := f1 == f2 && f1 > 0 && (i1-i2 > 20 || i1-i2 < -20)
-		if p.checkRule(isCurrentDiff, 3*time.Minute, deviceID, code+"_i") {
+		if p.checkRule(isCurrentDiff, 3*time.Minute, deviceID, code+"_i", currentTime) {
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
 			return
 		}
 		// 条件2：运行 > 5min 后，过热度异常 -> 持续10分钟
-		// 先判定运行状态（用于 5min 前置判断）
 		isRunning := f1 > 0 || f2 > 0
-		hasBeenRunning := p.checkRule(isRunning, 5*time.Minute, deviceID, code+"_run")
+		hasBeenRunning := p.checkRule(isRunning, 5*time.Minute, deviceID, code+"_run", currentTime)
 		isSpErr := hasBeenRunning && (sp1 > 200 || sp1 < -80 || sp2 > 200 || sp2 < -80)
-		if p.checkRule(isSpErr, 10*time.Minute, deviceID, code+"_sp") {
+		if p.checkRule(isSpErr, 10*time.Minute, deviceID, code+"_sp", currentTime) {
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
 		}
 	}
@@ -356,30 +380,28 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 	// 3. 传感器预警 (HVAC_07 ~ HVAC_11)
 	// ================================================================
 	// HVAC_07/08: 温差 > 8℃ -> 持续 5 分钟
-	fasDiff := rawInt(raw, "FasU1") - rawInt(raw, "FasU2")
-	if p.checkRule(fasDiff > 80 || fasDiff < -80, 5*time.Minute, deviceID, hvacCode(base, 7)) {
+	fasCondition := rawInt(raw, "FasU1")-rawInt(raw, "FasU2") > 80 || rawInt(raw, "FasU1")-rawInt(raw, "FasU2") < -80
+	if p.checkRule(fasCondition, 5*time.Minute, deviceID, hvacCode(base, 7), currentTime) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 7), Name: "新风温度传感器预警", Severity: 3})
 	}
-	rasDiff := rawInt(raw, "RasU1") - rawInt(raw, "RasU2")
-	if p.checkRule(rasDiff > 80 || rasDiff < -80, 5*time.Minute, deviceID, hvacCode(base, 8)) {
+	rasCondition := rawInt(raw, "RasU1")-rawInt(raw, "RasU2") > 80 || rawInt(raw, "RasU1")-rawInt(raw, "RasU2") < -80
+	if p.checkRule(rasCondition, 5*time.Minute, deviceID, hvacCode(base, 8), currentTime) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 8), Name: "回风温度传感器预警", Severity: 3})
 	}
 
-	// HVAC_09: 车厢超温预警 -> 系统正常运行 > 20min，且车温 > 4℃ (假设为偏差值或特定阈值) -> 持续 2 分钟
-	// 注意：此处需要判断"无故障"，简单起见判定 buildAlarmHits 为空
+	// HVAC_09: 车厢超温预警 -> 系统正常运行 > 20min，且车温 > 4℃ -> 持续 2 分钟
 	coolingNormal := len(buildAlarmHits(raw)) == 0 && (wModeU1 == 2 || wModeU2 == 2)
-	sysRunningLong := p.checkRule(coolingNormal, 20*time.Minute, deviceID, "cooling_normal_20")
-	// 这里使用 Tveh1/2（单位 0.1C，4C=40）
+	sysRunningLong := p.checkRule(coolingNormal, 20*time.Minute, deviceID, "cooling_normal_20", currentTime)
 	isOvertemp := sysRunningLong && (rawInt(raw, "Tveh1") > 40 || rawInt(raw, "Tveh2") > 40)
-	if p.checkRule(isOvertemp, 2*time.Minute, deviceID, hvacCode(base, 9)) {
+	if p.checkRule(isOvertemp, 2*time.Minute, deviceID, hvacCode(base, 9), currentTime) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 9), Name: "车厢温度超温预警", Severity: 3})
 	}
 
 	// HVAC_10/11: 压差 > 300Pa -> 持续 30 分钟
-	if p.checkRule(rawBool(raw, "CfbkEfU11") && rawInt(raw, "PresdiffU1") > 3000 && rawInt(raw, "PresdiffU1") < 32767, 30*time.Minute, deviceID, hvacCode(base, 10)) {
+	if p.checkRule(rawBool(raw, "CfbkEfU11") && rawInt(raw, "PresdiffU1") > 3000 && rawInt(raw, "PresdiffU1") < 32767, 30*time.Minute, deviceID, hvacCode(base, 10), currentTime) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 10), Name: "机组1滤网脏堵预警", Severity: 2})
 	}
-	if p.checkRule(rawBool(raw, "CfbkEfU21") && rawInt(raw, "PresdiffU2") > 3000 && rawInt(raw, "PresdiffU2") < 32767, 30*time.Minute, deviceID, hvacCode(base, 11)) {
+	if p.checkRule(rawBool(raw, "CfbkEfU21") && rawInt(raw, "PresdiffU2") > 3000 && rawInt(raw, "PresdiffU2") < 32767, 30*time.Minute, deviceID, hvacCode(base, 11), currentTime) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 11), Name: "机组2滤网脏堵预警", Severity: 2})
 	}
 
@@ -389,7 +411,7 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 	checkFanI := func(cfbkField, iField string, threshold int64, seq int, name string) {
 		code := hvacCode(base, seq)
 		isOverI := rawBool(raw, cfbkField) && rawInt(raw, iField) > threshold
-		if p.checkRule(isOverI, 10*time.Minute, deviceID, code) {
+		if p.checkRule(isOverI, 10*time.Minute, deviceID, code, currentTime) {
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
 		}
 	}
@@ -409,7 +431,7 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 	checkCpI := func(fasField, iField string, seq int, name string) {
 		code := hvacCode(base, seq)
 		isOverI := rawInt(raw, fasField) < 350 && rawInt(raw, iField) > 180
-		if p.checkRule(isOverI, 10*time.Minute, deviceID, code) {
+		if p.checkRule(isOverI, 10*time.Minute, deviceID, code, currentTime) {
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
 		}
 	}
@@ -423,17 +445,15 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 	// ================================================================
 	checkAQ := func(uIdx int, name string) {
 		code := hvacCode(base, uIdx+24) // 101+24=125, 126
-		// 前置条件：通风机连续运行 > 20 分钟
 		fanRunning := rawBool(raw, fmt.Sprintf("CfbkEfU%d1", uIdx))
-		hasBeenRunning := p.checkRule(fanRunning, 20*time.Minute, deviceID, code+"_fanrun")
+		hasBeenRunning := p.checkRule(fanRunning, 20*time.Minute, deviceID, code+"_fanrun", currentTime)
 
-		// 阈值判定
 		aqErr := hasBeenRunning && (rawInt(raw, fmt.Sprintf("AqCo2U%d", uIdx)) > 1200 ||
 			rawInt(raw, fmt.Sprintf("AqPm25U%d", uIdx)) > 75 ||
 			rawInt(raw, fmt.Sprintf("AqPm10U%d", uIdx)) > 150 ||
 			rawInt(raw, fmt.Sprintf("AqTvocU%d", uIdx)) > 600)
 
-		if p.checkRule(aqErr, 20*time.Minute, deviceID, code+"_pollute") {
+		if p.checkRule(aqErr, 20*time.Minute, deviceID, code+"_pollute", currentTime) {
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
 		}
 	}
