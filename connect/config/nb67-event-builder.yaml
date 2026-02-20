@@ -69,6 +69,7 @@ pipeline:
         root.life_hits = []
 
         # HVAC 预警码，详见下方注释
+        
         let hvac_base = this.carriage_id * 100
 
         # 冷媒泄漏预警
