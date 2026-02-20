@@ -37,10 +37,11 @@ output:
       # signal-predict: predict_event（故障预警命中列表）
       - processors:
           - mapping: |
-              root = this.predict_event
-          # hits 为空时丢弃，不向 topic 发送任何内容
-          - mapping: |
-              root = if this.hits.length() == 0 { deleted() } else { this }
+              root = if this.predict_event.hits.length() > 0 {
+                this.predict_event
+              } else {
+                deleted()
+              }
         kafka:
           addresses:
             - redpanda-1:9092
@@ -55,10 +56,11 @@ output:
       # signal-alarm: alarm_event（原生故障位命中列表）
       - processors:
           - mapping: |
-              root = this.alarm_event
-          # hits 为空时丢弃
-          - mapping: |
-              root = if this.hits.length() == 0 { deleted() } else { this }
+              root = if this.alarm_event.hits.length() > 0 {
+                this.alarm_event
+              } else {
+                deleted()
+              }
         kafka:
           addresses:
             - redpanda-1:9092
@@ -73,10 +75,11 @@ output:
       # signal-life: life_event（部件寿命命中列表）
       - processors:
           - mapping: |
-              root = this.life_event
-          # hits 为空时丢弃
-          - mapping: |
-              root = if this.hits.length() == 0 { deleted() } else { this }
+              root = if this.life_event.hits.length() > 0 {
+                this.life_event
+              } else {
+                deleted()
+              }
         kafka:
           addresses:
             - redpanda-1:9092
