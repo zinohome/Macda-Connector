@@ -363,6 +363,10 @@ input:
             "hits": root.life_hits,
             "source": "part-life-v2"
           }
+      - processors:
+          - mapping: |
+              root = this.predict_event
+        kafka:
           addresses:
             - redpanda-1:9092
             - redpanda-2:9092
