@@ -99,7 +99,7 @@ output:
       - redpanda-1:9092
       - redpanda-2:9092
       - redpanda-3:9092
-    topic: signal.storage.fact_raw.v1
+    topic: signal-storage
     key: ${! this.device_id }
     partitioner: round_robin
     max_in_flight: 64
