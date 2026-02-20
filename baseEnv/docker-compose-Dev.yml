@@ -45,6 +45,7 @@ services:
       - --set redpanda.partition_autobalancing_mode=node_add
       - --set redpanda.core_balancing_continuous=false
       - --set redpanda.enable_schema_id_validation=false
+      - --set redpanda.auto_create_topics_enabled=false
     volumes:
       - "/data/MACDA2/redpanda/redpanda1:/var/lib/redpanda/data"
     ports:
@@ -85,6 +86,7 @@ services:
       - --set redpanda.partition_autobalancing_mode=node_add
       - --set redpanda.core_balancing_continuous=false
       - --set redpanda.enable_schema_id_validation=false
+      - --set redpanda.auto_create_topics_enabled=false
     volumes:
       - "/data/MACDA2/redpanda/redpanda2:/var/lib/redpanda/data"
     ports:
@@ -125,6 +127,7 @@ services:
       - --set redpanda.partition_autobalancing_mode=node_add
       - --set redpanda.core_balancing_continuous=false
       - --set redpanda.enable_schema_id_validation=false
+      - --set redpanda.auto_create_topics_enabled=false
     volumes:
       - "/data/MACDA2/redpanda/redpanda3:/var/lib/redpanda/data"
     ports:
