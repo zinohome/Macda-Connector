@@ -1,4 +1,43 @@
 input:
+    # ================================================================
+    # NB67 HVAC 事件检测规则说明（原详细注释已移至此处，便于lint安全）
+    #
+    # 1~4. 冷媒泄漏预警 (ref_leak)
+    #   HVAC_01 机组1系统1  HVAC_02 机组1系统2
+    #   HVAC_03 机组2系统1  HVAC_04 机组2系统2
+    #   制冷 热泵(2/3) 频率>30Hz 且 吸气压力<2.0bar(raw<20)
+    #   通风(1)         高压压力<5bar(raw<50)
+    # 5~6. 制冷系统预警 (f_cp)
+    #   HVAC_05 机组1  HVAC_06 机组2
+    #   同频压缩机电流差>2A(raw>20) 或 过热度>20°C(raw>200)/<-8°C(raw<-80)
+    # 7~8. 温度传感器预警 (f_fas/f_ras)
+    #   HVAC_07 新风温度传感器  HVAC_08 回风温度传感器
+    #   U1 与 U2 温差 > 8°C (raw > 80)
+    # 9. 车厢温度超温预警 (cabin_overtemp)
+    #   HVAC_09：BfltTempover 故障位置位
+    # 10~11. 滤网脏堵预警 (f_presdiff)
+    #   HVAC_10 机组1  HVAC_11 机组2
+    #   通风机运行 且 压差 > 300Pa (raw > 3000)
+    # 12~15. 通风机电流预警 (f_ef)
+    #   HVAC_12 机组1通风机1  HVAC_13 机组1通风机2
+    #   HVAC_14 机组2通风机1  HVAC_15 机组2通风机2
+    #   运行时电流 > 2A (raw > 20)
+    # 16~19. 冷凝风机电流预警 (f_cf)
+    #   HVAC_16 机组1冷凝风机1  HVAC_17 机组1冷凝风机2
+    #   HVAC_18 机组2冷凝风机1  HVAC_19 机组2冷凝风机2
+    #   运行时电流 > 2.9A (raw > 29)
+    # 20. 废排风机电流预警 (f_exufan)
+    #   HVAC_20：运行时电流 > 4.0A (raw > 40)
+    # 21~24. 压缩机电流预警 (f_fas_u)
+    #   HVAC_21 机组1压缩机1  HVAC_22 机组1压缩机2
+    #   HVAC_23 机组2压缩机1  HVAC_24 机组2压缩机2
+    #   新风温度 < 35°C (raw < 350) 且 压缩机电流 > 18A (raw > 180)
+    # 25~26. 空气质量预警 (f_aq)
+    #   HVAC_25 机组1  HVAC_26 机组2
+    #   通风机运行 且 CO2>1200ppm 或 PM2.5>75 或 PM10>150 或 TVOC>600
+    #
+    # 其余部件寿命、原生故障位等规则详见 requirements/binary-spec.md
+    # ================================================================
   kafka:
     addresses:
       - redpanda-1:9092
@@ -29,19 +68,10 @@ pipeline:
         root.alarm_hits = []
         root.life_hits = []
 
-        # ================================================================
-        # HVAC 预警码（来源：NB6&7-空调预警码表20240802）
-        # 官方码格式：HVAC{carriage_id × 100 + seq}
-        #   carriage_id 1~6 对应 Tc1/Mp1/M1/M2/Mp2/Tc2
-        #   seq 01~26 对应 26 种预警类型
-        # ================================================================
+        # HVAC 预警码，详见下方注释
         let hvac_base = this.carriage_id * 100
 
-        # 1~4. 冷媒泄漏预警 (ref_leak)
-        #   HVAC_01 机组1系统1  HVAC_02 机组1系统2
-        #   HVAC_03 机组2系统1  HVAC_04 机组2系统2
-        #   制冷 热泵(2/3) 频率>30Hz 且 吸气压力<2.0bar(raw<20)
-        #   通风(1)         高压压力<5bar(raw<50)
+        # 冷媒泄漏预警
         if (this.raw.WmodeU1 == 2 || this.raw.WmodeU1 == 3) && this.raw.FCpU11 > 300 && this.raw.SuckpU11 < 20 {
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+1),"name":"机组1系统1冷媒泄露预警","severity":3})
         }
@@ -67,9 +97,7 @@ pipeline:
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+4),"name":"机组2系统2冷媒泄露预警","severity":3})
         }
 
-        # 5~6. 制冷系统预警 (f_cp)
-        #   HVAC_05 机组1  HVAC_06 机组2
-        #   同频压缩机电流差>2A(raw>20) 或 过热度>20°C(raw>200)/<-8°C(raw<-80)
+        # 制冷系统预警
         let cp_u1_diff = this.raw.ICpU11 - this.raw.ICpU12
         if this.raw.FCpU11 == this.raw.FCpU12 && ($cp_u1_diff > 20 || $cp_u1_diff < -20) {
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+5),"name":"机组1制冷系统预警","severity":3})
@@ -85,9 +113,7 @@ pipeline:
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+6),"name":"机组2制冷系统预警","severity":3})
         }
 
-        # 7~8. 温度传感器预警 (f_fas/f_ras)
-        #   HVAC_07 新风温度传感器  HVAC_08 回风温度传感器
-        #   U1 与 U2 温差 > 8°C (raw > 80)
+        # 温度传感器预警
         let fas_diff = this.raw.FasU1 - this.raw.FasU2
         if $fas_diff > 80 || $fas_diff < -80 {
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+7),"name":"新风温度传感器预警","severity":3})
@@ -97,15 +123,12 @@ pipeline:
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+8),"name":"回风温度传感器预警","severity":3})
         }
 
-        # 9. 车厢温度超温预警 (cabin_overtemp)
-        #   HVAC_09：BfltTempover 故障位置位
+        # 车厢温度超温预警
         if this.raw.BfltTempover == true {
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+9),"name":"车厢温度超温预警","severity":3})
         }
 
-        # 10~11. 滤网脏堵预警 (f_presdiff)
-        #   HVAC_10 机组1  HVAC_11 机组2
-        #   通风机运行 且 压差 > 300Pa (raw > 3000)
+        # 滤网脏堵预警
         if this.raw.CfbkEfU11 == true && this.raw.PresdiffU1 > 3000 {
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+10),"name":"机组1滤网脏堵预警","severity":2})
         }
@@ -113,10 +136,7 @@ pipeline:
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+11),"name":"机组2滤网脏堵预警","severity":2})
         }
 
-        # 12~15. 通风机电流预警 (f_ef)
-        #   HVAC_12 机组1通风机1  HVAC_13 机组1通风机2
-        #   HVAC_14 机组2通风机1  HVAC_15 机组2通风机2
-        #   运行时电流 > 2A (raw > 20)
+        # 通风机电流预警
         if this.raw.CfbkEfU11 == true && this.raw.IEfU11 > 20 {
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+12),"name":"机组1通风机1电流预警","severity":3})
         }
@@ -130,10 +150,7 @@ pipeline:
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+15),"name":"机组2通风机2电流预警","severity":3})
         }
 
-        # 16~19. 冷凝风机电流预警 (f_cf)
-        #   HVAC_16 机组1冷凝风机1  HVAC_17 机组1冷凝风机2
-        #   HVAC_18 机组2冷凝风机1  HVAC_19 机组2冷凝风机2
-        #   运行时电流 > 2.9A (raw > 29)
+        # 冷凝风机电流预警
         if this.raw.CfbkCfU11 == true && this.raw.ICfU11 > 29 {
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+16),"name":"机组1冷凝风机1电流预警","severity":3})
         }
@@ -147,16 +164,12 @@ pipeline:
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+19),"name":"机组2冷凝风机2电流预警","severity":3})
         }
 
-        # 20. 废排风机电流预警 (f_exufan)
-        #   HVAC_20：运行时电流 > 4.0A (raw > 40)
+        # 废排风机电流预警
         if this.raw.CfbkExufan == true && this.raw.IExufan > 40 {
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+20),"name":"废排风机电流预警","severity":3})
         }
 
-        # 21~24. 压缩机电流预警 (f_fas_u)
-        #   HVAC_21 机组1压缩机1  HVAC_22 机组1压缩机2
-        #   HVAC_23 机组2压缩机1  HVAC_24 机组2压缩机2
-        #   新风温度 < 35°C (raw < 350) 且 压缩机电流 > 18A (raw > 180)
+        # 压缩机电流预警
         if this.raw.FasU1 < 350 && this.raw.ICpU11 > 180 {
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+21),"name":"机组1压缩机1电流预警","severity":3})
         }
@@ -170,9 +183,7 @@ pipeline:
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+24),"name":"机组2压缩机2电流预警","severity":3})
         }
 
-        # 25~26. 空气质量预警 (f_aq)
-        #   HVAC_25 机组1  HVAC_26 机组2
-        #   通风机运行 且 CO2>1200ppm 或 PM2.5>75 或 PM10>150 或 TVOC>600
+        # 空气质量预警
         if this.raw.CfbkEfU11 == true && (this.raw.AqCo2U1 > 1200 || this.raw.AqPm25U1 > 75 || this.raw.AqPm10U1 > 150 || this.raw.AqTvocU1 > 600) {
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+25),"name":"机组1空气质量预警","severity":3})
         }
@@ -180,9 +191,7 @@ pipeline:
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+26),"name":"机组2空气质量预警","severity":3})
         }
 
-        # ================================================================
-        # 原生故障位告警（来源：binary 故障位字段直接映射）
-        # ================================================================
+        # 原生故障位告警
         if this.raw.BlpfltCompU11 == true {
           root.alarm_hits = root.alarm_hits.append({"code":"blpflt_comp_u11","name":"低压故障U1-1","level":2})
         }
@@ -256,113 +265,104 @@ pipeline:
           root.alarm_hits = root.alarm_hits.append({"code":"bflt_exhaustfan","name":"废排风机故障","level":2})
         }
 
-        # ================================================================
-        # 部件寿命预警（来源：NB6&7-空调部件码表20240802）
-        # part_code = carriage_id × 1000 + 50000 + offset
-        # 时间字段单位：秒（raw）
-        # ----------------------------------------------------------------
-        # 阈值变量（修改寿命阈值只需改这里）：
-        #   风机类（通风机/冷凝风机/废排风机）：额定寿命 25000h
-        #   压缩机：额定寿命 50000h
-        #   阀门类（新风阀/回风阀/废排风阀）：额定寿命 1000000次
-        # ================================================================
+        # 部件寿命预警
         let life_base = this.carriage_id * 1000 + 50000
 
-        # --- 风机类阈值（秒） 25000h = 90000000s ---
+        # 风机类阈值
         let fan_life_s  = 90000000   # 额定寿命
         let fan_warn_s  = 67500000   # 75% warn
         let fan_crit_s  = 81000000   # 90% crit
 
-        # --- 压缩机阈值（秒） 50000h = 180000000s ---
+        # 压缩机阈值
         let cp_life_s   = 180000000  # 额定寿命
         let cp_warn_s   = 135000000  # 75% warn
         let cp_crit_s   = 162000000  # 90% crit
 
-        # --- 阀门类阈值（次） 额定 1000000次 ---
+        # 阀门类阈值
         let valve_life_n = 1000000   # 额定寿命
         let valve_warn_n = 750000    # 75% warn
         let valve_crit_n = 900000    # 90% crit
 
-        # 机组1 通风机运行时间 (part +001)
+        # 机组1 通风机运行时间
         if this.raw.DwefOpTmU11 >= $fan_crit_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+1),"name":"机组1通风机累计运行时间","severity":3,"value":this.raw.DwefOpTmU11,"limit":$fan_life_s})
         } else if this.raw.DwefOpTmU11 >= $fan_warn_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+1),"name":"机组1通风机累计运行时间","severity":2,"value":this.raw.DwefOpTmU11,"limit":$fan_life_s})
         }
-        # 机组1 冷凝风机运行时间 (part +002)
+        # 机组1 冷凝风机运行时间
         if this.raw.DwcfOpTmU11 >= $fan_crit_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+2),"name":"机组1冷凝风机累计运行时间","severity":3,"value":this.raw.DwcfOpTmU11,"limit":$fan_life_s})
         } else if this.raw.DwcfOpTmU11 >= $fan_warn_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+2),"name":"机组1冷凝风机累计运行时间","severity":2,"value":this.raw.DwcfOpTmU11,"limit":$fan_life_s})
         }
-        # 机组1 压缩机1运行时间 (part +003)
+        # 机组1 压缩机1运行时间
         if this.raw.DwcpOpTmU11 >= $cp_crit_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+3),"name":"机组1压缩机1累计运行时间","severity":3,"value":this.raw.DwcpOpTmU11,"limit":$cp_life_s})
         } else if this.raw.DwcpOpTmU11 >= $cp_warn_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+3),"name":"机组1压缩机1累计运行时间","severity":2,"value":this.raw.DwcpOpTmU11,"limit":$cp_life_s})
         }
-        # 机组1 压缩机2运行时间 (part +004)
+        # 机组1 压缩机2运行时间
         if this.raw.DwcpOpTmU12 >= $cp_crit_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+4),"name":"机组1压缩机2累计运行时间","severity":3,"value":this.raw.DwcpOpTmU12,"limit":$cp_life_s})
         } else if this.raw.DwcpOpTmU12 >= $cp_warn_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+4),"name":"机组1压缩机2累计运行时间","severity":2,"value":this.raw.DwcpOpTmU12,"limit":$cp_life_s})
         }
-        # 机组1 新风阀开关次数 (part +005)
+        # 机组1 新风阀开关次数
         if this.raw.DwfadOpCntU1 >= $valve_crit_n {
           root.life_hits = root.life_hits.append({"code":string($life_base+5),"name":"机组1新风阀开关总次数","severity":3,"value":this.raw.DwfadOpCntU1,"limit":$valve_life_n})
         } else if this.raw.DwfadOpCntU1 >= $valve_warn_n {
           root.life_hits = root.life_hits.append({"code":string($life_base+5),"name":"机组1新风阀开关总次数","severity":2,"value":this.raw.DwfadOpCntU1,"limit":$valve_life_n})
         }
-        # 机组1 回风阀开关次数 (part +006)
+        # 机组1 回风阀开关次数
         if this.raw.DwradOpCntU1 >= $valve_crit_n {
           root.life_hits = root.life_hits.append({"code":string($life_base+6),"name":"机组1回风阀开关总次数","severity":3,"value":this.raw.DwradOpCntU1,"limit":$valve_life_n})
         } else if this.raw.DwradOpCntU1 >= $valve_warn_n {
           root.life_hits = root.life_hits.append({"code":string($life_base+6),"name":"机组1回风阀开关总次数","severity":2,"value":this.raw.DwradOpCntU1,"limit":$valve_life_n})
         }
 
-        # 机组2 通风机运行时间 (part +011)
+        # 机组2 通风机运行时间
         if this.raw.DwefOpTmU21 >= $fan_crit_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+11),"name":"机组2通风机累计运行时间","severity":3,"value":this.raw.DwefOpTmU21,"limit":$fan_life_s})
         } else if this.raw.DwefOpTmU21 >= $fan_warn_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+11),"name":"机组2通风机累计运行时间","severity":2,"value":this.raw.DwefOpTmU21,"limit":$fan_life_s})
         }
-        # 机组2 冷凝风机运行时间 (part +012)
+        # 机组2 冷凝风机运行时间
         if this.raw.DwcfOpTmU21 >= $fan_crit_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+12),"name":"机组2冷凝风机累计运行时间","severity":3,"value":this.raw.DwcfOpTmU21,"limit":$fan_life_s})
         } else if this.raw.DwcfOpTmU21 >= $fan_warn_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+12),"name":"机组2冷凝风机累计运行时间","severity":2,"value":this.raw.DwcfOpTmU21,"limit":$fan_life_s})
         }
-        # 机组2 压缩机1运行时间 (part +013)
+        # 机组2 压缩机1运行时间
         if this.raw.DwcpOpTmU21 >= $cp_crit_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+13),"name":"机组2压缩机1累计运行时间","severity":3,"value":this.raw.DwcpOpTmU21,"limit":$cp_life_s})
         } else if this.raw.DwcpOpTmU21 >= $cp_warn_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+13),"name":"机组2压缩机1累计运行时间","severity":2,"value":this.raw.DwcpOpTmU21,"limit":$cp_life_s})
         }
-        # 机组2 压缩机2运行时间 (part +014)
+        # 机组2 压缩机2运行时间
         if this.raw.DwcpOpTmU22 >= $cp_crit_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+14),"name":"机组2压缩机2累计运行时间","severity":3,"value":this.raw.DwcpOpTmU22,"limit":$cp_life_s})
         } else if this.raw.DwcpOpTmU22 >= $cp_warn_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+14),"name":"机组2压缩机2累计运行时间","severity":2,"value":this.raw.DwcpOpTmU22,"limit":$cp_life_s})
         }
-        # 机组2 新风阀开关次数 (part +015)
+        # 机组2 新风阀开关次数
         if this.raw.DwfadOpCntU2 >= $valve_crit_n {
           root.life_hits = root.life_hits.append({"code":string($life_base+15),"name":"机组2新风阀开关总次数","severity":3,"value":this.raw.DwfadOpCntU2,"limit":$valve_life_n})
         } else if this.raw.DwfadOpCntU2 >= $valve_warn_n {
           root.life_hits = root.life_hits.append({"code":string($life_base+15),"name":"机组2新风阀开关总次数","severity":2,"value":this.raw.DwfadOpCntU2,"limit":$valve_life_n})
         }
-        # 机组2 回风阀开关次数 (part +016)
+        # 机组2 回风阀开关次数
         if this.raw.DwradOpCntU2 >= $valve_crit_n {
           root.life_hits = root.life_hits.append({"code":string($life_base+16),"name":"机组2回风阀开关总次数","severity":3,"value":this.raw.DwradOpCntU2,"limit":$valve_life_n})
         } else if this.raw.DwradOpCntU2 >= $valve_warn_n {
           root.life_hits = root.life_hits.append({"code":string($life_base+16),"name":"机组2回风阀开关总次数","severity":2,"value":this.raw.DwradOpCntU2,"limit":$valve_life_n})
         }
-        # 废排风机运行时间 (part +021)
+        # 废排风机运行时间
         if this.raw.DwexufanOpTm >= $fan_crit_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+21),"name":"废排风机累计运行时间","severity":3,"value":this.raw.DwexufanOpTm,"limit":$fan_life_s})
         } else if this.raw.DwexufanOpTm >= $fan_warn_s {
           root.life_hits = root.life_hits.append({"code":string($life_base+21),"name":"废排风机累计运行时间","severity":2,"value":this.raw.DwexufanOpTm,"limit":$fan_life_s})
         }
-        # 废排风阀开关次数 (part +022)
+        # 废排风阀开关次数
         if this.raw.DwdmpexuOpCnt >= $valve_crit_n {
           root.life_hits = root.life_hits.append({"code":string($life_base+22),"name":"废排风阀开关总次数","severity":3,"value":this.raw.DwdmpexuOpCnt,"limit":$valve_life_n})
         } else if this.raw.DwdmpexuOpCnt >= $valve_warn_n {
