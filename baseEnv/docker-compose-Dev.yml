@@ -147,15 +147,15 @@ services:
     command: >-
       -c "
       rpk topic create signal-in --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
-      rpk topic create signal.parsed.v1 --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
-      rpk topic create signal.event.predict.v1 --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
-      rpk topic create signal.event.alarm.v1 --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
-      rpk topic create signal.event.life.v1 --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
+      rpk topic create signal-parsed --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
+      rpk topic create signal-predict --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
+      rpk topic create signal-alarm --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
+      rpk topic create signal-life --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 &&
       rpk topic alter-config signal-in --set retention.ms=604800000 -X brokers=redpanda-1:9092 &&
-      rpk topic alter-config signal.parsed.v1 --set retention.ms=604800000 -X brokers=redpanda-1:9092 &&
-      rpk topic alter-config signal.event.predict.v1 --set retention.ms=2592000000 -X brokers=redpanda-1:9092 &&
-      rpk topic alter-config signal.event.alarm.v1 --set retention.ms=2592000000 -X brokers=redpanda-1:9092 &&
-      rpk topic alter-config signal.event.life.v1 --set retention.ms=2592000000 -X brokers=redpanda-1:9092
+      rpk topic alter-config signal-parsed --set retention.ms=604800000 -X brokers=redpanda-1:9092 &&
+      rpk topic alter-config signal-predict --set retention.ms=2592000000 -X brokers=redpanda-1:9092 &&
+      rpk topic alter-config signal-alarm --set retention.ms=2592000000 -X brokers=redpanda-1:9092 &&
+      rpk topic alter-config signal-life --set retention.ms=2592000000 -X brokers=redpanda-1:9092
       "
     depends_on:
       redpanda-1:
@@ -233,7 +233,7 @@ services:
       - macdanet
 
   # ── NB67 三段流水线 ──────────────────────────────────────────
-  # Pipeline Stage 1: 解析NB67二进制 → signal.parsed.v1
+  # Pipeline Stage 1: 解析NB67二进制 → signal-parsed
   connect-parser:
     image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.0
     container_name: connect-parser
@@ -254,7 +254,7 @@ services:
     networks:
       - macdanet
 
-  # Pipeline Stage 2: 写入存储 (signal.parsed.v1 → TimescaleDB)
+  # Pipeline Stage 2: 写入存储 (signal-parsed → TimescaleDB)
   connect-storage-writer:
     image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.0
     container_name: connect-storage-writer
@@ -275,7 +275,7 @@ services:
     networks:
       - macdanet
 
-  # Pipeline Stage 3: 事件检测 (signal.parsed.v1 → predict/alarm/life topics)
+  # Pipeline Stage 3: 事件检测 (signal-parsed → signal-predict/signal-alarm/signal-life)
   connect-event-builder:
     image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.0
     container_name: connect-event-builder

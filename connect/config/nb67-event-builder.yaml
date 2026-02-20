@@ -5,7 +5,7 @@ input:
       - redpanda-2:9092
       - redpanda-3:9092
     topics:
-      - signal.parsed.v1
+      - signal-parsed
     consumer_group: macda-event-v1
     start_from_oldest: false
     commit_period: 1s
@@ -390,9 +390,9 @@ pipeline:
 output:
   broker:
     # fan_out: 每条消息复制到所有 output，各 output 的 processors 负责裁剪字段
-    # signal.event.predict.v1 → 只含 predict_event（故障预警命中列表）
-    # signal.event.alarm.v1  → 只含 alarm_event（原生故障位命中列表）
-    # signal.event.life.v1   → 只含 life_event（部件寿命命中列表）
+    # signal-predict → 只含 predict_event（故障预警命中列表）
+    # signal-alarm   → 只含 alarm_event（原生故障位命中列表）
+    # signal-life    → 只含 life_event（部件寿命命中列表）
     pattern: fan_out
     outputs:
       - processors:
@@ -403,7 +403,7 @@ output:
             - redpanda-1:9092
             - redpanda-2:9092
             - redpanda-3:9092
-          topic: signal.event.predict.v1
+          topic: signal-predict
           key: ${! this.event_meta.device_id }
           partitioner: round_robin
           max_in_flight: 64
@@ -416,7 +416,7 @@ output:
             - redpanda-1:9092
             - redpanda-2:9092
             - redpanda-3:9092
-          topic: signal.event.alarm.v1
+          topic: signal-alarm
           key: ${! this.event_meta.device_id }
           partitioner: round_robin
           max_in_flight: 64
@@ -429,7 +429,7 @@ output:
             - redpanda-1:9092
             - redpanda-2:9092
             - redpanda-3:9092
-          topic: signal.event.life.v1
+          topic: signal-life
           key: ${! this.event_meta.device_id }
           partitioner: round_robin
           max_in_flight: 64
