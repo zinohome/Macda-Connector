@@ -33,8 +33,7 @@ pipeline:
         # HVAC 预警码
         # ================================================================
         let hvac_base = this.carriage_id * 100
-
-        # 1~4. 冷媒泄漏预警
+        
         if (this.raw.WmodeU1 == 2 || this.raw.WmodeU1 == 3) && this.raw.FCpU11 > 300 && this.raw.SuckpU11 < 20 {
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+1),"name":"机组1系统1冷媒泄露预警","severity":3})
         }
