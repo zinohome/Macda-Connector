@@ -260,99 +260,113 @@ pipeline:
         # 部件寿命预警（来源：NB6&7-空调部件码表20240802）
         # part_code = carriage_id × 1000 + 50000 + offset
         # 时间字段单位：秒（raw）
-        #   通风机/冷凝风机/废排风机寿命：25000h = 90000000s
-        #     75% warn = 67500000s | 90% crit = 81000000s
-        #   压缩机寿命：50000h = 180000000s
-        #     75% warn = 135000000s | 90% crit = 162000000s
-        #   阀门（新风阀/回风阀/废排风阀）寿命：1000000次
-        #     75% warn = 750000次  | 90% crit = 900000次
+        # ----------------------------------------------------------------
+        # 阈值变量（修改寿命阈值只需改这里）：
+        #   风机类（通风机/冷凝风机/废排风机）：额定寿命 25000h
+        #   压缩机：额定寿命 50000h
+        #   阀门类（新风阀/回风阀/废排风阀）：额定寿命 1000000次
         # ================================================================
         let life_base = this.carriage_id * 1000 + 50000
 
+        # --- 风机类阈值（秒）: 25000h = 90000000s ---
+        let fan_life_s  = 90000000   # 额定寿命
+        let fan_warn_s  = 67500000   # 75% warn
+        let fan_crit_s  = 81000000   # 90% crit
+
+        # --- 压缩机阈值（秒）: 50000h = 180000000s ---
+        let cp_life_s   = 180000000  # 额定寿命
+        let cp_warn_s   = 135000000  # 75% warn
+        let cp_crit_s   = 162000000  # 90% crit
+
+        # --- 阀门类阈值（次）: 额定 1000000次 ---
+        let valve_life_n = 1000000   # 额定寿命
+        let valve_warn_n = 750000    # 75% warn
+        let valve_crit_n = 900000    # 90% crit
+
         # 机组1 通风机运行时间 (part +001)
-        if this.raw.DwefOpTmU11 >= 81000000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+1),"name":"机组1通风机累计运行时间","severity":3,"value":this.raw.DwefOpTmU11,"limit":90000000})
-        } else if this.raw.DwefOpTmU11 >= 67500000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+1),"name":"机组1通风机累计运行时间","severity":2,"value":this.raw.DwefOpTmU11,"limit":90000000})
+        if this.raw.DwefOpTmU11 >= $fan_crit_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+1),"name":"机组1通风机累计运行时间","severity":3,"value":this.raw.DwefOpTmU11,"limit":$fan_life_s})
+        } else if this.raw.DwefOpTmU11 >= $fan_warn_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+1),"name":"机组1通风机累计运行时间","severity":2,"value":this.raw.DwefOpTmU11,"limit":$fan_life_s})
         }
         # 机组1 冷凝风机运行时间 (part +002)
-        if this.raw.DwcfOpTmU11 >= 81000000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+2),"name":"机组1冷凝风机累计运行时间","severity":3,"value":this.raw.DwcfOpTmU11,"limit":90000000})
-        } else if this.raw.DwcfOpTmU11 >= 67500000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+2),"name":"机组1冷凝风机累计运行时间","severity":2,"value":this.raw.DwcfOpTmU11,"limit":90000000})
+        if this.raw.DwcfOpTmU11 >= $fan_crit_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+2),"name":"机组1冷凝风机累计运行时间","severity":3,"value":this.raw.DwcfOpTmU11,"limit":$fan_life_s})
+        } else if this.raw.DwcfOpTmU11 >= $fan_warn_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+2),"name":"机组1冷凝风机累计运行时间","severity":2,"value":this.raw.DwcfOpTmU11,"limit":$fan_life_s})
         }
         # 机组1 压缩机1运行时间 (part +003)
-        if this.raw.DwcpOpTmU11 >= 162000000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+3),"name":"机组1压缩机1累计运行时间","severity":3,"value":this.raw.DwcpOpTmU11,"limit":180000000})
-        } else if this.raw.DwcpOpTmU11 >= 135000000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+3),"name":"机组1压缩机1累计运行时间","severity":2,"value":this.raw.DwcpOpTmU11,"limit":180000000})
+        if this.raw.DwcpOpTmU11 >= $cp_crit_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+3),"name":"机组1压缩机1累计运行时间","severity":3,"value":this.raw.DwcpOpTmU11,"limit":$cp_life_s})
+        } else if this.raw.DwcpOpTmU11 >= $cp_warn_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+3),"name":"机组1压缩机1累计运行时间","severity":2,"value":this.raw.DwcpOpTmU11,"limit":$cp_life_s})
         }
         # 机组1 压缩机2运行时间 (part +004)
-        if this.raw.DwcpOpTmU12 >= 162000000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+4),"name":"机组1压缩机2累计运行时间","severity":3,"value":this.raw.DwcpOpTmU12,"limit":180000000})
-        } else if this.raw.DwcpOpTmU12 >= 135000000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+4),"name":"机组1压缩机2累计运行时间","severity":2,"value":this.raw.DwcpOpTmU12,"limit":180000000})
+        if this.raw.DwcpOpTmU12 >= $cp_crit_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+4),"name":"机组1压缩机2累计运行时间","severity":3,"value":this.raw.DwcpOpTmU12,"limit":$cp_life_s})
+        } else if this.raw.DwcpOpTmU12 >= $cp_warn_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+4),"name":"机组1压缩机2累计运行时间","severity":2,"value":this.raw.DwcpOpTmU12,"limit":$cp_life_s})
         }
         # 机组1 新风阀开关次数 (part +005)
-        if this.raw.DwfadOpCntU1 >= 900000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+5),"name":"机组1新风阀开关总次数","severity":3,"value":this.raw.DwfadOpCntU1,"limit":1000000})
-        } else if this.raw.DwfadOpCntU1 >= 750000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+5),"name":"机组1新风阀开关总次数","severity":2,"value":this.raw.DwfadOpCntU1,"limit":1000000})
+        if this.raw.DwfadOpCntU1 >= $valve_crit_n {
+          root.life_hits = root.life_hits.append({"code":string($life_base+5),"name":"机组1新风阀开关总次数","severity":3,"value":this.raw.DwfadOpCntU1,"limit":$valve_life_n})
+        } else if this.raw.DwfadOpCntU1 >= $valve_warn_n {
+          root.life_hits = root.life_hits.append({"code":string($life_base+5),"name":"机组1新风阀开关总次数","severity":2,"value":this.raw.DwfadOpCntU1,"limit":$valve_life_n})
         }
         # 机组1 回风阀开关次数 (part +006)
-        if this.raw.DwradOpCntU1 >= 900000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+6),"name":"机组1回风阀开关总次数","severity":3,"value":this.raw.DwradOpCntU1,"limit":1000000})
-        } else if this.raw.DwradOpCntU1 >= 750000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+6),"name":"机组1回风阀开关总次数","severity":2,"value":this.raw.DwradOpCntU1,"limit":1000000})
+        if this.raw.DwradOpCntU1 >= $valve_crit_n {
+          root.life_hits = root.life_hits.append({"code":string($life_base+6),"name":"机组1回风阀开关总次数","severity":3,"value":this.raw.DwradOpCntU1,"limit":$valve_life_n})
+        } else if this.raw.DwradOpCntU1 >= $valve_warn_n {
+          root.life_hits = root.life_hits.append({"code":string($life_base+6),"name":"机组1回风阀开关总次数","severity":2,"value":this.raw.DwradOpCntU1,"limit":$valve_life_n})
         }
 
         # 机组2 通风机运行时间 (part +011)
-        if this.raw.DwefOpTmU21 >= 81000000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+11),"name":"机组2通风机累计运行时间","severity":3,"value":this.raw.DwefOpTmU21,"limit":90000000})
-        } else if this.raw.DwefOpTmU21 >= 67500000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+11),"name":"机组2通风机累计运行时间","severity":2,"value":this.raw.DwefOpTmU21,"limit":90000000})
+        if this.raw.DwefOpTmU21 >= $fan_crit_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+11),"name":"机组2通风机累计运行时间","severity":3,"value":this.raw.DwefOpTmU21,"limit":$fan_life_s})
+        } else if this.raw.DwefOpTmU21 >= $fan_warn_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+11),"name":"机组2通风机累计运行时间","severity":2,"value":this.raw.DwefOpTmU21,"limit":$fan_life_s})
         }
         # 机组2 冷凝风机运行时间 (part +012)
-        if this.raw.DwcfOpTmU21 >= 81000000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+12),"name":"机组2冷凝风机累计运行时间","severity":3,"value":this.raw.DwcfOpTmU21,"limit":90000000})
-        } else if this.raw.DwcfOpTmU21 >= 67500000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+12),"name":"机组2冷凝风机累计运行时间","severity":2,"value":this.raw.DwcfOpTmU21,"limit":90000000})
+        if this.raw.DwcfOpTmU21 >= $fan_crit_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+12),"name":"机组2冷凝风机累计运行时间","severity":3,"value":this.raw.DwcfOpTmU21,"limit":$fan_life_s})
+        } else if this.raw.DwcfOpTmU21 >= $fan_warn_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+12),"name":"机组2冷凝风机累计运行时间","severity":2,"value":this.raw.DwcfOpTmU21,"limit":$fan_life_s})
         }
         # 机组2 压缩机1运行时间 (part +013)
-        if this.raw.DwcpOpTmU21 >= 162000000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+13),"name":"机组2压缩机1累计运行时间","severity":3,"value":this.raw.DwcpOpTmU21,"limit":180000000})
-        } else if this.raw.DwcpOpTmU21 >= 135000000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+13),"name":"机组2压缩机1累计运行时间","severity":2,"value":this.raw.DwcpOpTmU21,"limit":180000000})
+        if this.raw.DwcpOpTmU21 >= $cp_crit_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+13),"name":"机组2压缩机1累计运行时间","severity":3,"value":this.raw.DwcpOpTmU21,"limit":$cp_life_s})
+        } else if this.raw.DwcpOpTmU21 >= $cp_warn_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+13),"name":"机组2压缩机1累计运行时间","severity":2,"value":this.raw.DwcpOpTmU21,"limit":$cp_life_s})
         }
         # 机组2 压缩机2运行时间 (part +014)
-        if this.raw.DwcpOpTmU22 >= 162000000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+14),"name":"机组2压缩机2累计运行时间","severity":3,"value":this.raw.DwcpOpTmU22,"limit":180000000})
-        } else if this.raw.DwcpOpTmU22 >= 135000000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+14),"name":"机组2压缩机2累计运行时间","severity":2,"value":this.raw.DwcpOpTmU22,"limit":180000000})
+        if this.raw.DwcpOpTmU22 >= $cp_crit_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+14),"name":"机组2压缩机2累计运行时间","severity":3,"value":this.raw.DwcpOpTmU22,"limit":$cp_life_s})
+        } else if this.raw.DwcpOpTmU22 >= $cp_warn_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+14),"name":"机组2压缩机2累计运行时间","severity":2,"value":this.raw.DwcpOpTmU22,"limit":$cp_life_s})
         }
         # 机组2 新风阀开关次数 (part +015)
-        if this.raw.DwfadOpCntU2 >= 900000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+15),"name":"机组2新风阀开关总次数","severity":3,"value":this.raw.DwfadOpCntU2,"limit":1000000})
-        } else if this.raw.DwfadOpCntU2 >= 750000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+15),"name":"机组2新风阀开关总次数","severity":2,"value":this.raw.DwfadOpCntU2,"limit":1000000})
+        if this.raw.DwfadOpCntU2 >= $valve_crit_n {
+          root.life_hits = root.life_hits.append({"code":string($life_base+15),"name":"机组2新风阀开关总次数","severity":3,"value":this.raw.DwfadOpCntU2,"limit":$valve_life_n})
+        } else if this.raw.DwfadOpCntU2 >= $valve_warn_n {
+          root.life_hits = root.life_hits.append({"code":string($life_base+15),"name":"机组2新风阀开关总次数","severity":2,"value":this.raw.DwfadOpCntU2,"limit":$valve_life_n})
         }
         # 机组2 回风阀开关次数 (part +016)
-        if this.raw.DwradOpCntU2 >= 900000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+16),"name":"机组2回风阀开关总次数","severity":3,"value":this.raw.DwradOpCntU2,"limit":1000000})
-        } else if this.raw.DwradOpCntU2 >= 750000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+16),"name":"机组2回风阀开关总次数","severity":2,"value":this.raw.DwradOpCntU2,"limit":1000000})
+        if this.raw.DwradOpCntU2 >= $valve_crit_n {
+          root.life_hits = root.life_hits.append({"code":string($life_base+16),"name":"机组2回风阀开关总次数","severity":3,"value":this.raw.DwradOpCntU2,"limit":$valve_life_n})
+        } else if this.raw.DwradOpCntU2 >= $valve_warn_n {
+          root.life_hits = root.life_hits.append({"code":string($life_base+16),"name":"机组2回风阀开关总次数","severity":2,"value":this.raw.DwradOpCntU2,"limit":$valve_life_n})
         }
         # 废排风机运行时间 (part +021)
-        if this.raw.DwexufanOpTm >= 81000000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+21),"name":"废排风机累计运行时间","severity":3,"value":this.raw.DwexufanOpTm,"limit":90000000})
-        } else if this.raw.DwexufanOpTm >= 67500000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+21),"name":"废排风机累计运行时间","severity":2,"value":this.raw.DwexufanOpTm,"limit":90000000})
+        if this.raw.DwexufanOpTm >= $fan_crit_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+21),"name":"废排风机累计运行时间","severity":3,"value":this.raw.DwexufanOpTm,"limit":$fan_life_s})
+        } else if this.raw.DwexufanOpTm >= $fan_warn_s {
+          root.life_hits = root.life_hits.append({"code":string($life_base+21),"name":"废排风机累计运行时间","severity":2,"value":this.raw.DwexufanOpTm,"limit":$fan_life_s})
         }
         # 废排风阀开关次数 (part +022)
-        if this.raw.DwdmpexuOpCnt >= 900000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+22),"name":"废排风阀开关总次数","severity":3,"value":this.raw.DwdmpexuOpCnt,"limit":1000000})
-        } else if this.raw.DwdmpexuOpCnt >= 750000 {
-          root.life_hits = root.life_hits.append({"code":string($life_base+22),"name":"废排风阀开关总次数","severity":2,"value":this.raw.DwdmpexuOpCnt,"limit":1000000})
+        if this.raw.DwdmpexuOpCnt >= $valve_crit_n {
+          root.life_hits = root.life_hits.append({"code":string($life_base+22),"name":"废排风阀开关总次数","severity":3,"value":this.raw.DwdmpexuOpCnt,"limit":$valve_life_n})
+        } else if this.raw.DwdmpexuOpCnt >= $valve_warn_n {
+          root.life_hits = root.life_hits.append({"code":string($life_base+22),"name":"废排风阀开关总次数","severity":2,"value":this.raw.DwdmpexuOpCnt,"limit":$valve_life_n})
         }
 
         root.predict_event = {
