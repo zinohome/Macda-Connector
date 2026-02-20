@@ -1,4 +1,3 @@
-
 package main
 
 import (
@@ -8,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"time"
+
 	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/kaitai-io/kaitai_struct_go_runtime/kaitai"
 )
