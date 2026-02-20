@@ -278,6 +278,8 @@ services:
     depends_on:
       connect-parser:
         condition: service_healthy
+      dev-create-topic:
+        condition: service_completed_successfully
     networks:
       - macdanet
 
@@ -299,6 +301,8 @@ services:
     depends_on:
       connect-parser:
         condition: service_healthy
+      dev-create-topic:
+        condition: service_completed_successfully
     networks:
       - macdanet
 
