@@ -38,8 +38,8 @@ pipeline:
         let hvac_base = this.carriage_id * 100
 
         # 1~4. 冷媒泄漏预警 (ref_leak)
-        #   HVAC_01 机组1系统1 (u11)  HVAC_02 机组1系统2 (u12)
-        #   HVAC_03 机组2系统1 (u21)  HVAC_04 机组2系统2 (u22)
+        #   HVAC_01 机组1系统1  HVAC_02 机组1系统2
+        #   HVAC_03 机组2系统1  HVAC_04 机组2系统2
         #   制冷 热泵(2/3) 频率>30Hz 且 吸气压力<2.0bar(raw<20)
         #   通风(1)         高压压力<5bar(raw<50)
         if (this.raw.WmodeU1 == 2 || this.raw.WmodeU1 == 3) && this.raw.FCpU11 > 300 && this.raw.SuckpU11 < 20 {
