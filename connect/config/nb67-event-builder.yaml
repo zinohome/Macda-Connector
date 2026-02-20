@@ -40,8 +40,8 @@ pipeline:
         # 1~4. 冷媒泄漏预警 (ref_leak)
         #   HVAC_01 机组1系统1 (u11)  HVAC_02 机组1系统2 (u12)
         #   HVAC_03 机组2系统1 (u21)  HVAC_04 机组2系统2 (u22)
-        #   制冷/热泵(2/3): 频率>30Hz 且 吸气压力<2.0bar(raw<20)
-        #   通风(1):         高压压力<5bar(raw<50)
+        #   制冷 热泵(2/3) 频率>30Hz 且 吸气压力<2.0bar(raw<20)
+        #   通风(1)         高压压力<5bar(raw<50)
         if (this.raw.WmodeU1 == 2 || this.raw.WmodeU1 == 3) && this.raw.FCpU11 > 300 && this.raw.SuckpU11 < 20 {
           root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+1),"name":"机组1系统1冷媒泄露预警","severity":3})
         }
@@ -268,17 +268,17 @@ pipeline:
         # ================================================================
         let life_base = this.carriage_id * 1000 + 50000
 
-        # --- 风机类阈值（秒）: 25000h = 90000000s ---
+        # --- 风机类阈值（秒） 25000h = 90000000s ---
         let fan_life_s  = 90000000   # 额定寿命
         let fan_warn_s  = 67500000   # 75% warn
         let fan_crit_s  = 81000000   # 90% crit
 
-        # --- 压缩机阈值（秒）: 50000h = 180000000s ---
+        # --- 压缩机阈值（秒） 50000h = 180000000s ---
         let cp_life_s   = 180000000  # 额定寿命
         let cp_warn_s   = 135000000  # 75% warn
         let cp_crit_s   = 162000000  # 90% crit
 
-        # --- 阀门类阈值（次）: 额定 1000000次 ---
+        # --- 阀门类阈值（次） 额定 1000000次 ---
         let valve_life_n = 1000000   # 额定寿命
         let valve_warn_n = 750000    # 75% warn
         let valve_crit_n = 900000    # 90% crit
@@ -389,7 +389,7 @@ pipeline:
 
 output:
   broker:
-    # fan_out: 每条消息复制到所有 output，各 output 的 processors 负责裁剪字段
+    # fan_out 每条消息复制到所有 output，各 output 的 processors 负责裁剪字段
     # signal-predict → 只含 predict_event（故障预警命中列表）
     # signal-alarm   → 只含 alarm_event（原生故障位命中列表）
     # signal-life    → 只含 life_event（部件寿命命中列表）
