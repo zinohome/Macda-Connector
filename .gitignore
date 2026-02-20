@@ -46,6 +46,8 @@ vendor/
 # IDE & Editors
 .vscode/
 .idea/
+.claude/
+.codex/
 *.swp
 *.swo
 *~
