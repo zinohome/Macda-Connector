@@ -1,3 +1,4 @@
+
 package main
 
 import (
@@ -7,10 +8,20 @@ import (
 	"fmt"
 	"log"
 	"time"
-
 	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/kaitai-io/kaitai_struct_go_runtime/kaitai"
 )
+
+var beijingLoc *time.Location
+
+func init() {
+	var err error
+	beijingLoc, err = time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		// fallback: +8
+		beijingLoc = time.FixedZone("CST", 8*3600)
+	}
+}
 
 type NB67Processor struct {
 	count          int64
@@ -114,7 +125,7 @@ func (p *NB67Processor) Process(ctx context.Context, msg *service.Message) (serv
 		return service.MessageBatch{msg}, fmt.Errorf("NB67 parse error: %w", err)
 	}
 
-	now := time.Now().UTC()
+	now := time.Now().In(beijingLoc)
 	output := &ParsedOutput{
 		HeaderCode01:    nb67.MsgHeaderCode01,
 		HeaderCode02:    nb67.MsgHeaderCode02,
