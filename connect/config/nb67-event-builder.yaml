@@ -68,127 +68,124 @@ pipeline:
         root.alarm_hits = []
         root.life_hits = []
 
-        # HVAC 预警码
-        let hvac_base = carriage_id * 100;
-
         # 冷媒泄漏预警
         if (this.raw.WmodeU1 == 2 || this.raw.WmodeU1 == 3) && this.raw.FCpU11 > 300 && this.raw.SuckpU11 < 20 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+1),"name":"机组1系统1冷媒泄露预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 1),"name":"机组1系统1冷媒泄露预警","severity":3})
         }
         if this.raw.WmodeU1 == 1 && this.raw.HighpressU11 < 50 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+1),"name":"机组1系统1冷媒泄露预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 1),"name":"机组1系统1冷媒泄露预警","severity":3})
         }
         if (this.raw.WmodeU1 == 2 || this.raw.WmodeU1 == 3) && this.raw.FCpU12 > 300 && this.raw.SuckpU12 < 20 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+2),"name":"机组1系统2冷媒泄露预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 2),"name":"机组1系统2冷媒泄露预警","severity":3})
         }
         if this.raw.WmodeU1 == 1 && this.raw.HighpressU12 < 50 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+2),"name":"机组1系统2冷媒泄露预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 2),"name":"机组1系统2冷媒泄露预警","severity":3})
         }
         if (this.raw.WmodeU2 == 2 || this.raw.WmodeU2 == 3) && this.raw.FCpU21 > 300 && this.raw.SuckpU21 < 20 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+3),"name":"机组2系统1冷媒泄露预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 3),"name":"机组2系统1冷媒泄露预警","severity":3})
         }
         if this.raw.WmodeU2 == 1 && this.raw.HighpressU21 < 50 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+3),"name":"机组2系统1冷媒泄露预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 3),"name":"机组2系统1冷媒泄露预警","severity":3})
         }
         if (this.raw.WmodeU2 == 2 || this.raw.WmodeU2 == 3) && this.raw.FCpU22 > 300 && this.raw.SuckpU22 < 20 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+4),"name":"机组2系统2冷媒泄露预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 4),"name":"机组2系统2冷媒泄露预警","severity":3})
         }
         if this.raw.WmodeU2 == 1 && this.raw.HighpressU22 < 50 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+4),"name":"机组2系统2冷媒泄露预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 4),"name":"机组2系统2冷媒泄露预警","severity":3})
         }
 
         # 制冷系统预警
         let cp_u1_diff = this.raw.ICpU11 - this.raw.ICpU12;
         if this.raw.FCpU11 == this.raw.FCpU12 && ($cp_u1_diff > 20 || $cp_u1_diff < -20) {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+5),"name":"机组1制冷系统预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 5),"name":"机组1制冷系统预警","severity":3})
         }
         if this.raw.SpU11 > 200 || this.raw.SpU11 < -80 || this.raw.SpU12 > 200 || this.raw.SpU12 < -80 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+5),"name":"机组1制冷系统预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 5),"name":"机组1制冷系统预警","severity":3})
         }
         let cp_u2_diff = this.raw.ICpU21 - this.raw.ICpU22;
         if this.raw.FCpU21 == this.raw.FCpU22 && ($cp_u2_diff > 20 || $cp_u2_diff < -20) {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+6),"name":"机组2制冷系统预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 6),"name":"机组2制冷系统预警","severity":3})
         }
         if this.raw.SpU21 > 200 || this.raw.SpU21 < -80 || this.raw.SpU22 > 200 || this.raw.SpU22 < -80 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+6),"name":"机组2制冷系统预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 6),"name":"机组2制冷系统预警","severity":3})
         }
 
         # 温度传感器预警
         let fas_diff = this.raw.FasU1 - this.raw.FasU2;
         if $fas_diff > 80 || $fas_diff < -80 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+7),"name":"新风温度传感器预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 7),"name":"新风温度传感器预警","severity":3})
         }
         let ras_diff = this.raw.RasU1 - this.raw.RasU2;
         if $ras_diff > 80 || $ras_diff < -80 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+8),"name":"回风温度传感器预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 8),"name":"回风温度传感器预警","severity":3})
         }
 
         # 车厢温度超温预警
         if this.raw.BfltTempover == true {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+9),"name":"车厢温度超温预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 9),"name":"车厢温度超温预警","severity":3})
         }
 
         # 滤网脏堵预警
         if this.raw.CfbkEfU11 == true && this.raw.PresdiffU1 > 3000 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+10),"name":"机组1滤网脏堵预警","severity":2})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 10),"name":"机组1滤网脏堵预警","severity":2})
         }
         if this.raw.CfbkEfU21 == true && this.raw.PresdiffU2 > 3000 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+11),"name":"机组2滤网脏堵预警","severity":2})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 11),"name":"机组2滤网脏堵预警","severity":2})
         }
 
         # 通风机电流预警
         if this.raw.CfbkEfU11 == true && this.raw.IEfU11 > 20 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+12),"name":"机组1通风机1电流预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 12),"name":"机组1通风机1电流预警","severity":3})
         }
         if this.raw.CfbkEfU11 == true && this.raw.IEfU12 > 20 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+13),"name":"机组1通风机2电流预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 13),"name":"机组1通风机2电流预警","severity":3})
         }
         if this.raw.CfbkEfU21 == true && this.raw.IEfU21 > 20 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+14),"name":"机组2通风机1电流预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 14),"name":"机组2通风机1电流预警","severity":3})
         }
         if this.raw.CfbkEfU21 == true && this.raw.IEfU22 > 20 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+15),"name":"机组2通风机2电流预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 15),"name":"机组2通风机2电流预警","severity":3})
         }
 
         # 冷凝风机电流预警
         if this.raw.CfbkCfU11 == true && this.raw.ICfU11 > 29 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+16),"name":"机组1冷凝风机1电流预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 16),"name":"机组1冷凝风机1电流预警","severity":3})
         }
         if this.raw.CfbkCfU11 == true && this.raw.ICfU12 > 29 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+17),"name":"机组1冷凝风机2电流预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 17),"name":"机组1冷凝风机2电流预警","severity":3})
         }
         if this.raw.CfbkCfU21 == true && this.raw.ICfU21 > 29 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+18),"name":"机组2冷凝风机1电流预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 18),"name":"机组2冷凝风机1电流预警","severity":3})
         }
         if this.raw.CfbkCfU21 == true && this.raw.ICfU22 > 29 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+19),"name":"机组2冷凝风机2电流预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 19),"name":"机组2冷凝风机2电流预警","severity":3})
         }
 
         # 废排风机电流预警
         if this.raw.CfbkExufan == true && this.raw.IExufan > 40 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+20),"name":"废排风机电流预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 20),"name":"废排风机电流预警","severity":3})
         }
 
         # 压缩机电流预警
         if this.raw.FasU1 < 350 && this.raw.ICpU11 > 180 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+21),"name":"机组1压缩机1电流预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 21),"name":"机组1压缩机1电流预警","severity":3})
         }
         if this.raw.FasU1 < 350 && this.raw.ICpU12 > 180 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+22),"name":"机组1压缩机2电流预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 22),"name":"机组1压缩机2电流预警","severity":3})
         }
         if this.raw.FasU2 < 350 && this.raw.ICpU21 > 180 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+23),"name":"机组2压缩机1电流预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 23),"name":"机组2压缩机1电流预警","severity":3})
         }
         if this.raw.FasU2 < 350 && this.raw.ICpU22 > 180 {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+24),"name":"机组2压缩机2电流预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 24),"name":"机组2压缩机2电流预警","severity":3})
         }
 
         # 空气质量预警
         if this.raw.CfbkEfU11 == true && (this.raw.AqCo2U1 > 1200 || this.raw.AqPm25U1 > 75 || this.raw.AqPm10U1 > 150 || this.raw.AqTvocU1 > 600) {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+25),"name":"机组1空气质量预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 25),"name":"机组1空气质量预警","severity":3})
         }
         if this.raw.CfbkEfU21 == true && (this.raw.AqCo2U2 > 1200 || this.raw.AqPm25U2 > 75 || this.raw.AqPm10U2 > 150 || this.raw.AqTvocU2 > 600) {
-          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string($hvac_base+26),"name":"机组2空气质量预警","severity":3})
+          root.predict_hits = root.predict_hits.append({"code":"HVAC"+string(carriage_id * 100 + 26),"name":"机组2空气质量预警","severity":3})
         }
 
         # 原生故障位告警
@@ -266,7 +263,6 @@ pipeline:
         }
 
         # 部件寿命预警
-        let life_base = this.carriage_id * 1000 + 50000;
 
         # 风机类阈值
         let fan_life_s  = 90000000;   # 额定寿命
@@ -285,88 +281,88 @@ pipeline:
 
         # 机组1 通风机运行时间
         if this.raw.DwefOpTmU11 >= $fan_crit_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+1),"name":"机组1通风机累计运行时间","severity":3,"value":this.raw.DwefOpTmU11,"limit":$fan_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 1),"name":"机组1通风机累计运行时间","severity":3,"value":this.raw.DwefOpTmU11,"limit":$fan_life_s})
         } else if this.raw.DwefOpTmU11 >= $fan_warn_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+1),"name":"机组1通风机累计运行时间","severity":2,"value":this.raw.DwefOpTmU11,"limit":$fan_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 1),"name":"机组1通风机累计运行时间","severity":2,"value":this.raw.DwefOpTmU11,"limit":$fan_life_s})
         }
         # 机组1 冷凝风机运行时间
         if this.raw.DwcfOpTmU11 >= $fan_crit_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+2),"name":"机组1冷凝风机累计运行时间","severity":3,"value":this.raw.DwcfOpTmU11,"limit":$fan_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 2),"name":"机组1冷凝风机累计运行时间","severity":3,"value":this.raw.DwcfOpTmU11,"limit":$fan_life_s})
         } else if this.raw.DwcfOpTmU11 >= $fan_warn_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+2),"name":"机组1冷凝风机累计运行时间","severity":2,"value":this.raw.DwcfOpTmU11,"limit":$fan_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 2),"name":"机组1冷凝风机累计运行时间","severity":2,"value":this.raw.DwcfOpTmU11,"limit":$fan_life_s})
         }
         # 机组1 压缩机1运行时间
         if this.raw.DwcpOpTmU11 >= $cp_crit_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+3),"name":"机组1压缩机1累计运行时间","severity":3,"value":this.raw.DwcpOpTmU11,"limit":$cp_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 3),"name":"机组1压缩机1累计运行时间","severity":3,"value":this.raw.DwcpOpTmU11,"limit":$cp_life_s})
         } else if this.raw.DwcpOpTmU11 >= $cp_warn_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+3),"name":"机组1压缩机1累计运行时间","severity":2,"value":this.raw.DwcpOpTmU11,"limit":$cp_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 3),"name":"机组1压缩机1累计运行时间","severity":2,"value":this.raw.DwcpOpTmU11,"limit":$cp_life_s})
         }
         # 机组1 压缩机2运行时间
         if this.raw.DwcpOpTmU12 >= $cp_crit_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+4),"name":"机组1压缩机2累计运行时间","severity":3,"value":this.raw.DwcpOpTmU12,"limit":$cp_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 4),"name":"机组1压缩机2累计运行时间","severity":3,"value":this.raw.DwcpOpTmU12,"limit":$cp_life_s})
         } else if this.raw.DwcpOpTmU12 >= $cp_warn_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+4),"name":"机组1压缩机2累计运行时间","severity":2,"value":this.raw.DwcpOpTmU12,"limit":$cp_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 4),"name":"机组1压缩机2累计运行时间","severity":2,"value":this.raw.DwcpOpTmU12,"limit":$cp_life_s})
         }
         # 机组1 新风阀开关次数
         if this.raw.DwfadOpCntU1 >= $valve_crit_n {
-          root.life_hits = root.life_hits.append({"code":string($life_base+5),"name":"机组1新风阀开关总次数","severity":3,"value":this.raw.DwfadOpCntU1,"limit":$valve_life_n})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 5),"name":"机组1新风阀开关总次数","severity":3,"value":this.raw.DwfadOpCntU1,"limit":$valve_life_n})
         } else if this.raw.DwfadOpCntU1 >= $valve_warn_n {
-          root.life_hits = root.life_hits.append({"code":string($life_base+5),"name":"机组1新风阀开关总次数","severity":2,"value":this.raw.DwfadOpCntU1,"limit":$valve_life_n})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 5),"name":"机组1新风阀开关总次数","severity":2,"value":this.raw.DwfadOpCntU1,"limit":$valve_life_n})
         }
         # 机组1 回风阀开关次数
         if this.raw.DwradOpCntU1 >= $valve_crit_n {
-          root.life_hits = root.life_hits.append({"code":string($life_base+6),"name":"机组1回风阀开关总次数","severity":3,"value":this.raw.DwradOpCntU1,"limit":$valve_life_n})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 6),"name":"机组1回风阀开关总次数","severity":3,"value":this.raw.DwradOpCntU1,"limit":$valve_life_n})
         } else if this.raw.DwradOpCntU1 >= $valve_warn_n {
-          root.life_hits = root.life_hits.append({"code":string($life_base+6),"name":"机组1回风阀开关总次数","severity":2,"value":this.raw.DwradOpCntU1,"limit":$valve_life_n})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 6),"name":"机组1回风阀开关总次数","severity":2,"value":this.raw.DwradOpCntU1,"limit":$valve_life_n})
         }
 
         # 机组2 通风机运行时间
         if this.raw.DwefOpTmU21 >= $fan_crit_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+11),"name":"机组2通风机累计运行时间","severity":3,"value":this.raw.DwefOpTmU21,"limit":$fan_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 11),"name":"机组2通风机累计运行时间","severity":3,"value":this.raw.DwefOpTmU21,"limit":$fan_life_s})
         } else if this.raw.DwefOpTmU21 >= $fan_warn_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+11),"name":"机组2通风机累计运行时间","severity":2,"value":this.raw.DwefOpTmU21,"limit":$fan_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 11),"name":"机组2通风机累计运行时间","severity":2,"value":this.raw.DwefOpTmU21,"limit":$fan_life_s})
         }
         # 机组2 冷凝风机运行时间
         if this.raw.DwcfOpTmU21 >= $fan_crit_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+12),"name":"机组2冷凝风机累计运行时间","severity":3,"value":this.raw.DwcfOpTmU21,"limit":$fan_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 12),"name":"机组2冷凝风机累计运行时间","severity":3,"value":this.raw.DwcfOpTmU21,"limit":$fan_life_s})
         } else if this.raw.DwcfOpTmU21 >= $fan_warn_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+12),"name":"机组2冷凝风机累计运行时间","severity":2,"value":this.raw.DwcfOpTmU21,"limit":$fan_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 12),"name":"机组2冷凝风机累计运行时间","severity":2,"value":this.raw.DwcfOpTmU21,"limit":$fan_life_s})
         }
         # 机组2 压缩机1运行时间
         if this.raw.DwcpOpTmU21 >= $cp_crit_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+13),"name":"机组2压缩机1累计运行时间","severity":3,"value":this.raw.DwcpOpTmU21,"limit":$cp_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 13),"name":"机组2压缩机1累计运行时间","severity":3,"value":this.raw.DwcpOpTmU21,"limit":$cp_life_s})
         } else if this.raw.DwcpOpTmU21 >= $cp_warn_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+13),"name":"机组2压缩机1累计运行时间","severity":2,"value":this.raw.DwcpOpTmU21,"limit":$cp_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 13),"name":"机组2压缩机1累计运行时间","severity":2,"value":this.raw.DwcpOpTmU21,"limit":$cp_life_s})
         }
         # 机组2 压缩机2运行时间
         if this.raw.DwcpOpTmU22 >= $cp_crit_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+14),"name":"机组2压缩机2累计运行时间","severity":3,"value":this.raw.DwcpOpTmU22,"limit":$cp_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 14),"name":"机组2压缩机2累计运行时间","severity":3,"value":this.raw.DwcpOpTmU22,"limit":$cp_life_s})
         } else if this.raw.DwcpOpTmU22 >= $cp_warn_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+14),"name":"机组2压缩机2累计运行时间","severity":2,"value":this.raw.DwcpOpTmU22,"limit":$cp_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 14),"name":"机组2压缩机2累计运行时间","severity":2,"value":this.raw.DwcpOpTmU22,"limit":$cp_life_s})
         }
         # 机组2 新风阀开关次数
         if this.raw.DwfadOpCntU2 >= $valve_crit_n {
-          root.life_hits = root.life_hits.append({"code":string($life_base+15),"name":"机组2新风阀开关总次数","severity":3,"value":this.raw.DwfadOpCntU2,"limit":$valve_life_n})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 15),"name":"机组2新风阀开关总次数","severity":3,"value":this.raw.DwfadOpCntU2,"limit":$valve_life_n})
         } else if this.raw.DwfadOpCntU2 >= $valve_warn_n {
-          root.life_hits = root.life_hits.append({"code":string($life_base+15),"name":"机组2新风阀开关总次数","severity":2,"value":this.raw.DwfadOpCntU2,"limit":$valve_life_n})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 15),"name":"机组2新风阀开关总次数","severity":2,"value":this.raw.DwfadOpCntU2,"limit":$valve_life_n})
         }
         # 机组2 回风阀开关次数
         if this.raw.DwradOpCntU2 >= $valve_crit_n {
-          root.life_hits = root.life_hits.append({"code":string($life_base+16),"name":"机组2回风阀开关总次数","severity":3,"value":this.raw.DwradOpCntU2,"limit":$valve_life_n})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 16),"name":"机组2回风阀开关总次数","severity":3,"value":this.raw.DwradOpCntU2,"limit":$valve_life_n})
         } else if this.raw.DwradOpCntU2 >= $valve_warn_n {
-          root.life_hits = root.life_hits.append({"code":string($life_base+16),"name":"机组2回风阀开关总次数","severity":2,"value":this.raw.DwradOpCntU2,"limit":$valve_life_n})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 16),"name":"机组2回风阀开关总次数","severity":2,"value":this.raw.DwradOpCntU2,"limit":$valve_life_n})
         }
         # 废排风机运行时间
         if this.raw.DwexufanOpTm >= $fan_crit_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+21),"name":"废排风机累计运行时间","severity":3,"value":this.raw.DwexufanOpTm,"limit":$fan_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 21),"name":"废排风机累计运行时间","severity":3,"value":this.raw.DwexufanOpTm,"limit":$fan_life_s})
         } else if this.raw.DwexufanOpTm >= $fan_warn_s {
-          root.life_hits = root.life_hits.append({"code":string($life_base+21),"name":"废排风机累计运行时间","severity":2,"value":this.raw.DwexufanOpTm,"limit":$fan_life_s})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 21),"name":"废排风机累计运行时间","severity":2,"value":this.raw.DwexufanOpTm,"limit":$fan_life_s})
         }
         # 废排风阀开关次数
         if this.raw.DwdmpexuOpCnt >= $valve_crit_n {
-          root.life_hits = root.life_hits.append({"code":string($life_base+22),"name":"废排风阀开关总次数","severity":3,"value":this.raw.DwdmpexuOpCnt,"limit":$valve_life_n})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 22),"name":"废排风阀开关总次数","severity":3,"value":this.raw.DwdmpexuOpCnt,"limit":$valve_life_n})
         } else if this.raw.DwdmpexuOpCnt >= $valve_warn_n {
-          root.life_hits = root.life_hits.append({"code":string($life_base+22),"name":"废排风阀开关总次数","severity":2,"value":this.raw.DwdmpexuOpCnt,"limit":$valve_life_n})
+          root.life_hits = root.life_hits.append({"code":string(carriage_id * 1000 + 50000 + 22),"name":"废排风阀开关总次数","severity":2,"value":this.raw.DwdmpexuOpCnt,"limit":$valve_life_n})
         }
 
         root.predict_event = {
