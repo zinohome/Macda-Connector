@@ -286,6 +286,47 @@ services:
     networks:
       - macdanet
 
+  timescaledb:
+    image: harbor.naivehero.top:8443/macda2/timescaledb-ha:pg14-ts2.19-all
+    container_name: timescaledb
+    hostname: timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: "passw0rd"
+    #ports:
+    #  - 5432:5432
+    volumes:
+      - "/data/MACDA2/timescaledb/data:/home/postgres/pgdata"
+    #healthcheck:
+    #    test: ["CMD", "netstat", "-anp", "|", "grep 5432", "||", "exit 1"]
+    #    interval: 30s
+    #    timeout: 5s
+    #    retries: 5
+    networks:
+      - macdanet
+
+  pgadmin:
+    image: harbor.naivehero.top:8443/macda2/pgadmin4:9.12
+    container_name: pgadmin
+    hostname: pgadmin
+    restart: unless-stopped
+    depends_on:
+      - timescaledb
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "admin@macda.com"
+      PGADMIN_DEFAULT_PASSWORD: "passw0rd"
+    #ports:
+    #  - 8280:80
+    volumes:
+      - "/data/MACDA2/pgadmin:/var/lib/pgadmin"
+    #healthcheck:
+    #    test: ["CMD", "netstat", "-anp", "|", "grep 8280", "||", "exit 1"]
+    #    interval: 30s
+    #    timeout: 5s
+    #    retries: 5
+    networks:
+      - macdanet
+
 networks:
   macdanet:
     name: macdanet
