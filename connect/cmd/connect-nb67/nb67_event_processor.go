@@ -262,6 +262,10 @@ func hvacCode(hvacBase int, seq int) string {
 func buildPredictHits(raw map[string]any, carriageID int) []PredictHit {
 	// 初始化为空 slice（非 nil），序列化时输出 [] 而非 null
 	hits := make([]PredictHit, 0)
+	// raw 为空时所有 rawInt 返回 0，会误触发 FasU1(0)<350 等规则，必须提前退出
+	if len(raw) == 0 {
+		return hits
+	}
 	base := carriageID * 100
 
 	// ---------- 1~4. 冷媒泄漏预警（ref_leak）----------
@@ -433,6 +437,10 @@ func buildPredictHits(raw map[string]any, carriageID int) []PredictHit {
 func buildAlarmHits(raw map[string]any) []AlarmHit {
 	// 初始化为空 slice（非 nil），序列化时输出 [] 而非 null
 	hits := make([]AlarmHit, 0)
+	// raw 为空时直接返回，避免误判断
+	if len(raw) == 0 {
+		return hits
+	}
 
 	// 辅助函数：批量检查故障位
 	check := func(field, code, name string, level int) {
@@ -484,6 +492,10 @@ func buildAlarmHits(raw map[string]any) []AlarmHit {
 func buildLifeHits(raw map[string]any, carriageID int) []LifeHit {
 	// 初始化为空 slice（非 nil），序列化时输出 [] 而非 null
 	hits := make([]LifeHit, 0)
+	// raw 为空时直接返回，避免误判断
+	if len(raw) == 0 {
+		return hits
+	}
 	lifeBase := int64(carriageID*1000 + 50_000)
 
 	// checkFan 检查风机类寿命（单位：秒）
