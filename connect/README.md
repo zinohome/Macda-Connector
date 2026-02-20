@@ -6,7 +6,12 @@
 
 ## 🚀 构建与部署（Docker / Harbor / docker-compose）
 
-本模块最终运行形态是一个容器镜像（内置 `connect-nb67` 二进制），启动时通过 `-c` 指定配置文件（通常挂载到容器内 `/etc/connect/nb67-connect.yaml`）。
+本模块最终运行形态是一个容器镜像（内置 `connect-nb67` 二进制），启动时通过 `-c` 指定配置文件。
+
+> 说明：`nb67-connect.yaml` 为历史单体配置（deprecated），当前推荐使用拆分配置：
+> - `nb67-parser.yaml`
+> - `nb67-storage-writer.yaml`
+> - `nb67-event-builder.yaml`
 
 ### 1）构建并推送 Harbor 镜像
 
@@ -54,8 +59,8 @@ docker compose -f docker-compose-Dev.yml up -d
 
 配置挂载路径（当前约定）：
 
-- 宿主机：`/data/MACDA2/connect/config/nb67-connect.yaml`
-- 容器内：`/etc/connect/nb67-connect.yaml`
+- 宿主机：`/data/MACDA2/connect/config/nb67-parser.yaml`
+- 容器内：`/etc/connect/nb67-parser.yaml`
 
 ### 3）动态调整 scale（运行中扩/缩容）
 
@@ -145,7 +150,10 @@ connect/
 │   └── nb67.go                ← Kaitai生成的Go解析代码（AUTO-GENERATED）
 │
 ├── config/                    ← ⚙️ 配置文件
-│   ├── nb67-connect.yaml      ← Redpanda Connect连接器配置（完整版）
+│   ├── nb67-parser.yaml       ← 解析链路（signal-in -> signal.parsed.v1）
+│   ├── nb67-storage-writer.yaml ← 存储链路（signal.parsed.v1 -> signal.storage.fact_raw.v1）
+│   ├── nb67-event-builder.yaml  ← 事件链路（signal.parsed.v1 -> event topics）
+│   └── nb67-connect.yaml      ← 历史单体配置（deprecated，兼容保留）
 │
 └── tests/                     ← 🧪 自动化测试脚本
     ├── test-kafka-connection.sh    ← 验证Kafka/Redpanda连接
@@ -270,9 +278,9 @@ connect/
 
 ### config/
 
-#### 1. **nb67-connect.yaml** (500+行)
+#### 1. **nb67-connect.yaml**（历史文件，deprecated）
 ```
-⚙️ Redpanda Connect连接器配置（完整版）
+⚙️ Redpanda Connect早期单体配置（兼容保留）
 用途：
   • 定义Connect任务的完整配置
   • 指定source connector（Kafka source）
@@ -289,6 +297,11 @@ connect/
     ↓ [SinkConnector]
     ↓
   signal-parsed (Kafka)
+
+当前主线改为三段配置：
+- `nb67-parser.yaml`
+- `nb67-storage-writer.yaml`
+- `nb67-event-builder.yaml`
 ```
 
 ---

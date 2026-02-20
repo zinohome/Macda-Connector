@@ -1,3 +1,15 @@
+# ==============================================================
+# DEPRECATED（历史兼容配置）
+#
+# 该文件是早期单体链路配置（signal-in -> signal-parsed）。
+# 当前重构主线请使用：
+#   1) connect/config/nb67-parser.yaml
+#   2) connect/config/nb67-storage-writer.yaml
+#   3) connect/config/nb67-event-builder.yaml
+#
+# 若无历史依赖，请勿继续基于本文件新增功能。
+# ==============================================================
+
 # ===== INPUT: 从Redpanda消费原始二进制数据 =====
 input:
   kafka:
