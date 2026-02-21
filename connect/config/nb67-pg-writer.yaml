@@ -1,0 +1,119 @@
+input:
+  kafka:
+    addresses:
+      - redpanda-1:9092
+      - redpanda-2:9092
+      - redpanda-3:9092
+    topics:
+      - signal-storage
+    consumer_group: macda-pg-writer
+
+pipeline:
+  threads: 8
+  processors:
+    - catch:
+        - log:
+            message: "Failed to process message: ${! error() }"
+
+output:
+  sql_raw:
+    driver: postgres
+    dsn: postgres://postgres:passw0rd@timescaledb:5432/postgres?sslmode=disable
+    query: |
+      INSERT INTO hvac.fact_raw (
+        event_time, ingest_time, process_time, event_time_valid,
+        line_id, train_id, carriage_id, device_id, frame_no,
+        parser_version, quality_code,
+        wmode_u1, wmode_u2,
+        f_cp_u11, f_cp_u12, f_cp_u21, f_cp_u22,
+        i_cp_u11, i_cp_u12, i_cp_u21, i_cp_u22,
+        suckp_u11, suckp_u12, suckp_u21, suckp_u22,
+        highpress_u11, highpress_u12, highpress_u21, highpress_u22,
+        fas_u1, fas_u2, ras_u1, ras_u2,
+        presdiff_u1, presdiff_u2,
+        aq_co2_u1, aq_co2_u2, aq_tvoc_u1, aq_tvoc_u2,
+        aq_pm2_5_u1, aq_pm2_5_u2, aq_pm10_u1, aq_pm10_u2,
+        bocflt_ef_u11, bocflt_ef_u12, bocflt_ef_u21, bocflt_ef_u22,
+        bocflt_cf_u11, bocflt_cf_u12, bocflt_cf_u21, bocflt_cf_u22,
+        blpflt_comp_u11, blpflt_comp_u12, blpflt_comp_u21, blpflt_comp_u22,
+        bscflt_comp_u11, bscflt_comp_u12, bscflt_comp_u21, bscflt_comp_u22,
+        bflt_tempover, bflt_diffpres_u1, bflt_diffpres_u2,
+        payload_json
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
+        $31, $32, $33, $34, $35, $36, $37, $38, $39, $40,
+        $41, $42, $43, $44, $45, $46, $47, $48, $49, $50,
+        $51, $52, $53, $54, $55, $56, $57, $58, $59, $60,
+        $61, $62, $63
+      ) ON CONFLICT (device_id, event_time, ingest_time) DO NOTHING;
+    args_mapping: |
+      root = [
+        this.event_time_text,
+        this.ingest_time,
+        this.process_time,
+        this.event_time_valid,
+        this.line_id,
+        this.train_id,
+        this.carriage_id,
+        this.device_id,
+        this.frame_no,
+        this.parser_version,
+        this.quality_code,
+        this.wmode_u1,
+        this.wmode_u2,
+        this.f_cp_u11,
+        this.f_cp_u12,
+        this.f_cp_u21,
+        this.f_cp_u22,
+        this.i_cp_u11,
+        this.i_cp_u12,
+        this.i_cp_u21,
+        this.i_cp_u22,
+        this.suckp_u11,
+        this.suckp_u12,
+        this.suckp_u21,
+        this.suckp_u22,
+        this.highpress_u11,
+        this.highpress_u12,
+        this.highpress_u21,
+        this.highpress_u22,
+        this.fas_u1,
+        this.fas_u2,
+        this.ras_u1,
+        this.ras_u2,
+        this.presdiff_u1,
+        this.presdiff_u2,
+        this.aq_co2_u1,
+        this.aq_co2_u2,
+        this.aq_tvoc_u1,
+        this.aq_tvoc_u2,
+        this.aq_pm2_5_u1,
+        this.aq_pm2_5_u2,
+        this.aq_pm10_u1,
+        this.aq_pm10_u2,
+        this.bocflt_ef_u11,
+        this.bocflt_ef_u12,
+        this.bocflt_ef_u21,
+        this.bocflt_ef_u22,
+        this.bocflt_cf_u11,
+        this.bocflt_cf_u12,
+        this.bocflt_cf_u21,
+        this.bocflt_cf_u22,
+        this.blpflt_comp_u11,
+        this.blpflt_comp_u12,
+        this.blpflt_comp_u21,
+        this.blpflt_comp_u22,
+        this.bscflt_comp_u11,
+        this.bscflt_comp_u12,
+        this.bscflt_comp_u21,
+        this.bscflt_comp_u22,
+        this.bflt_tempover,
+        this.bflt_diffpres_u1,
+        this.bflt_diffpres_u2,
+        this.payload_json.string()
+      ]
+    batching:
+      count: 300
+      period: 500ms

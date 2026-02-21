@@ -29,7 +29,24 @@ go run .
 
 ## 构建
 
+### 静态二进制打包
 ```bash
 cd connect/cmd/storage-adapter
-go build -o storage-adapter .
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o storage-adapter -ldflags="-s -w" .
 ```
+
+### 制作镜像并推送部署 (Docker)
+这符合 `baseEnv/docker-compose-Dev.yml` 中定义的 `harbor.naivehero.top:8443/macda2/storage-adapter:v1.0` 的标准格式，执行以下命令即可将其编译出镜像并供容器编排使用：
+
+```bash
+cd connect/cmd/storage-adapter
+
+# 1. 编译 Docker 镜像 (依赖外层 go.mod 需切回根目录周边或利用自带 Dockerfile 的多层构建)
+# 当前 Dockerfile 为独立打包。执行此命令:
+docker build -t harbor.naivehero.top:8443/macda2/storage-adapter:v1.0 .
+
+# 2. 如果你需要上传到公司自有私有库
+docker push harbor.naivehero.top:8443/macda2/storage-adapter:v1.0
+```
+
+> **注意：** 在最新的项目中已将该组件配置为了 `docker-compose-Dev.yml` 里的 `profiles: ["backup_plan_a"]`。若你想开启它，可使用 `docker compose --profile backup_plan_a up -d` 启动。否则，系统将默认采用 Redpanda Connect 的 SQL Output (Plan B) 进行平滑写入。
