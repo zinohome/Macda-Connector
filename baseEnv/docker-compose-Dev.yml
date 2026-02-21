@@ -288,6 +288,26 @@ services:
     networks:
       - macdanet
 
+  # Pipeline Stage 4: 数据落盘持久化 (signal-storage → TimescaleDB)
+  storage-adapter:
+    build:
+      context: ../connect
+      dockerfile: cmd/storage-adapter/Dockerfile
+    container_name: storage-adapter
+    hostname: storage-adapter
+    restart: unless-stopped
+    environment:
+      - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
+      - KAFKA_TOPIC=signal-storage
+      - PG_DSN=postgres://postgres:passw0rd@timescaledb:5432/postgres?sslmode=disable
+    depends_on:
+      connect-storage-writer:
+        condition: service_healthy
+      timescaledb:
+        condition: service_started
+    networks:
+      - macdanet
+
   timescaledb:
     image: harbor.naivehero.top:8443/macda2/timescaledb-ha:pg14-ts2.19-all
     container_name: timescaledb
