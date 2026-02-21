@@ -289,7 +289,28 @@ services:
       - macdanet
 
   # Pipeline Stage 4: 数据落盘持久化 (signal-storage → TimescaleDB)
-  # Pipeline Stage 4 (Plan A): 使用 Go 语言原生的极致性能写入 (备用方案)
+  # Pipeline Stage 4 (Plan A): 使用 Redpanda Connect SQL 插件直接落盘 (主流方案)
+  connect-pg-writer:
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full
+    container_name: connect-pg-writer
+    restart: unless-stopped
+    command: [ "-c", "/etc/connect/nb67-pg-writer.yaml" ]
+    volumes:
+      - "/data/MACDA2/connect/config/nb67-pg-writer.yaml:/etc/connect/nb67-pg-writer.yaml:ro"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      connect-storage-writer:
+        condition: service_healthy
+      timescaledb:
+        condition: service_started
+    networks:
+      - macdanet
+
+  # Pipeline Stage 4 (Plan B): 使用 Go 语言原生的极致性能写入 (备用方案)
   storage-adapter:
     # 鉴于需要在别处构建镜像，此处注释掉 build，改用外部构建好的 image:
     # 手动在此镜像目录下执行: docker build -t harbor.naivehero.top:8443/macda2/storage-adapter:v2.1.2 .
@@ -303,27 +324,6 @@ services:
       - PG_DSN=postgres://postgres:passw0rd@timescaledb:5432/postgres?sslmode=disable
     # 暂时将此高配版留存，当 Plan B 的 Connect 方案跑满瓶颈时切换使用。不启用时可通过 docker stop 暂停
     profiles: [ "backup_plan_a" ]
-    depends_on:
-      connect-storage-writer:
-        condition: service_healthy
-      timescaledb:
-        condition: service_started
-    networks:
-      - macdanet
-
-  # Pipeline Stage 4 (Plan B): 使用 Redpanda Connect SQL 插件直接落盘 (主流方案)
-  connect-pg-writer:
-    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full
-    container_name: connect-pg-writer
-    restart: unless-stopped
-    command: [ "-c", "/etc/connect/nb67-pg-writer.yaml" ]
-    volumes:
-      - "/data/MACDA2/connect/config/nb67-pg-writer.yaml:/etc/connect/nb67-pg-writer.yaml:ro"
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     depends_on:
       connect-storage-writer:
         condition: service_healthy
