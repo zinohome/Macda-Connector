@@ -324,7 +324,7 @@ services:
       - KAFKA_TOPIC=signal-storage
       - PG_DSN=postgres://postgres:passw0rd@timescaledb:5432/postgres?sslmode=disable
     # 暂时将此高配版留存，当 Plan A 的 Connect 方案跑满瓶颈时切换使用。不启用时可通过 docker stop 暂停
-    profiles: [ "backup_plan_a" ]
+    profiles: [ "plan_b" ]
     depends_on:
       connect-storage-writer:
         condition: service_healthy
