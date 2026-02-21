@@ -184,7 +184,7 @@ services:
     image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full
     restart: unless-stopped
     entrypoint: /bin/sh
-    command: -c "echo \"$$CONNECT_CONFIG\" > /tmp/connect.yaml && /redpanda-connect -c /tmp/connect.yaml"
+    command: -c "echo \"$$CONNECT_CONFIG\" > /tmp/connect.yaml && /app/connect-nb67 -c /tmp/connect.yaml"
     environment:
       CONNECT_CONFIG: |
         input:
