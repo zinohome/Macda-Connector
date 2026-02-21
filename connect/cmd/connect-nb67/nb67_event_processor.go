@@ -107,9 +107,9 @@ type EventOutput struct {
 // parsedInput 是从上游 signal-parsed 消息解析的输入结构。
 // 仅保留事件构建所需字段，Raw 字段来自 nb67_parser 输出的 raw 对象。
 type parsedInput struct {
-	LineID        int            `json:"line_id"`
-	TrainID       int            `json:"train_id"`
-	CarriageID    int            `json:"carriage_id"`
+	LineID        json.Number    `json:"line_id"`
+	TrainID       json.Number    `json:"train_id"`
+	CarriageID    json.Number    `json:"carriage_id"`
 	DeviceID      string         `json:"device_id"`
 	EventTimeText string         `json:"event_time_text"`
 	IngestTime    string         `json:"ingest_time"`
@@ -204,9 +204,9 @@ func (p *NB67EventProcessor) Process(ctx context.Context, msg *service.Message) 
 	// 构建事件元数据
 	meta := EventMeta{
 		SchemaVersion: "nb67.event",
-		LineID:        fmt.Sprintf("%d", input.LineID),
-		TrainID:       fmt.Sprintf("%d", input.TrainID),
-		CarriageID:    input.CarriageID,
+		LineID:        input.LineID.String(),
+		TrainID:       input.TrainID.String(),
+		CarriageID:    func() int { n, _ := input.CarriageID.Int64(); return int(n) }(),
 		DeviceID:      input.DeviceID,
 		EventTimeText: input.EventTimeText,
 		IngestTime:    input.IngestTime,
@@ -230,9 +230,10 @@ func (p *NB67EventProcessor) Process(ctx context.Context, msg *service.Message) 
 	}
 
 	// 构建三类事件命中列表
-	predictHits := p.buildPredictHits(input.Raw, input.CarriageID, input.DeviceID, currentTime)
+	cidInt := func() int { n, _ := input.CarriageID.Int64(); return int(n) }()
+	predictHits := p.buildPredictHits(input.Raw, cidInt, input.DeviceID, currentTime)
 	alarmHits := buildAlarmHits(input.Raw)
-	lifeHits := buildLifeHits(input.Raw, input.CarriageID)
+	lifeHits := buildLifeHits(input.Raw, cidInt)
 
 	// 如果三类命中均为空，直接拦截，不向下游输出任何内容
 	if len(predictHits) == 0 && len(alarmHits) == 0 && len(lifeHits) == 0 {
