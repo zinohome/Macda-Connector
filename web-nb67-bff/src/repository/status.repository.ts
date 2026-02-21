@@ -25,9 +25,11 @@ export class StatusRepository {
            bflt_diffpres_u1 = true OR bflt_diffpres_u2 = true
         )`.as('warning_count')
             ])
-            .where('event_time', '>', sql<Date>`NOW() - INTERVAL '1 hour'`)
+            // .where('event_time', '>', sql<Date>`NOW() - INTERVAL '1 hour'`)
             .groupBy('train_id')
             .execute();
+
+        console.log('[BFF Debug] Records from DB:', records);
 
         return {
             vw_train_alarm_count: records.map(r => ({

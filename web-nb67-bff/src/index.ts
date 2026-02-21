@@ -1,4 +1,6 @@
 import Fastify from 'fastify';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import websocket from '@fastify/websocket';
 import cors from '@fastify/cors';
 import { config } from './config/index.js';
@@ -22,6 +24,26 @@ async function bootstrap() {
         await fastify.register(cors, { origin: '*' });
         await fastify.register(websocket);
 
+        // 注册 Swagger
+        await fastify.register(swagger, {
+            openapi: {
+                info: {
+                    title: 'Macda-Connector BFF API',
+                    description: '车载空调网关 BFF 接口文档',
+                    version: '1.0.0'
+                },
+                servers: [{ url: `http://localhost:${config.port}` }]
+            }
+        });
+
+        await fastify.register(swaggerUi, {
+            routePrefix: '/docs',
+            uiConfig: {
+                docExpansion: 'list',
+                deepLinking: false
+            }
+        });
+
         // 2. 数据库健康检查
         await checkDbConnection();
 
@@ -41,11 +63,46 @@ async function bootstrap() {
         });
 
         // 4. 注册 HTTP 路由 (REST)
-        fastify.get('/api/rest/AirSystem', async () => {
+        fastify.get('/api/rest/AirSystem', {
+            schema: {
+                description: '获取在线列车空调运行状态汇总',
+                tags: ['Status'],
+                response: {
+                    200: {
+                        type: 'object',
+                        properties: {
+                            vw_train_alarm_count: {
+                                type: 'array',
+                                items: {
+                                    type: 'object',
+                                    properties: {
+                                        train_no: { type: 'number' },
+                                        alarm_count: { type: 'number' },
+                                        warning_count: { type: 'number' },
+                                        total_number: { type: 'number' }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }, async () => {
             return await StatusRepository.getTrainAlarmSummary();
         });
 
-        fastify.post('/api/rest/v2/train/RealtimeAlarm', async (request: any) => {
+        fastify.post('/api/rest/v2/train/RealtimeAlarm', {
+            schema: {
+                description: '获取指定列车的详细实时信号',
+                tags: ['Status'],
+                body: {
+                    type: 'object',
+                    properties: {
+                        trainNo: { type: 'array', items: { type: 'string' } }
+                    }
+                }
+            }
+        }, async (request: any) => {
             const { trainNo } = request.body;
             const data = await StatusRepository.getTrainDetails(parseInt(trainNo?.[0] || '0'));
             // 这里的返回结构需要适配前端对 vw_train_alarm_info 的期望

@@ -6,7 +6,15 @@ import { config } from './index.js';
 /**
  * 初始化 TimescaleDB 连接池
  */
-const pool = new Pool(config.db);
+const pool = new Pool({
+    ...config.db,
+    connectionTimeoutMillis: 5000,
+    idleTimeoutMillis: 30000,
+});
+
+pool.on('error', (err) => {
+    console.error('[Postgres Pool] Unexpected error on idle client', err);
+});
 
 /**
  * Kysely 强类型查询构造器实例
@@ -15,6 +23,12 @@ export const db = new Kysely<Database>({
     dialect: new PostgresDialect({
         pool,
     }),
+    log: (event) => {
+        if (event.level === 'query') {
+            console.log('[SQL Query]:', event.query.sql);
+            console.log('[SQL Params]:', event.query.parameters);
+        }
+    }
 });
 
 /**
