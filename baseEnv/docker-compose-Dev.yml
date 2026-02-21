@@ -303,6 +303,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    #profiles: [ "plan_a" ]
     depends_on:
       connect-storage-writer:
         condition: service_healthy

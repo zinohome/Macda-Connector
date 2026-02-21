@@ -1,5 +1,11 @@
-import { Kafka } from 'kafkajs';
-import type { Consumer, EachMessagePayload } from 'kafkajs';
+import kafkajs from 'kafkajs';
+import type { Kafka, Consumer, EachMessagePayload } from 'kafkajs';
+// @ts-ignore
+import SnappyCodec from 'kafkajs-snappy';
+
+const { CompressionTypes, CompressionCodecs } = kafkajs;
+// @ts-ignore
+CompressionCodecs[CompressionTypes.Snappy] = SnappyCodec;
 import { config } from './index.js';
 
 /**
@@ -12,7 +18,7 @@ export class KafkaManager {
     private consumer: Consumer;
 
     private constructor() {
-        this.kafka = new Kafka({
+        this.kafka = new kafkajs.Kafka({
             clientId: config.kafka.clientId,
             brokers: config.kafka.brokers,
         });
@@ -37,7 +43,7 @@ export class KafkaManager {
                 fromBeginning: false
             });
 
-            await this.consumer.run({
+            this.consumer.run({
                 eachMessage: async (payload: EachMessagePayload) => {
                     const { topic, message } = payload;
                     if (message.value) {
