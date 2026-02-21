@@ -1,7 +1,5 @@
--- =============================================================================
--- 核心底层数据表与时序优化设计 
--- 适用环境: PostgreSQL + TimescaleDB
--- =============================================================================
+-- 确保加装 TimescaleDB 扩展
+CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 
 CREATE SCHEMA IF NOT EXISTS hvac;
 
