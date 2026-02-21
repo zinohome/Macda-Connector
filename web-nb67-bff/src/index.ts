@@ -116,22 +116,40 @@ async function bootstrap() {
         });
 
         fastify.get('/api/history/events', {
+            // ... (keep existing historical events route)
+        }, async (request: any) => {
+            return await StatusRepository.getHistoricalEvents(request.query);
+        });
+
+        /**
+         * 业务接口：删除（屏蔽）具体告警
+         */
+        fastify.post('/api/rest/v2/alarm/mask', {
             schema: {
-                description: '获取历史事件列表 (告警/预警/寿命)',
-                tags: ['History'],
-                query: {
+                description: '删除(屏蔽)指定的故障位。被屏蔽的故障将不再计入实时统计，直到该故障物理消失后再次发生。',
+                tags: ['Alarm'],
+                body: {
                     type: 'object',
+                    required: ['deviceId', 'faultCode'],
                     properties: {
-                        trainId: { type: 'number' },
-                        eventType: { type: 'string', enum: ['alarm', 'predict', 'life'] },
-                        startTime: { type: 'string', format: 'date-time' },
-                        endTime: { type: 'string', format: 'date-time' }
-                    },
-                    required: ['startTime', 'endTime']
+                        deviceId: { type: 'string', description: '设备唯一标识 (如 HVAC-67-07002-01)' },
+                        faultCode: { type: 'string', description: '故障代码位名称 (如 Bflt_FadU11)' }
+                    }
+                },
+                response: {
+                    200: {
+                        type: 'object',
+                        properties: {
+                            success: { type: 'boolean' },
+                            message: { type: 'string' }
+                        }
+                    }
                 }
             }
         }, async (request: any) => {
-            return await StatusRepository.getHistoricalEvents(request.query);
+            const { deviceId, faultCode } = request.body;
+            await StatusRepository.maskAlarm(deviceId, faultCode);
+            return { success: true, message: `Alarm ${faultCode} for ${deviceId} masked.` };
         });
 
         fastify.get('/api/history/temperature', async (request: any, reply) => {
