@@ -1,0 +1,56 @@
+input:
+  kafka:
+    addresses:
+      - redpanda-1:9092
+      - redpanda-2:9092
+      - redpanda-3:9092
+    topics:
+      - signal-alarm
+      - signal-predict
+      - signal-life
+    consumer_group: macda-event-persister
+    start_from_oldest: true
+
+pipeline:
+  processors:
+    # 1. 提取事件类型 (从 topic 映射)
+    - mapping: |
+        root = this
+        root.event_type = meta("kafka_topic").split("-").index(1)
+    
+    # 2. 将 hits 数组展开为多条消息，每条消息代表一个故障点
+    - unarchive:
+        format: json_array
+        path: hits
+
+    # 3. 字段平铺与标准化
+    - mapping: |
+        root.event_time = this.event_meta.event_time_text
+        root.line_id = this.event_meta.line_id.number()
+        root.train_id = this.event_meta.train_id.number()
+        root.carriage_id = this.event_meta.carriage_id.number()
+        root.device_id = this.event_meta.device_id
+        root.event_type = this.event_type
+        root.fault_code = this.code
+        root.fault_name = this.name
+        root.severity = coalesce(this.level, this.severity, 0)
+        root.payload_json = this.event_meta.merge(this).string()
+
+output:
+  sql_raw:
+    driver: postgres
+    dsn: postgres://postgres:passw0rd@192.168.32.17:5432/postgres?sslmode=disable
+    query: |
+      INSERT INTO hvac.fact_event (
+        event_time, line_id, train_id, carriage_id, device_id,
+        event_type, fault_code, fault_name, severity, payload_json
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      ON CONFLICT (event_time, device_id, fault_code) DO NOTHING;
+    args_mapping: |
+      root = [
+        this.event_time, this.line_id, this.train_id, this.carriage_id, this.device_id,
+        this.event_type, this.fault_code, this.fault_name, this.severity, this.payload_json
+      ]
+    batching:
+      count: 100
+      period: 500ms

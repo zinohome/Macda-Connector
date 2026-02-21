@@ -115,6 +115,25 @@ async function bootstrap() {
             };
         });
 
+        fastify.get('/api/history/events', {
+            schema: {
+                description: '获取历史事件列表 (告警/预警/寿命)',
+                tags: ['History'],
+                query: {
+                    type: 'object',
+                    properties: {
+                        trainId: { type: 'number' },
+                        eventType: { type: 'string', enum: ['alarm', 'predict', 'life'] },
+                        startTime: { type: 'string', format: 'date-time' },
+                        endTime: { type: 'string', format: 'date-time' }
+                    },
+                    required: ['startTime', 'endTime']
+                }
+            }
+        }, async (request: any) => {
+            return await StatusRepository.getHistoricalEvents(request.query);
+        });
+
         fastify.get('/api/history/temperature', async (request: any, reply) => {
             const { deviceId, hours } = request.query;
             if (!deviceId) return reply.status(400).send({ error: 'deviceId is required' });

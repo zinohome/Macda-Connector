@@ -64,6 +64,36 @@ SELECT create_hypertable('hvac.fact_raw', 'event_time', chunk_time_interval => I
 -- 为经常进行 UI 端过滤的 device_id (车厢级别) 加速建立索引
 CREATE INDEX IF NOT EXISTS ix_fact_raw_device_time ON hvac.fact_raw (device_id, event_time DESC);
 
+-- 5. 创建告警屏蔽表 (用于业务上的“删除告警”/告警抑制)
+CREATE TABLE IF NOT EXISTS hvac.dim_alarm_mask (
+    device_id VARCHAR(64) NOT NULL,
+    fault_code VARCHAR(128) NOT NULL,
+    masked_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (device_id, fault_code)
+);
+COMMENT ON TABLE hvac.dim_alarm_mask IS '故障屏蔽/抑制状态表，用于处理用户在界面上删除告警的逻辑';
+
+-- 6. 创建历史事件超表：存储计算后的告警、预警、寿命等事件
+CREATE TABLE IF NOT EXISTS hvac.fact_event (
+    event_time TIMESTAMPTZ NOT NULL,              -- 事件记录时间
+    line_id INTEGER,                              -- 线路编号
+    train_id INTEGER,                             -- 列车编号
+    carriage_id INTEGER,                          -- 车厢编号
+    device_id VARCHAR(64) NOT NULL,               -- 设备唯一标识
+    event_type VARCHAR(32),                       -- 事件分类: alarm, predict, life
+    fault_code VARCHAR(128) NOT NULL,             -- 故障/预警代码
+    fault_name TEXT,                              -- 故障/预警名称
+    severity SMALLINT,                            -- 严重等级 (0, 1, 2...)
+    status VARCHAR(16) DEFAULT 'open',            -- 事件状态: open, resolved
+    payload_json JSONB,                           -- 事件发生时的上下文详情
+    PRIMARY KEY (event_time, device_id, fault_code)
+);
+COMMENT ON TABLE hvac.fact_event IS '经规则引擎处理后的事件事实表，支持历史追溯与报表分析';
+
+-- 将事件表转化为 Hypertable
+SELECT create_hypertable('hvac.fact_event', 'event_time', if_not_exists => TRUE);
+CREATE INDEX IF NOT EXISTS ix_fact_event_searching ON hvac.fact_event (train_id, event_type, event_time DESC);
+
 -- =============================================================================
 -- 构建服务于前端 Web 展现的连续聚合层 (Continuous Aggregates)
 -- =============================================================================
