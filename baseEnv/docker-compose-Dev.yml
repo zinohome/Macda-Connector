@@ -292,8 +292,8 @@ services:
   # Pipeline Stage 4 (Plan A): 使用 Go 语言原生的极致性能写入 (备用方案)
   storage-adapter:
     # 鉴于需要在别处构建镜像，此处注释掉 build，改用外部构建好的 image:
-    # 手动在此镜像目录下执行: docker build -t harbor.naivehero.top:8443/macda2/storage-adapter:v1.0 .
-    image: harbor.naivehero.top:8443/macda2/storage-adapter:v1.0
+    # 手动在此镜像目录下执行: docker build -t harbor.naivehero.top:8443/macda2/storage-adapter:v2.1.2 .
+    image: harbor.naivehero.top:8443/macda2/storage-adapter:v2.1.2
     container_name: storage-adapter
     hostname: storage-adapter
     restart: unless-stopped
