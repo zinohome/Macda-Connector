@@ -1,11 +1,15 @@
--- 确保加装 TimescaleDB 扩展
+-- 1. 确保加载 TimescaleDB 扩展
 CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 
+-- 2. 设置当前数据库的全局默认时区为东八区
+ALTER DATABASE postgres SET timezone TO 'Asia/Shanghai';
+
+-- 3. 创建业务 Schema
 CREATE SCHEMA IF NOT EXISTS hvac;
 
--- 1. 创建核心超表：实时传感器遥测与状态宽表 (Hypertable)
+-- 4. 创建核心超表：实时传感器遥测与状态宽表 (Hypertable)
 CREATE TABLE IF NOT EXISTS hvac.fact_raw (
-    event_time TIMESTAMPTZ NOT NULL,              -- 报文产生时间
+    event_time TIMESTAMPTZ NOT NULL,              -- 报文产生时间 (带时序，将自动转换为上海时间展示)
     ingest_time TIMESTAMPTZ NOT NULL,             -- 网关接收时间
     process_time TIMESTAMPTZ,                     -- 解析处理时间
     event_time_valid BOOLEAN,                     -- event_time 是否有效合法(防漂移)
