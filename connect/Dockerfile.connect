@@ -1,5 +1,5 @@
 # Stage 1: Builder - 编译自定义Connect
-FROM golang:1.23-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # 安装必要的构建工具
 RUN apk add --no-cache git
@@ -54,5 +54,5 @@ CMD ["-c", "/etc/connect/nb67-parser.yaml"]
 
 # 标签
 LABEL maintainer="MACDA Project" \
-      description="Redpanda Connect with NB67 Parser Plugin" \
-      version="2.0"
+    description="Redpanda Connect with NB67 Parser Plugin" \
+    version="2.0"
