@@ -194,6 +194,7 @@ services:
             topics:
               - signal-in
             consumer_group: topic-in-sync
+            start_from_oldest: false
 
         output:
           kafka:

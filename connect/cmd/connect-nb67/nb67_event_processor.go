@@ -107,8 +107,8 @@ type EventOutput struct {
 // parsedInput 是从上游 signal-parsed 消息解析的输入结构。
 // 仅保留事件构建所需字段，Raw 字段来自 nb67_parser 输出的 raw 对象。
 type parsedInput struct {
-	LineID        string         `json:"line_id"`
-	TrainID       string         `json:"train_id"`
+	LineID        int            `json:"line_id"`
+	TrainID       int            `json:"train_id"`
 	CarriageID    int            `json:"carriage_id"`
 	DeviceID      string         `json:"device_id"`
 	EventTimeText string         `json:"event_time_text"`
@@ -204,8 +204,8 @@ func (p *NB67EventProcessor) Process(ctx context.Context, msg *service.Message) 
 	// 构建事件元数据
 	meta := EventMeta{
 		SchemaVersion: "nb67.event",
-		LineID:        input.LineID,
-		TrainID:       input.TrainID,
+		LineID:        fmt.Sprintf("%d", input.LineID),
+		TrainID:       fmt.Sprintf("%d", input.TrainID),
 		CarriageID:    input.CarriageID,
 		DeviceID:      input.DeviceID,
 		EventTimeText: input.EventTimeText,
