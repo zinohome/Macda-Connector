@@ -299,6 +299,7 @@ services:
     #  - 5432:5432
     volumes:
       - "/data/MACDA2/timescaledb/data:/home/postgres/pgdata"
+      - "/data/MACDA2/timescaledb/init-db:/docker-entrypoint-initdb.d:ro"
     #healthcheck:
     #    test: ["CMD", "netstat", "-anp", "|", "grep 5432", "||", "exit 1"]
     #    interval: 30s
