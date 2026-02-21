@@ -157,7 +157,7 @@ services:
     image: harbor.naivehero.top:8443/macda2/redpanda-console:v3.5.2
     container_name: redpanda-console
     hostname: redpanda-console
-    restart: on-failure
+    restart: unless-stopped
     entrypoint: /bin/sh
     command: -c "echo \"$$CONSOLE_CONFIG_FILE\" > /tmp/config.yml; /app/console"
     environment:
@@ -182,7 +182,7 @@ services:
 
   connect-topic-in:
     image: harbor.naivehero.top:8443/macda2/connect:latest
-    restart: on-failure
+    restart: unless-stopped
     entrypoint: /bin/sh
     command: -c "echo \"$$CONNECT_CONFIG\" > /tmp/connect.yaml && /redpanda-connect -c /tmp/connect.yaml"
     environment:
