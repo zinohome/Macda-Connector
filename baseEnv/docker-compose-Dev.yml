@@ -313,7 +313,7 @@ services:
 
   # Pipeline Stage 4 (Plan B): 使用 Redpanda Connect SQL 插件直接落盘 (主流方案)
   connect-pg-writer:
-    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1.2
+    image: harbor.naivehero.top:8443/macda2/connect:latest
     container_name: connect-pg-writer
     restart: unless-stopped
     command: [ "-c", "/etc/connect/nb67-pg-writer.yaml" ]
