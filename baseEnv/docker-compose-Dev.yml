@@ -5,7 +5,7 @@ services:
     container_name: dev-init
     user: "0:0"
     command: >
-      /bin/sh -c " mkdir -p /host-redpanda-1 /host-redpanda-2 /host-redpanda-3 /host-timescaledb /host-pgadmin; chown -R 101:101 /host-redpanda-1 /host-redpanda-2 /host-redpanda-3; chown -R 1000:1000 /host-timescaledb /host-pgadmin; chmod -R ug+rwX /host-redpanda-1 /host-redpanda-2 /host-redpanda-3 /host-timescaledb /host-pgadmin; "
+      /bin/sh -c " mkdir -p /host-redpanda-1 /host-redpanda-2 /host-redpanda-3 /host-timescaledb /host-pgadmin; chown -R 101:101 /host-redpanda-1 /host-redpanda-2 /host-redpanda-3; chown -R 1000:1000 /host-timescaledb; chown -R 5050:5050  /host-pgadmin; chmod -R ug+rwX /host-redpanda-1 /host-redpanda-2 /host-redpanda-3 /host-timescaledb /host-pgadmin; "
     volumes:
       - "/data/MACDA2/redpanda/redpanda1:/host-redpanda-1"
       - "/data/MACDA2/redpanda/redpanda2:/host-redpanda-2"
