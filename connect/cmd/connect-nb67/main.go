@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/kafka"
-	_ "github.com/benthosdev/benthos/v4/public/components/prometheus"
-	_ "github.com/benthosdev/benthos/v4/public/components/pure"
+	_ "github.com/benthosdev/benthos/v4/public/components/all"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 

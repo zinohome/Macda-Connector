@@ -181,7 +181,7 @@ services:
       - macdanet
 
   connect-topic-in:
-    image: harbor.naivehero.top:8443/macda2/connect:latest
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full
     restart: unless-stopped
     entrypoint: /bin/sh
     command: -c "echo \"$$CONNECT_CONFIG\" > /tmp/connect.yaml && /redpanda-connect -c /tmp/connect.yaml"
@@ -230,7 +230,7 @@ services:
   # ── NB67 三段流水线 ──────────────────────────────────────────
   # Pipeline Stage 1: 解析NB67二进制 → signal-parsed
   connect-parser:
-    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1.2
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full
     restart: unless-stopped
     command: [ "-c", "/etc/connect/nb67-parser.yaml" ]
     volumes:
@@ -248,7 +248,7 @@ services:
 
   # Pipeline Stage 2: 写入存储 (signal-parsed → TimescaleDB)
   connect-storage-writer:
-    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1.2
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full
     restart: unless-stopped
     command: [ "-c", "/etc/connect/nb67-storage-writer.yaml" ]
     volumes:
@@ -268,7 +268,7 @@ services:
 
   # Pipeline Stage 3: 事件检测 (signal-parsed → signal-predict/signal-alarm/signal-life)
   connect-event-builder:
-    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.1.2
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full
     restart: unless-stopped
     command: [ "-c", "/etc/connect/nb67-event-builder.yaml" ]
     environment:
@@ -313,7 +313,7 @@ services:
 
   # Pipeline Stage 4 (Plan B): 使用 Redpanda Connect SQL 插件直接落盘 (主流方案)
   connect-pg-writer:
-    image: harbor.naivehero.top:8443/macda2/connect:latest
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full
     container_name: connect-pg-writer
     restart: unless-stopped
     command: [ "-c", "/etc/connect/nb67-pg-writer.yaml" ]
