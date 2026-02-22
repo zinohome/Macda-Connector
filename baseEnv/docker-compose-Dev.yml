@@ -293,7 +293,6 @@ services:
   # Pipeline Stage 4 (Plan A): 使用 Redpanda Connect SQL 插件直接落盘 (主流方案)
   connect-pg-writer:
     image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full
-    container_name: connect-pg-writer
     restart: unless-stopped
     command: [ "-c", "/etc/connect/nb67-pg-writer.yaml" ]
     volumes:
@@ -315,7 +314,6 @@ services:
   # Pipeline Stage 5: 事件历史持久化 (signal-alarm/predict/life → TimescaleDB)
   connect-event-writer:
     image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full
-    container_name: connect-event-writer
     restart: unless-stopped
     command: [ "-c", "/etc/connect/nb67-event-writer.yaml" ]
     volumes:
@@ -338,8 +336,6 @@ services:
     # 鉴于需要在别处构建镜像，此处注释掉 build，改用外部构建好的 image:
     # 手动在此镜像目录下执行: docker build -t harbor.naivehero.top:8443/macda2/storage-adapter:v2.1.2 .
     image: harbor.naivehero.top:8443/macda2/storage-adapter:v2.1.2
-    container_name: storage-adapter
-    hostname: storage-adapter
     restart: unless-stopped
     environment:
       - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
