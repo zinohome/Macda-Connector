@@ -13,11 +13,15 @@ input:
 
 pipeline:
   processors:
-    # 1. 过滤空数据，并为数组中每个元素注入 event_type
+    # 1. 提取元数据并注入到数组元素，防止展开后丢失
     - mapping: |
-        let event_type = meta("kafka_topic").split("-").index(1)
+        let event_type = meta("kafka_topic").split("-").index(1) | "unknown"
+        let meta_info = this.event_meta | {}
         root = match {
-          this.hits.type() == "array" && this.hits.length() > 0 => this.hits.map_each(hit -> hit.merge({"event_type": $event_type})),
+          this.hits.type() == "array" && this.hits.length() > 0 => this.hits.map_each(hit -> hit.merge({
+            "event_type": $event_type,
+            "event_meta": $meta_info
+          })),
           _ => deleted()
         }
     
@@ -25,12 +29,12 @@ pipeline:
     - unarchive:
         format: json_array
 
-    # 3. 字段平铺与标准化 (带容错空值的后备处理 | default)
+    # 3. 字段平铺与标准化，防范字符串型数字的 panic 错误
     - mapping: |
         root.event_time = this.event_meta.event_time_text | "1970-01-01T00:00:00Z"
-        root.line_id = this.event_meta.line_id | 0
-        root.train_id = this.event_meta.train_id | 0
-        root.carriage_id = this.event_meta.carriage_id | 0
+        root.line_id = this.event_meta.line_id.number() | 0
+        root.train_id = this.event_meta.train_id.number() | 0
+        root.carriage_id = this.event_meta.carriage_id.number() | 0
         root.device_id = this.event_meta.device_id | "unknown"
         root.event_type = this.event_type | "unknown"
         root.fault_code = this.code | "unknown"
