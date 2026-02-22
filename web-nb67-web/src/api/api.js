@@ -4,8 +4,8 @@ import request from '../utils/request.js'
 export const getAirStartDataApi = (params) => request('/api/airStartData', 'get', params)
 
 //取在线列车
-// export const getActiveCarApi = () => request('/api/getActiveCar', 'get')
-export const getActiveCarApi = () => request('/api/rest/train', 'get')
+// export const getActiveCarApi = () => request('/api/rest/train', 'get')
+export const getActiveCarApi = () => request('/api/getActiveCar', 'get')
 // 空调系统
 export const getAirSystemApi = () => request('/api/rest/AirSystem', 'get')
 // 实时报警
@@ -19,7 +19,7 @@ export const getRealtimeAlarmDetail = (trainID) => request('/api/rest/train/Real
 // 列车详情-车厢状态预警
 export const getStatusAlert = (trainID) => request('/api/rest/train/StatusAlert/' + trainID, 'get')
 // 列车详情-车厢选择
-export const getTrainSelection = (trainId) => request('/api/rest/rain/TrainSelection/' + trainId, 'get')
+export const getTrainSelection = (trainId) => request('/api/rest/train/TrainSelection/' + trainId, 'get')
 // 列车详情-报警信息
 // export const getAlarmInformation = (trainId) => request('/api/rest/train/AlarmInformation/' + trainId, 'get')
 export const getAlarmInformation = (params) => request('/api/rest/train/AlarmInformation', 'post', params)

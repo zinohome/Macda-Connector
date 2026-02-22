@@ -27,10 +27,11 @@
           <el-table-column label="操作" min-width="25%">
             <template #default="scope">
               <el-popover
-                        class="item" effect="light"
+                        class="item" 
+                        popper-class="advice-popover"
                         placement="left"
                         title="指导建议"
-                        width="200"
+                        width="240"
                         trigger="hover"
                         :content="scope.row.precautions">
                         <template #reference>
@@ -75,10 +76,11 @@
           <el-table-column label="操作" align="center" min-width="25%">
             <template #default="scope">
               <el-popover
-                        class="item" effect="light"
+                        class="item" 
+                        popper-class="advice-popover"
                         placement="left"
-                        title="处理措施"
-                        width="200"
+                        title="指导建议"
+                        width="240"
                         trigger="hover"
                         :content="scope.row.precautions">
                         <template #reference>
@@ -131,8 +133,10 @@ const startScroll = (tableRef, timerRefId) => {
         if(timerRefId === 1 && scrollTimerEA) clearInterval(scrollTimerEA)
         if(timerRefId === 2 && scrollTimerPA) clearInterval(scrollTimerPA)
         
-        // 只有能够滚动时（内容高度 > 容器高度），才开启自动滚动
-        if (tableDiv.scrollHeight > tableDiv.clientHeight) {
+        const dataLength = timerRefId === 1 ? props.tableDataEa.length : props.tableDataPa.length
+        
+        // 只有当有数据且内容高度 > 容器高度时，才开启自动滚动
+        if (dataLength > 0 && tableDiv.scrollHeight > tableDiv.clientHeight) {
           const scrollFn = () => {
             tableDiv.scrollTop += 1
             // 当滚动到底部时返回顶部无缝循环

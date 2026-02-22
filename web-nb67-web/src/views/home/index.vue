@@ -1236,23 +1236,28 @@ function getApi(){
        centerData.value.warning_count = count.value
        centerData.value.alarm = num.value
        centerData.value.normal = normal.value
-       rightDataEA.value = []
        getRealtimeAlarm({trainNo: trainNo.value}).then((res)=>{
+        const tempEA = []
+        const seenEA = new Set()
         res.vw_train_alarm_info.forEach((item)=>{
             Object.keys(item).forEach((value)=>{
                 if(item[value]>0 && item[value +'_name']){
-                    rightDataEA.value.push({
-                        name:item[value +'_name'],
-                        code: value,
-                        alarm_time: item.alarm_time,
-                        carriage_no: item.carriage_no
-                    })
+                    const uniqueKey = `${item.train_no}_${item.carriage_no}_${value}`
+                    if (!seenEA.has(uniqueKey)) {
+                        tempEA.push({
+                            name:item[value +'_name'],
+                            code: value,
+                            alarm_time: newDate(item.alarm_time),
+                            carriage_no: item.carriage_no,
+                            train_no: item.train_no
+                        })
+                        seenEA.add(uniqueKey)
+                    }
                 }
             })
         })
         const proposeAdvice = propose.concat(proposeWarn)
-        rightDataEA.value.forEach((values)=>{
-            values.alarm_time = newDate(values.alarm_time)
+        tempEA.forEach((values)=>{
             proposeAdvice.forEach((proposeValue)=>{
                 if(proposeValue.value == values.code){
                     values.precautions = proposeValue.title
@@ -1260,6 +1265,7 @@ function getApi(){
                 }
             })
         })
+        rightDataEA.value = tempEA
     })
     // getRealtimeAlarm().then((res)=>{
     //     rightDataEA.value = []
@@ -1281,32 +1287,39 @@ function getApi(){
     // //    console.log(rightDataEA.value);
     // })
     getRealtimeWarning().then((res)=>{
-        rightDataPA.value = []
+        const tempPA = []
+        const seenPA = new Set()
+        const proposeAdvice = propose.concat(proposeWarn)
+
         Object.entries(res).forEach(([key, itemsObj]) => {
-           if(Array.isArray(itemsObj) && itemsObj.length !== 0){
-                itemsObj.forEach((items)=>{
-                    rightDataPA.value.push({...items, code: key})
-                })
+           const processItem = (i) => {
+               const uniqueKey = `${i.train_no}_${i.carriage_no}_${key}`
+               if (!seenPA.has(uniqueKey)) {
+                   const newItem = {
+                       ...i, 
+                       code: key, 
+                       warning_time: newDate(i.warning_time)
+                   }
+                   proposeAdvice.forEach((proposeValue)=>{
+                       if(proposeValue.value == newItem.code){
+                           newItem.precautions = proposeValue.title
+                           newItem.name = proposeValue.name
+                       }
+                   })
+                   tempPA.push(newItem)
+                   seenPA.add(uniqueKey)
+               }
+           }
+
+           if(Array.isArray(itemsObj)){
+                itemsObj.forEach(processItem)
             } else if (typeof itemsObj === 'object' && itemsObj !== null) {
-                 // in case it's grouped via dict
                  Object.values(itemsObj).forEach((itemArr) => {
-                     if(Array.isArray(itemArr)) {
-                         itemArr.forEach(i => rightDataPA.value.push({...i, code: key}))
-                     }
+                     if(Array.isArray(itemArr)) itemArr.forEach(processItem)
                  })
             }
         });
-        
-        const proposeAdvice = propose.concat(proposeWarn)
-        rightDataPA.value.forEach((value)=>{
-            value.warning_time = newDate(value.warning_time)
-            proposeAdvice.forEach((proposeValue)=>{
-                if(proposeValue.value == value.code){
-                    value.precautions = proposeValue.title
-                    value.name = proposeValue.name
-                }
-            })
-        })
+        rightDataPA.value = tempPA
         console.log("Warnings PA: ", rightDataPA.value);
     })
     })
@@ -1366,6 +1379,37 @@ function websocketclose(e) {  //关闭
 :deep(.el-table__empty-text) {
    margin-top: 40px;
    line-height: 20px !important;
+}
+</style>
+
+<style lang="scss">
+.el-popover.advice-popover {
+    background: #0c1124 !important;
+    border: 1px solid #2186cf !important;
+    color: #ffffff !important;
+    font-size: 13px !important;
+    padding: 15px !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6) !important;
+    border-radius: 6px !important;
+
+    .el-popover__title {
+        color: #2186cf !important;
+        font-size: 14px !important;
+        font-weight: bold !important;
+        margin-bottom: 10px !important;
+        border-bottom: 1px solid rgba(33, 134, 207, 0.3) !important;
+        padding-bottom: 8px !important;
+    }
+
+    // 允许换行展示
+    white-space: pre-line !important;
+    line-height: 1.6 !important;
+
+    // 箭头样式
+    .el-popper__arrow::before {
+        background: #0c1124 !important;
+        border: 1px solid #2186cf !important;
+    }
 }
 </style>
 

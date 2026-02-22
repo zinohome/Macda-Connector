@@ -1,64 +1,146 @@
 <template>
     <div class="warp2">
-        <!-- 顶部 -->
-        <div class="header">
-            <!-- <BackTop /> -->
-            <div></div>
-            <div class="trainInfo">
-                当前列车号：{{ route.query.trainNo }} &nbsp;
-                <!-- <Dropdown @handleCommand="handleCommand" /> -->
+        <!-- 顶部导航与筛选 -->
+        <div class="header-monitor">
+            <div class="header-left">
+                <el-button type="primary" class="nav-btn" icon="Calendar" @click="gotoPath('historyData')">历史数据</el-button>
+                <el-button type="primary" class="nav-btn" icon="Bell" @click="gotoPath('historyAlarm')">历史报警</el-button>
+            </div>
+
+            <div class="header-right">
+                <el-form :inline="true" :model="filterForm" class="filter-form">
+                    <el-form-item label="车号">
+                        <el-select v-model="filterForm.trainNo" placeholder="请选择车号" @change="handleTrainChange">
+                            <el-option v-for="item in trainList" :key="item.train_id" :label="item.train_id" :value="item.train_id" />
+                        </el-select>
+                    </el-form-item>
+                    <el-form-item label="车厢号">
+                        <el-select v-model="filterForm.carriageNo" placeholder="请选择车厢号" class="carriage-select">
+                            <el-option v-for="item in carriageList" :key="item.carriage_no" :label="item.label" :value="item.carriage_no" />
+                        </el-select>
+                    </el-form-item>
+                    <el-form-item>
+                        <el-button type="primary" class="nav-btn" icon="Search" @click="handleQuery">查询</el-button>
+                    </el-form-item>
+                </el-form>
             </div>
         </div>
-        <el-row :gutter="15" class="container">
-            <el-col :span="12">
-                <ActualWarning :ActualWarningData="ActualWarningData"/>
-            </el-col>
-            <el-col :span="12">
-                <StateWarning :StateWarningData="StateWarningData"/>
-            </el-col>
-        </el-row>
-        <!-- 车厢选择 -->
-        <CarCrew :trainId="route.query.trainNo"/>
-        <!-- 报警信息 -->
-        <AlarmInfo :AlarmInfoData="AlarmInfoData" @callParentMethod="parentMethod"/>
-        <!-- 运行状态信息 -->
-        <RunState :RunStateData="RunStateData"/>
-        <!-- 车厢温度信息 -->
-        <CarTemperature :CarTemperatureData="CarTemperatureData"/>
+
+        <div class="monitor-container">
+            <!-- 2. 全车概览 (固定在顶部) -->
+            <div class="section-box sticky-section">
+                <CarCrew :trainId="currentTrainNo" :activeCarriage="currentCarriageNo" @select="handleCarSelect" />
+            </div>
+
+            <!-- 3. 运行参数 (全车6节) -->
+            <div class="section-box">
+                <RunState :trainId="currentTrainNo" />
+            </div>
+
+            <!-- 4. 机组原理图 -->
+            <div class="section-box">
+                <TrainUnitMap :carriageId="fullCarriageId" />
+            </div>
+
+            <!-- 5. 健康评估信息 -->
+            <div class="section-box">
+                <Healthy :carriageId="fullCarriageId" />
+            </div>
+
+            <!-- 6. 预警中心 (左右分栏) -->
+            <el-row :gutter="15">
+                <el-col :span="12">
+                    <div class="section-box">
+                        <ActualWarning :ActualWarningData="filteredActualAlarms"/>
+                    </div>
+                </el-col>
+                <el-col :span="12">
+                    <div class="section-box">
+                        <StateWarning :StateWarningData="filteredStateWarnings"/>
+                    </div>
+                </el-col>
+            </el-row>
+
+            <div class="monitor-container-bottom">
+                <div class="section-box chart-box">
+                    <Echart :carriageId="fullCarriageId" />
+                </div>
+            </div>
+
+
+        </div>
     </div>
 </template>
 
 <script setup>
 
-import BackTop from "@/components/BackTop.vue"
-import AlarmInfo from "./AlarmInfo.vue"
-import ActualWarning from "./ActualWarning.vue"
-import StateWarning from "./StateWarning.vue"
 import CarCrew from "./CarCrew.vue"
 import RunState from "./RunState.vue"
-import CarTemperature from "./CarTemperature.vue"
-import Dropdown from './Dropdown.vue'
-import { ref, onMounted, onUnmounted } from 'vue'
+import TrainUnitMap from "@/views/airConditioner/TrainUnitMap.vue"
+import Healthy from "@/views/airConditioner/Healthy.vue"
+import ActualWarning from "./ActualWarning.vue"
+import StateWarning from "./StateWarning.vue"
+import Echart from "@/views/airConditioner/Echart.vue"
+import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getRealtimeAlarmDetail, getStatusAlert, getAlarmInformation, getRunningState, getTrainTemperature, getRealtimeAlarm } from '@/api/api'
+import { 
+    getRealtimeAlarmDetail, 
+    getStatusAlert, 
+    getAlarmInformation, 
+    getRunningState, 
+    getTrainTemperature, 
+    getRealtimeAlarm,
+    getActiveCarApi,
+    getAirSystemApi,
+    getTrainSelection
+} from '@/api/api'
 let route = useRoute()
 let router = useRouter()
 
-let trainId = '1'    //列车号
-let trainNum = '1'   //车厢号
-let trainCrew = '1'  //机组
+// 筛选状态与 URL 参数初始化 (保持 String 类型以匹配 el-option)
+const filterForm = reactive({
+    trainNo: String(route.query.trainNo || '7001'),
+    carriageNo: String(route.query.trainCoach || '1')
+})
+
+const currentTrainNo = ref(filterForm.trainNo)
+const currentCarriageNo = ref(filterForm.carriageNo)
+
+// 计算全路径车厢 ID ( e.g. 700101 )
+const fullCarriageId = computed(() => {
+    if (!currentTrainNo.value || !currentCarriageNo.value) return ''
+    return `${currentTrainNo.value}0${currentCarriageNo.value}`
+})
+
+// 生成车号列表 (7001 - 7040)
+const trainList = ref(Array.from({ length: 40 }, (_, i) => ({
+    train_id: (7001 + i).toString()
+})))
+
+// 生成车厢号列表 (1 - 6车厢)
+const carriageList = ref(Array.from({ length: 6 }, (_, i) => ({
+    carriage_no: (i + 1).toString(),
+    label: (i + 1) + '车厢'
+})))
+
 let AlarmInfoData = ref([])  //报警信息
 let ActualWarningData = ref([]) //实时报警
 let StateWarningData = ref([]) //状态预警
 let RunStateData = ref([]) //运行状态信息
 let CarTemperatureData = ref([]) //车厢温度信息
-let name = ref(['压缩机','通风机','冷凝风机','新风阀','回风阀'])
-let lists = ref([])
-let trainNo = ref([])
-let queryData = ref({
-    query: '',
-    variables: {state:"05098021"},
-    operationName:"MyQuery"
+
+// 计算过滤后的报警（仅限当前车厢，排除寿命预测预警）
+const filteredActualAlarms = computed(() => {
+    return ActualWarningData.value.filter(item => String(item.carriage_no) == String(currentCarriageNo.value))
+})
+
+const filteredStateWarnings = computed(() => {
+    // 过滤逻辑：匹配车厢号 且 排除寿命/健康相关的预警（这部分已在健康评估中展示）
+    return StateWarningData.value.filter(item => {
+        const isSelectedCar = String(item.carriage_no) == String(currentCarriageNo.value);
+        const isNotLifeWarning = item.name && !item.name.includes('寿命') && !item.name.includes('健康');
+        return isSelectedCar && isNotLifeWarning;
+    })
 })
 const proposeWarn = [
     {
@@ -283,8 +365,6 @@ const proposeWarn = [
      title: `1、检查新风阀开度是否正常
             \n2、检查车厢内空气环境`
     },
-    
-    
     
     {
      value: 'bflt_airclean_u1',
@@ -1268,9 +1348,11 @@ function newDate(time) {
     return false;
 }
 function extractNumber(str) {
+    if (str === null || str === undefined) return null;
+    const s = String(str);
     // 正则表达式用于匹配数字
     const regex = /(\d+)/;
-    const match = str.match(regex);
+    const match = s.match(regex);
 
     // 如果匹配成功，返回匹配到的第一个数字
     if (match) {
@@ -1348,328 +1430,394 @@ async function listData (){
             AlarmInfoData.value.push(item)
         })
     }
+}
+}
+
+// 获取指定列车下的车厢 (现为静态，此函数可保留用于扩展或删除)
+const fetchCarriages = async (trainId) => {
+    // 静态模式下不需要从后端拉取列表并覆盖
+}
+
+const handleTrainChange = (val) => {
+    filterForm.carriageNo = '1' // 切换车号时默认到1车厢
+}
+
+const handleQuery = () => {
+    // 只有点击查询或点击车厢图形时才执行此处
+    currentTrainNo.value = String(filterForm.trainNo)
+    currentCarriageNo.value = String(filterForm.carriageNo)
+    
+    // 手动点击查询时更新 URL
+    router.push({
+        query: {
+            ...route.query,
+            trainNo: currentTrainNo.value,
+            trainCoach: currentCarriageNo.value
+        }
+    })
+    getTrainApi()
+}
+
+const handleCarSelect = (carriageId) => {
+    filterForm.carriageNo = carriageId
+    handleQuery()
+}
+
+const gotoPath = (type) => {
+    if (type === 'historyData') {
+        router.push('/historyData') // 假设路径
+    } else if (type === 'historyAlarm') {
+        router.push('/historyAlarm') // 假设路径
     }
-    }
+}
+
 function getTrainApi() {
-    trainNo.value = []
-    trainNo.value.push(route.query.trainNo)
-    getRealtimeAlarm({trainNo: trainNo.value}).then((res)=>{
-        // res.vw_train_alarm_info[0].bflt_airmon_u1 = 1
-        ActualWarningData.value = []
-        // AlarmInfoData.value = []
+    if (!currentTrainNo.value) return;
+
+    const tNo = [currentTrainNo.value]
+    const proposeAdvice = propose.concat(proposeWarn)
+
+    // 1. 处理实时报警 (ActualWarning)
+    getRealtimeAlarm({trainNo: tNo}).then((res)=>{
+        const tempActual = []
+        const seen = new Set() // 用于点位去重
+
         res.vw_train_alarm_info.forEach((item)=>{
             Object.keys(item).forEach((value)=>{
-                console.log(item,value);
-                if(item[value]>0 && item[value +'_name']){
-                    console.log(item,value);
-                    ActualWarningData.value.push({
-                        name:item[value +'_name'],
-                        code: value 
-                    })
+                if(item[value]>0 && (item[value +'_name'] || item.name)){
+                    const carNo = extractNumber(item.carriage_no) ? extractNumber(item.carriage_no).slice(-1) : item.carriage_no
+                    const uniqueKey = `${value}_${carNo}`
+                    
+                    if (!seen.has(uniqueKey)) {
+                        const newItem = {
+                            name: item[value + '_name'] || item.name || '未知故障',
+                            code: value,
+                            alarm_time: newDate(item.alarm_time),
+                            carriage_no: carNo,
+                            precautions: ''
+                        }
+                        // 匹配指导建议
+                        const cleanCode = newItem.code.replace('dvc_', '')
+                        proposeAdvice.forEach((proposeValue)=>{
+                            if(proposeValue.value == newItem.code || proposeValue.value == cleanCode){
+                                newItem.precautions = proposeValue.title
+                                if(!newItem.name || newItem.name === '未知故障') {
+                                    newItem.name = proposeValue.name
+                                }
+                            }
+                        })
+                        tempActual.push(newItem)
+                        seen.add(uniqueKey)
+                    }
                 }
             })
-            console.log(ActualWarningData.value);
-            ActualWarningData.value.forEach((values)=>{
-                // 原始
-                values.alarm_time = newDate(item.alarm_time)
-                values.carriage_no = item.carriage_no
-                propose.forEach((proposeValue)=>{
-                    if(proposeValue.value == values.code){
-                    values.precautions = proposeValue.title
-                    values.name = proposeValue.name
-                }
+        })
+        // 一次性整块替换，解决异步追加导致的重复问题
+        ActualWarningData.value = tempActual
+    })
+
+    // 2. 处理实时预警 (StateWarning)
+    getStatusAlert(currentTrainNo.value).then((res)=>{
+        const tempState = []
+        const seen = new Set()
+
+        Object.entries(res).forEach(([key, itemArr]) => {
+            if(key.startsWith('vw_') || key.includes('count')) return;
+            
+            if(Array.isArray(itemArr) && itemArr.length !== 0){
+                itemArr.forEach((items)=>{
+                    const carNo = extractNumber(items.carriage_no) ? extractNumber(items.carriage_no).slice(-1) : items.carriage_no
+                    const uniqueKey = `${key}_${carNo}`
+
+                    if (!seen.has(uniqueKey)) {
+                        const newItem = {
+                            ...items, 
+                            code: key,
+                            warning_time: newDate(items.warning_time),
+                            name: items.name || items.alert_name || items.warning_info || items[key + '_name'] || '未知预警',
+                            carriage_no: carNo,
+                            precautions: ''
+                        }
+                        // 匹配指导建议
+                        const cleanCode = newItem.code.replace('dvc_', '')
+                        proposeAdvice.forEach((proposeValue)=>{
+                            if(proposeValue.value == newItem.code || proposeValue.value == cleanCode){
+                                newItem.precautions = proposeValue.title
+                                if(newItem.name === '未知预警' || !newItem.name) {
+                                    newItem.name = proposeValue.name
+                                }
+                            }
+                        })
+                        tempState.push(newItem)
+                        seen.add(uniqueKey)
+                    }
                 })
-            })
-            console.log('888',ActualWarningData.value);
-        })
-    })
-    // getRealtimeAlarmDetail(route.query.trainId).then((res)=>{
-    //     ActualWarningData.value = []
-    //     Object.values(res).forEach((item)=>{
-    //     if(item.length !== 0){
-    //         item.forEach((items)=>{
-    //             ActualWarningData.value.push(items)
-    //         })
-    //     }
-    //    })
-    //    ActualWarningData.value.forEach((item)=>{
-    //     item.alarm_time = newDate(item.alarm_time)
-    //     propose.forEach((value)=>{
-    //         if(value.name == item.name){
-    //             item.precautions = value.title
-    //         }
-    //     })
-    //    })
-    // })
-    getStatusAlert(route.query.trainNo).then((res)=>{
-        console.log(res);
-        StateWarningData.value = []
-        Object.entries(res).forEach(([key, item]) => {
-        console.log(`Key: ${key}, Value:`, item);
-        if(item.length !== 0){
-                item.forEach((items)=>{
-                    StateWarningData.value.push({...items, code: key})
-                })
             }
-            });
-        // 原始  开始
-    //     Object.values(res).forEach((item)=>{
-    //         console.log(item);
-    //     if(item.length !== 0){
-    //         item.forEach((items)=>{
-    //             StateWarningData.value.push(items)
-    //         })
-    //     }
-    //    })
-        // 原始  结束
-
-    //    StateWarningData.value = res
-
-       console.log(StateWarningData.value.length, '99999999999900');
-       const proposeAdvice = propose.concat(proposeWarn)
-       StateWarningData.value.forEach((item)=>{
-        item.warning_time = newDate(item.warning_time)
-        proposeAdvice.forEach((proposeValue)=>{
-            if(proposeValue.value == item.code){
-                item.precautions = proposeValue.title
-                item.name = proposeValue.name
-            }
-        })
-       })
-       console.log(StateWarningData.value, 'StateWarningData.value');
-        // StateWarningData.value = res.vw_statusalert_list
-    })
-    const list = []
-    
-     listData()
-
-    getRunningState(route.query.trainNo).then((res)=>{
-        RunStateData.value = []
-        let data = {}
-        let data5 = {}
-        let data1 = {}
-        let data2 = {}
-        let data3 = {}
-        let data4 = {}
-        let key = 'comp_u11'
-        let keys = 'comp_u12'
-        res.vw_running_state_info.forEach((item,index)=>{
-         var itemArray =['ef_u1','ef_u2','cf_u1','cf_u2','fad_u1','fad_u2']
-            Object.keys(item).forEach((items)=>{
-                if(items == 'cfbk_comp_u11'){
-                data.equipmentName = '压缩机1'
-                data[key+index] = runningState(item.cfbk_comp_u11)
-                } else if(items == 'cfbk_comp_u21') {
-                data[keys+index] = runningState(item.cfbk_comp_u21)
-                }
-                if(items == 'cfbk_comp_u12'){
-                data5.equipmentName = '压缩机2'
-                data5[key+index] = runningState(item.cfbk_comp_u12)
-                } else if(items == 'cfbk_comp_u22') {
-                data5[keys+index] = runningState(item.cfbk_comp_u22)
-                }
-                // if(items == 'comp_u11' || items == 'comp_u12'){
-                // data.equipmentName = '压缩机'
-                // if((item.comp_u11+'/'+item.comp_u12) == '0/0'){
-                //     data[key+index] = '停机'
-                // } else {
-                //     data[key+index] = item.comp_u11+'/'+item.comp_u12
-                // }
-                // } else if(items == 'comp_u21'||items == 'comp_u22') {
-                //     if((item.comp_u21+'/'+item.comp_u22) == '0/0'){
-                //         data[keys+index] = '停机'
-                //     } else {
-                //         data[keys+index] = item.comp_u21+'/'+item.comp_u22
-                //     }
-                // }
-                if(items == 'cfbk_ef_u11'){
-                data1.equipmentName = '通风机'
-                data1[key+index] = runningState(item.cfbk_ef_u11)
-                } else if(items == 'cfbk_ef_u21') {
-                data1[keys+index] = runningState(item.cfbk_ef_u21)
-                }
-
-                if(items == 'cfbk_cf_u11'){
-                data2.equipmentName = '冷凝风机'
-                data2[key+index] = runningState(item.cfbk_cf_u11)
-                } else if(items == 'cfbk_cf_u21') {
-                 data2[keys+index] = runningState(item.cfbk_cf_u21)
-                }
-
-                if(items == 'fadpos_u1'){
-                data3.equipmentName = '新风阀开度'
-                data3[key+index] = item.fadpos_u1 + '%'
-                } else if(items == 'fadpos_u2') {
-                 data3[keys+index] = item.fadpos_u2 +'%'
-                }
-
-                if(items == 'radpos_u1'){
-                data4.equipmentName = '回风阀开度'
-                data4[key+index] = item.radpos_u1+ '%'
-                } else if(items == 'radpos_u2') {
-                 data4[keys+index] = item.radpos_u2+ '%'
-                }
-            })
-        })
-        console.log(data)
-      
-        RunStateData.value.push(data,data5,data1,data2,data3,data4)
-        console.log(RunStateData.value);
-        
-    })
-    getTrainTemperature(route.query.trainNo).then((res)=>{
-        // CarTemperatureData.value = res.vw_traintemperature
-        let Tc1 = {}
-        let Tc2 = {}
-        let Tc3 = {}
-        CarTemperatureData.value = []
-        res.vw_traintemperature.forEach((item,index)=>{
-            if(index == 0){
-                Tc1.name = '车厢温度',
-                // Tc1.carriageTC1 = (item.ras_sys*0.1).toFixed(2)+'℃'
-                Tc1.carriageTC1 = item.ras_sys+'℃'
-                Tc2.name = '目标温度',
-                // Tc2.carriageTC1 = (item.tic*0.1).toFixed(2)+'℃'
-                Tc2.carriageTC1 = item.tic+'℃'
-                Tc3.name = '环境温度',
-                // Tc3.carriageTC1 = (item.fas_sys*0.1).toFixed(2)+'℃'
-                Tc3.carriageTC1 = item.fas_sys+'℃'
-            } else if(index == 1) {
-                // Tc1.carriageMP1 = (item.ras_sys*0.1).toFixed(2)+'℃'
-                // Tc2.carriageMP1 = (item.tic*0.1).toFixed(2)+'℃'
-                // Tc3.carriageMP1 = (item.fas_sys*0.1).toFixed(2)+'℃'
-                Tc1.carriageMP1 = item.ras_sys+'℃'
-                Tc2.carriageMP1 = item.tic+'℃'
-                Tc3.carriageMP1 = item.fas_sys+'℃'
-            } else if(index == 2){
-                // Tc1.carriageM1 = (item.ras_sys*0.1).toFixed(2)+'℃'
-                // Tc2.carriageM1 = (item.tic*0.1).toFixed(2)+'℃'
-                // Tc3.carriageM1 = (item.fas_sys*0.1).toFixed(2)+'℃'
-                Tc1.carriageM1 = item.ras_sys+'℃'
-                Tc2.carriageM1 = item.tic+'℃'
-                Tc3.carriageM1 = item.fas_sys+'℃'
-            } else if(index == 3){
-                // Tc1.carriageM2 = (item.ras_sys*0.1).toFixed(2)+'℃'
-                // Tc2.carriageM2 = (item.tic*0.1).toFixed(2)+'℃'
-                // Tc3.carriageM2 = (item.fas_sys*0.1).toFixed(2)+'℃'
-                Tc1.carriageM2 = item.ras_sys+'℃'
-                Tc2.carriageM2 = item.tic+'℃'
-                Tc3.carriageM2 = item.fas_sys+'℃'
-            } else if(index == 4){
-                // Tc1.carriageMP2 = (item.ras_sys*0.1).toFixed(2)+'℃'
-                // Tc2.carriageMP2 = (item.tic*0.1).toFixed(2)+'℃'
-                // Tc3.carriageMP2 = (item.fas_sys*0.1).toFixed(2)+'℃'
-                Tc1.carriageMP2 = item.ras_sys+'℃'
-                Tc2.carriageMP2 = item.tic+'℃'
-                Tc3.carriageMP2 = item.fas_sys+'℃'
-            } else if(index == 5){
-                // Tc1.carriageTC2 = (item.ras_sys*0.1).toFixed(2)+'℃'
-                // Tc2.carriageTC2 = (item.tic*0.1).toFixed(2)+'℃'
-                // Tc3.carriageTC2 = (item.fas_sys*0.1).toFixed(2)+'℃'
-                Tc1.carriageTC2 = item.ras_sys+'℃'
-                Tc2.carriageTC2 = item.tic+'℃'
-                Tc3.carriageTC2 = item.fas_sys+'℃'
-            }
-        })
-         CarTemperatureData.value.push(Tc1,Tc2,Tc3)
+        });
+        // 一次性整块替换
+        StateWarningData.value = tempState
     })
 }
-let time = setInterval(() => {
-   getTrainApi()
-   console.log('请求')
-  }, 1000*60*2);
+
+watch(() => route.query, (newQuery) => {
+    // 仅当 URL 参数变化时（如点击查询按钮后或地址栏回车），同步回选择框
+    if (newQuery.trainNo) {
+        filterForm.trainNo = String(newQuery.trainNo)
+        currentTrainNo.value = String(newQuery.trainNo)
+    }
+    if (newQuery.trainCoach) {
+        filterForm.carriageNo = String(newQuery.trainCoach)
+        currentCarriageNo.value = String(newQuery.trainCoach)
+    }
+    getTrainApi()
+}, { deep: true, immediate: true })
+
 onMounted(() => {
+    // 初始进入时，如果 URL 没参数，设置默认值但不强制跳转
+    if (!route.query.trainNo) {
+        filterForm.trainNo = '7001'
+        currentTrainNo.value = '7001'
+    }
+    if (!route.query.trainCoach) {
+        filterForm.carriageNo = '1'
+        currentCarriageNo.value = '1'
+    }
     getTrainApi()
 })
-onUnmounted(()=>{
-    clearInterval(time)
+
+let timer = setInterval(() => {
+    getTrainApi()
+}, 1000 * 60 * 2)
+
+onUnmounted(() => {
+    clearInterval(timer)
 })
 </script>
 
 <style scoped lang="scss">
-:deep(table) {
-    border-color: transparent!important;
+.warp2 {
+    background: #0a0f1d;
+    min-height: 100vh;
+    padding: 0;
+    color: #fff;
 }
-:deep(thead) {
-    background: transparent;
-}
-:deep(.title) {
-    width: 100%;
-    height: 40px;
-    line-height: 40px;
-    padding-left: 20px;
-    box-sizing: border-box;
-    /* border-bottom: 2px solid #1f273c; */
-    margin-bottom: 10px;
-    font-size: 13px;
-    font-weight: bold;
-}
-/* nodate table style */
-:deep(.el-table__empty-text) {
-    margin: 30px 0;
-    line-height: 20px !important;
-}
-:deep(.el-table th) {
-    border-color: transparent!important; 
-}
-:deep(.trainInfo .el-input__inner, .trainInfo .el-input__inner .el-input__inner:hover, .trainInfo .el-input__inner .el-input__inner:focus) {
-    background-color: #181F30 !important;
-    box-shadow: 0 0 1px 0 #394153;
-    color: #fff !important;
-    height: 40px;
-    box-sizing: border-box;
-    font-size: 110%;
-}
-.header {
-    height: 60px;
+
+.header-monitor {
+    height: 50px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 5px;
+    padding: 0 20px;
+    background: linear-gradient(180deg, #181f30 0%, #0a0f1d 100%);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+
+    .header-left {
+        display: flex;
+        gap: 15px;
+    }
+
+
+
+    .header-right {
+        .filter-form {
+            display: flex;
+            align-items: center;
+            :deep(.el-form-item) {
+                margin-bottom: 0 !important;
+                margin-right: 12px !important;
+                display: flex;
+                align-items: center;
+            }
+            :deep(.el-form-item__label) {
+                color: #2186cf;
+                font-weight: bold;
+                padding-right: 6px;
+                white-space: nowrap;
+                font-size: 13px;
+            }
+        }
+    }
 }
 
-.warp {
-    box-sizing: border-box;
-    width: 100%;
-    border-radius: 10px;
-    background-color: #181F30 !important;
-    border: 1px solid #394153;
-    margin-bottom: 15px;
+.monitor-container {
+    padding: 10px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
-.btn_text {
-    font-size: 12px;
-    color: #2186CF !important;
+
+.section-box {
+    background: #141a2e;
+    border-radius: 8px;
+    border: 1px solid #262e45;
+    padding: 10px;
+    box-shadow: 0 6px 15px rgba(0,0,0,0.3);
+    overflow: hidden;
+    
+    &.sticky-section {
+        position: sticky;
+        top: 50px; // 位于 header (50px) 下方
+        z-index: 999;
+        margin-bottom: 4px;
+        background: #141a2e; /* 确保背景不透明 */
+        border-top: 1px solid #262e45;
+    }
 }
-.el-table tr th {
-    color: #fff !important;
-    font-size: 13px;
+
+.nav-btn {
+    background: #0a0f1d !important;
+    border: 1px solid #2186cf !important;
+    color: #ffffff !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    height: 32px !important;
+    padding: 0 15px !important;
+    border-radius: 4px !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    &:hover, &:focus {
+        background: rgba(33, 134, 207, 0.2) !important;
+        border-color: #409eff !important;
+        color: #ffffff !important;
+        box-shadow: 0 0 10px rgba(33, 134, 207, 0.3) !important;
+    }
+
+    &:active {
+        background: rgba(33, 134, 207, 0.4) !important;
+    }
+
+    /* 图标样式微调 */
+    :deep(.el-icon) {
+        font-size: 14px !important;
+        margin-right: 5px !important;
+        color: #2186cf !important;
+    }
 }
-.title {
-    width: 100%;
-    height: 40px;
-    line-height: 40px;
-    padding-left: 20px;
-    box-sizing: border-box;
-    border-bottom: 2px solid #1f273c;
-    margin-bottom: 10px;
+
+:deep(.el-table) {
+    background: transparent !important;
+    color: #d1d9e7;
+    --el-table-border-color: #262e45;
+    --el-table-header-bg-color: #1a2234;
+    --el-table-tr-bg-color: transparent;
+    --el-table-row-hover-bg-color: rgba(33, 134, 207, 0.1);
+    
+    th.el-table__cell {
+        background: #1a2234 !important;
+        color: #2186cf;
+        font-weight: bold;
+        border-bottom: 2px solid #2186cf;
+    }
+    
+    td.el-table__cell {
+        border-bottom: 1px solid #262e45;
+    }
 }
-.warp2 {
-    background: #181F30;
-    border-radius: 20px;
-    border: 1px solid #3a3b68;
-    padding: 5px 20px 20px;
+</style>
+
+<!-- 全局样式，用于强制覆盖 Element Plus 样式 -->
+<style lang="scss">
+/* 极高优先级全局覆盖，确保暗色主题生效 */
+.filter-form {
+    /* 1. 强制控制内部变量 */
+    --el-fill-color-blank: #0a0f1d !important;
+    --el-border-color: #2186cf !important;
+    --el-text-color-regular: #ffffff !important;
+    --el-border-color-hover: #409eff !important;
+
+    .el-select {
+        width: 100px !important;
+        margin: 0 !important;
+        
+        .el-input__wrapper {
+            background-color: #0a0f1d !important;
+            /* 使用双重 box-shadow 确保边框和光晕共存 */
+            box-shadow: 0 0 0 1px #2186cf inset !important;
+            border-radius: 4px !important;
+            padding: 0 12px !important;
+            height: 32px !important;
+            
+            &:hover {
+                box-shadow: 0 0 0 1px #409eff inset, 0 0 10px rgba(33, 134, 207, 0.4) !important;
+            }
+            
+            &.is-focus {
+                box-shadow: 0 0 0 1px #409eff inset, 0 0 15px rgba(33, 134, 207, 0.6) !important;
+            }
+            
+            .el-input__inner {
+                color: #ffffff !important;
+                font-size: 14px !important;
+                background: none !important;
+                border: none !important;
+            }
+            
+            .el-select__caret {
+                color: #2186cf !important;
+                font-weight: bold;
+            }
+        }
+    }
 }
-:deep(.el-table .el-table__cell) {
-    padding: 10px !important;
+
+/* 下拉菜单弹出层 (Popper) */
+.el-select__popper.el-popper {
+    background-color: #141a2e !important;
+    border: 1px solid #2186cf !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
+    
+    .el-select-dropdown__item {
+        color: #d1d9e7 !important;
+        background-color: transparent !important;
+        &:hover, &.hover {
+            background-color: rgba(33, 134, 207, 0.2) !important;
+            color: #ffffff !important;
+        }
+        &.selected {
+            color: #2186cf !important;
+            font-weight: bold;
+            background-color: rgba(33, 134, 207, 0.1) !important;
+        }
+    }
+    
+    .el-popper__arrow::before {
+        background-color: #141a2e !important;
+        border-top: 1px solid #2186cf !important;
+        border-left: 1px solid #2186cf !important;
+    }
 }
-:deep(.el-input__wrapper) {
-    background-color: #181F30 !important;
-    border: 1px solid #394153;
-    box-shadow: 0 0 1px 0 #394153;
-    color: #fff !important;
-    .el-input__inner {
-        border: none !important;
-        color: #fff !important;
+
+/* 指导建议弹窗自定义样式 */
+.el-popover.advice-popover {
+    background: #0c1124 !important;
+    border: 1px solid #2186cf !important;
+    color: #ffffff !important;
+    font-size: 13px !important;
+    padding: 15px !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6) !important;
+    border-radius: 6px !important;
+
+    .el-popover__title {
+        color: #2186cf !important;
+        font-size: 14px !important;
+        font-weight: bold !important;
+        margin-bottom: 10px !important;
+        border-bottom: 1px solid rgba(33, 134, 207, 0.3) !important;
+        padding-bottom: 8px !important;
+    }
+
+    // 保持内容换行
+    white-space: pre-line !important;
+    line-height: 1.6 !important;
+
+    .el-popper__arrow::before {
+        background: #0c1124 !important;
+        border: 1px solid #2186cf !important;
     }
 }
 </style>

@@ -15,16 +15,47 @@ export class HistoryRepository {
     }
 
     /**
-     * 获取指定设备在过去 N 小时内的温度趋势
-     * 使用 TimescaleDB 的分页或时间加权聚合查询
+     * 获取多维度的温度趋势
+     * @param type 'hour' | 'day' | 'week' | 'month'
      */
-    static async getTemperatureTrend(deviceId: string, hours: number = 24) {
+    static async getTemperatureTrend(trainId: number, carriageId: number, type: string = 'hour') {
+        let bucketSize = '1 second';
+        let lookback = '1 hour';
+
+        // 设置各维度的颗粒度与回顾时间
+        switch (type) {
+            case 'hour':
+                bucketSize = '1 second';
+                lookback = '1 hour';
+                break;
+            case 'day':
+                bucketSize = '1 minute';
+                lookback = '24 hours';
+                break;
+            case 'week':
+                bucketSize = '15 minutes';
+                lookback = '168 hours'; // 7 days
+                break;
+            case 'month':
+                bucketSize = '30 minutes';
+                lookback = '720 hours'; // 30 days
+                break;
+        }
+
         return await db
             .selectFrom('hvac.fact_raw')
-            .select([this.timeCol as any, 'tveh_1', 'tveh_2' as any])
-            .where('device_id', '=', deviceId)
-            .where(this.timeCol as any, '>', sql<Date>`NOW() - INTERVAL '${sql.raw(hours.toString())} hours'`)
-            .orderBy(this.timeCol as any, 'asc')
+            .select([
+                // 使用 TimescaleDB 的 time_bucket 进行聚合
+                sql.raw(`time_bucket('${bucketSize}', ${this.timeCol})`).as('bucket'),
+                sql<number>`AVG(CAST(ras_u1 AS FLOAT) / 10.0)`.as('ras_sys'),
+                sql<number>`AVG(CAST(fas_u1 AS FLOAT) / 10.0)`.as('fas_sys'),
+                sql<number>`AVG(CAST(payload_json->'raw'->>'Tic' AS FLOAT) / 10.0)`.as('tic')
+            ])
+            .where('train_id', '=', trainId)
+            .where('carriage_id', '=', carriageId)
+            .where(sql.raw(this.timeCol), '>', sql`NOW() - INTERVAL '${sql.raw(lookback)}'`)
+            .groupBy('bucket')
+            .orderBy('bucket', 'asc')
             .execute();
     }
 

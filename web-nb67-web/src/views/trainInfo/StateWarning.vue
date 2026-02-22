@@ -1,26 +1,23 @@
 <template>
-    <div class="warp">
+    <div class="warp" @mouseenter="pauseScroll" @mouseleave="resumeScroll">
         <!-- 状态预警 -->
-        <div class="header">
-            <h4>实时预警</h4>
+        <div class="section-header">
+            <span class="title-icon"></span>
+            <span class="title-text">实时预警</span>
         </div>
-        <el-table :data="props.StateWarningData" stripe height="245px" style="width: 100%;">
+        <el-table ref="tableRef" :data="props.StateWarningData" stripe height="245px" style="width: 100%;">
             <el-table-column prop="carriage_no" label="车厢号" min-width="15%"></el-table-column>
             <el-table-column prop="name" label="预警名称" min-width="40%"></el-table-column>
-            <el-table-column prop="warning_time" label="报警时间" min-width="25%"></el-table-column>
+            <el-table-column prop="warning_time" label="预警时间" min-width="25%"></el-table-column>
             <el-table-column label="操作" min-width="20%">
                 <template #default="scope">
                     <el-space>
-                        <!-- <el-tooltip class="item" effect="light" content="运营结束后回库处理" placement="left">
-                            <el-link type="primary" underline="never" :class="['btn_text']">
-                                指导建议
-                            </el-link>
-                        </el-tooltip> -->
                         <el-popover
-                            class="item" effect="light"
+                            class="item" 
+                            popper-class="advice-popover"
                             placement="left"
                             title="指导建议"
-                            width="200"
+                            width="240"
                             trigger="hover"
                             :content="scope.row.precautions">
                             <template #reference>
@@ -29,11 +26,7 @@
                             </el-link>
                             </template>
                         </el-popover>
-                        <!-- <el-link type="primary" :underline="false" :class="['btn_text']" @click="detailsVisible = !detailsVisible">
-                            详细数据
-                        </el-link> -->
                     </el-space>
-                    <!-- 详细数据  显示不出来 -->
                     <el-dialog v-model="dialogTableVisible" title="详细数据">
                         详细数据内容
                     </el-dialog>
@@ -48,43 +41,56 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 const router = useRouter()
-const detailsVisible = ref(false)
+const dialogTableVisible = ref(false)
 const props = defineProps({
   StateWarningData: {
     type: Array,
     default: []
   }
 })
-const StateWarningData = [
-    {
-        carriage_no: 'Tc1',
-        name: '空调蒸发器A报警',
-        warning_time: '16:12:00',
-    }, {
-        carriage_no: 'Mp1',
-        name: '空调蒸发器A报警',
-        warning_time: '16:12:00',
-    }, {
-        carriage_no: 'M1',
-        name: '空调蒸发器A报警',
-        warning_time: '16:12:00',
-    }, {
-        carriage_no: 'M2',
-        name: '空调蒸发器A报警',
-        warning_time: '16:12:00',
-    }, {
-        carriage_no: 'MP2',
-        name: '空调蒸发器A报警',
-        warning_time: '16:12:00',
-    }, {
-        carriage_no: 'Tc2',
-        name: '空调蒸发器A报警',
-        warning_time: '16:12:00',
-    }
-]
+
+const tableRef = ref(null)
+let scrollTimer = null
+
+const startScroll = () => {
+  nextTick(() => {
+    setTimeout(() => {
+      const tableDiv = tableRef.value?.$el.querySelector('.el-scrollbar__wrap')
+      if (tableDiv) {
+        if(scrollTimer) clearInterval(scrollTimer)
+        // 只有当有数据且内容高度 > 容器高度时，才开启自动滚动
+        if (props.StateWarningData.length > 0 && tableDiv.scrollHeight > tableDiv.clientHeight) {
+          const scrollFn = () => {
+            tableDiv.scrollTop += 1
+            if (Math.ceil(tableDiv.scrollTop) >= tableDiv.scrollHeight - tableDiv.clientHeight) {
+              tableDiv.scrollTop = 0
+            }
+          }
+          scrollTimer = setInterval(scrollFn, 50)
+        }
+      }
+    }, 500)
+  })
+}
+
+const pauseScroll = () => {
+  if (scrollTimer) clearInterval(scrollTimer)
+}
+
+const resumeScroll = () => {
+  startScroll()
+}
+
+watch(() => props.StateWarningData, () => {
+  resumeScroll()
+}, { deep: true, immediate: true })
+
+onUnmounted(() => {
+  if(scrollTimer) clearInterval(scrollTimer)
+})
 </script>
 
 <style scoped>
@@ -97,38 +103,30 @@ const StateWarningData = [
 
 .warp {
     width: 100%;
-    border-radius: 10px;
-    background-color: #171c32 !important;
 }
 
 .el-table {
     --el-table-border-color: none;
 }
-/* 标题左边线 */
-.header {
-    height: 50px;
-    box-sizing: border-box;
-    top: 0;
-    left: 0;
+.section-header {
     display: flex;
     align-items: center;
-    gap: 30px;
-}
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 0;
 
-.header>h4 {
-    font-size: 16px;
-    position: relative;
-    margin-left: 30px;
-    line-height: 1em;
-}
+    .title-icon {
+        width: 4px;
+        height: 16px;
+        background: #ff9800;
+        border-radius: 2px;
+    }
 
-.header>h4::before {
-    position: absolute;
-    content: "";
-    width: 4px;
-    height: 1em;
-    background: #ffa55c;
-    margin-left: -10px;
+    .title-text {
+        color: #ffffff;
+        font-size: 15px;
+        font-weight: bold;
+    }
 }
 .btn_text {
     font-size: 14px;

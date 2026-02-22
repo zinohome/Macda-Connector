@@ -1,81 +1,74 @@
 <template>
-    <div class="warp">
-        <div class="header">
-            <h4>健康评估信息</h4>
+    <div class="healthy-container">
+        <div class="section-header">
+            <span class="title-icon"></span>
+            <span class="title-text">健康评估信息</span>
         </div>
-        <!-- <div class="content">
-            <el-table :data="props.tableData" stripe style="width: 100%">
-                <el-table-column prop="name" label="设备名称" min-width="25%"></el-table-column>
-                <el-table-column prop="state" label="健康状态" min-width="25%">
+        <div class="content" @mouseenter="pauseScroll" @mouseleave="resumeScroll">
+            <el-table 
+                ref="tableRef"
+                :data="assessmentData" 
+                stripe 
+                style="width: 100%"
+                height="350px"
+                :row-style="{ height: '50px' }"
+                :header-row-style="{ height: '50px' }"
+                class="scrollable-table"
+            >
+                <el-table-column prop="equipment_name" label="设备名称" min-width="150" />
+                
+                <el-table-column prop="health_status" label="健康状态" min-width="120">
                     <template #default="scope">
-                        <el-tag
-                            class="mx-1"
-                            :type="tagType(scope.row.start)[0]"
-                            effect="plain"
-                        >{{ tagType(scope.row.start)[1] }}</el-tag>
+                        <el-tag :type="getStatusType(scope.row.health_status)" effect="dark" round>
+                            {{ scope.row.health_status }}
+                        </el-tag>
                     </template>
                 </el-table-column>
-                <el-table-column prop="errorNum1" label="累计运行时间" min-width="25%">
+
+                <el-table-column label="累计运行时间 / 额定寿命" min-width="220">
                     <template #default="scope">
-                        <span v-if="scope.row.runDate>0">{{scope.row.runDate}} 小时</span>
-                         <span v-else>N/A</span></template>
+                        <div class="life-compare" v-if="scope.row.rated_running_time">
+                            <span :class="['actual', getLifeClass(scope.row.cumulative_running_time, scope.row.rated_running_time)]">
+                                {{ scope.row.cumulative_running_time }}h
+                            </span>
+                            <span class="divider">/</span>
+                            <span class="rated">{{ scope.row.rated_running_time }}h</span>
+                        </div>
+                        <span v-else class="placeholder">--</span>
+                    </template>
                 </el-table-column>
-                <el-table-column prop="errorNum2" label="动作次数" min-width="25%">
-                    <template #default="scope"> 
-                        <span v-if="scope.row.runCount>0">{{scope.row.runCount}} 次</span>
-                        <span v-else>N/A</span></template>
+
+                <el-table-column label="动作次数 / 额定寿命" min-width="200">
+                    <template #default="scope">
+                        <div class="life-compare" v-if="scope.row.rated_actions">
+                            <span :class="['actual', getLifeClass(scope.row.number_actions, scope.row.rated_actions)]">
+                                {{ scope.row.number_actions }}次
+                            </span>
+                            <span class="divider">/</span>
+                            <span class="rated">{{ scope.row.rated_actions }}次</span>
+                        </div>
+                        <span v-else class="placeholder">--</span>
+                    </template>
                 </el-table-column>
+
+                <el-table-column label="健康建议" min-width="200">
+                    <template #default="scope">
+                        <div :class="['suggestion-box', getStatusClass(scope.row.health_status)]">
+                            <el-icon class="sug-icon">
+                                <InfoFilled v-if="scope.row.health_status === '健康'" />
+                                <WarnTriangleFilled v-else-if="scope.row.health_status === '亚健康'" />
+                                <CircleCloseFilled v-else />
+                            </el-icon>
+                            <span>{{ scope.row.suggestion || getSuggestion(scope.row.health_status) }}</span>
+                        </div>
+                    </template>
+                </el-table-column>
+
                 <template #empty>
-                    <img src="/src/assets/img/no-data.svg" width="40" />
-                    <p style="font-size:12px">当前暂无数据</p>
-                </template>
-            </el-table>
-        </div> -->
-        <!-- 
-            三个状态tag
-            <el-tag class="s-tag s-tag-warning" :type="warning" effect="plain">亚健康</el-tag>
-            <el-tag class="s-tag s-tag-danger" :type="danger" effect="plain">非健康</el-tag>
-            <el-tag class="s-tag" effect="plain">健康</el-tag> 
-        -->
-        <div class="content">
-            <el-table :data="props.tableData"  stripe style="width: 100%">
-                <el-table-column prop="equipment_name" label="设备名称" min-width="25%" style="padding-left: 10px !important;"></el-table-column>
-                <el-table-column prop="health_status" label="健康状态" min-width="25%">
-                    <!-- <template #default="scope">
-                        <el-tag class="s-tag s-tag-warning" :type="warning" effect="plain">亚健康</el-tag>
-                        <el-tag class="s-tag s-tag-danger" :type="danger" effect="plain">非健康</el-tag>
-                        <el-tag class="s-tag" effect="plain">健康</el-tag>
-                    </template> -->
-                    <template #default="scope">
-                        <el-tag type="scuess" effect="plain" round v-if="scope.row.health_status == '健康'">健康</el-tag>
-                        <el-tag type="warning" effect="plain" round v-if="scope.row.health_status == '亚健康'">亚健康</el-tag>
-                        <el-tag type="danger" effect="plain" round v-if="scope.row.health_status == '非健康'">非健康</el-tag>
-                    </template>
-                </el-table-column>
-                <el-table-column prop="cumulative_running_time" label="累计运行时间" min-width="25%">
-                     <template #default="scope">
-                        <span v-if="scope.row.cumulative_running_time !=='-'">{{scope.row.cumulative_running_time}}小时</span>
-                        <span v-else>{{scope.row.cumulative_running_time}}</span>
-                    </template>
-                </el-table-column>
-                 
-                <el-table-column prop="number_actions" label="动作次数" min-width="25%">
-                    <template #default="scope">
-                        <span>{{scope.row.number_actions}}次</span>
-                    </template>
-                </el-table-column>
-                <el-table-column label="操作" min-width="15%">
-                    <template #default="scope">
-                        <el-tooltip class="item" effect="light" :content="scope.row.precautions" placement="left">
-                            <el-link v-if="scope.row.health_status !== '健康'" type="primary" underline="never" :class="['btn_text']">
-                                指导建议
-                            </el-link>
-                        </el-tooltip>
-                    </template>
-                </el-table-column>
-                <template #empty>
-                    <img src="/src/assets/img/no-data.svg" width="40" />
-                    <p style="font-size:12px">当前暂无数据</p>
+                    <div class="no-data-box">
+                        <img src="/src/assets/img/no-data.svg" width="60" />
+                        <p>暂无评估数据</p>
+                    </div>
                 </template>
             </el-table>
         </div>
@@ -83,152 +76,194 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch, onUnmounted, nextTick } from 'vue'
+import { getHealthAssessment } from '@/api/api'
 
 const props = defineProps({
-    tableData: {
-        type: Array,
-        default: []
-    }
+    carriageId: { type: String, default: '' }
 })
 
-const tagType = (state) => {
-    switch (state) {
-        case 'health':
-            return ['scuess', '健康'];
-        case 'subHealth':
-            return ['warning', '亚健康'];
-        case 'unhealthy':
-            return ['danger', '非健康'];
-    }
+const assessmentData = ref([])
+const tableRef = ref(null)
+let scrollTimer = null
+
+const getStatusType = (status) => {
+    if (status === '健康') return 'success'
+    if (status === '亚健康') return 'warning'
+    if (status === '非健康') return 'danger'
+    return 'info'
 }
 
-const tableData = [
-    {
-        equipment_name: '通风机',
-        health_status: '健康',
-        cumulative_running_time: 2114,
-        number_actions: 788
-    },{
-        equipment_name: '冷凝风机',
-        health_status: '亚健康',
-        cumulative_running_time: 192,
-        number_actions: 190
-    },{
-        equipment_name: '新风阀',
-        health_status: '非健康',
-        cumulative_running_time: 1084,
-        number_actions: 230
-    },{
-        equipment_name: '回风阀',
-        health_status: '健康',
-        cumulative_running_time: 2223,
-        number_actions: 190
-    },{
-        equipment_name: '压缩机1',
-        health_status: '健康',
-        cumulative_running_time: 1696,
-        number_actions: 223
-    },{
-        equipment_name: '压缩机2',
-        health_status: '健康',
-        cumulative_running_time: 1193,
-        number_actions: 118
-    }
-]
+const getStatusClass = (status) => {
+    if (status === '健康') return 'text-success'
+    if (status === '亚健康') return 'text-warning'
+    if (status === '非健康') return 'text-danger'
+    return ''
+}
+
+const getLifeClass = (actual, rated) => {
+    if (!rated) return ''
+    const ratio = actual / rated
+    if (ratio >= 1) return 'life-danger'
+    if (ratio >= 0.8) return 'life-warning'
+    return 'life-normal'
+}
+
+const getSuggestion = (status) => {
+    if (status === '健康') return '设备运行良好，继续保持'
+    if (status === '亚健康') return '寿命接近临界点，请关注使用寿命'
+    if (status === '非健康') return '设备状态严重异常，请立即更换部件'
+    return '暂无建议'
+}
+
+const startScroll = () => {
+  nextTick(() => {
+    setTimeout(() => {
+      const tableDiv = tableRef.value?.$el.querySelector('.el-scrollbar__wrap')
+      if (tableDiv) {
+        if(scrollTimer) clearInterval(scrollTimer)
+        // 只有当有数据且内容高度 > 容器高度时，才开启自动滚动
+        if (assessmentData.value.length > 0 && tableDiv.scrollHeight > tableDiv.clientHeight) {
+          const scrollFn = () => {
+            tableDiv.scrollTop += 1
+            if (Math.ceil(tableDiv.scrollTop) >= tableDiv.scrollHeight - tableDiv.clientHeight) {
+              tableDiv.scrollTop = 0
+            }
+          }
+          scrollTimer = setInterval(scrollFn, 50)
+        }
+      }
+    }, 500)
+  })
+}
+
+const pauseScroll = () => {
+  if (scrollTimer) clearInterval(scrollTimer)
+}
+
+const resumeScroll = () => {
+  startScroll()
+}
+
+const fetchData = () => {
+    assessmentData.value = [] 
+    if (!props.carriageId) return
+    getHealthAssessment(props.carriageId).then(res => {
+        assessmentData.value = res.data || res.vw_health_assessment || []
+        resumeScroll()
+    })
+}
+
+watch(() => props.carriageId, fetchData)
+watch(() => assessmentData.value, () => {
+  resumeScroll()
+}, { deep: true })
+
+onMounted(fetchData)
+
+onUnmounted(() => {
+  if(scrollTimer) clearInterval(scrollTimer)
+})
 </script>
 
 <style scoped lang="scss">
-$s-primary: #2186CF;
-$s-danger: #e65355;
-$s-warning: #ffa55c;
-$s-info: #bfbfbf;
-$s-success: #42ad5d;
-$s-yellow: #ffe375;
-$s-white: #ffffff;
+.healthy-container {
+    padding: 20px;
+}
 
-.el-tag {
-    background: rgba($s-success, .3);
-    color: $s-success;
-    border-color: $s-success;
+.content {
+    height: 350px; 
+    position: relative;
+}
 
-    &.el-tag--plain {
-        &.s-tag-yellow {
-            background: rgba($s-yellow, .3) !important;
-            color: $s-yellow !important;
-            border-color: $s-yellow !important;
-        }
+.scrollable-table {
+    background: transparent !important;
+    
+    :deep(.el-table__inner-wrapper::before) { display: none; }
+    
+    :deep(.el-table__header-wrapper) { 
+        background: rgba(255, 255, 255, 0.05); 
+        z-index: 10;
+        position: relative;
+    }
 
-        &.el-tag--info {
-            background: rgba($s-info, .3) !important;
-            color: $s-info !important;
-            border-color: $s-info !important;
-        }
+    // 默认隐藏滚动条，鼠标悬停时显示 (针对 Webkit 浏览器)
+    :deep(.el-scrollbar__bar.is-vertical) {
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
 
-        &.el-tag--danger {
-            background: rgba($s-danger, .3);
-            color: $s-danger;
-            border-color: $s-danger;
-        }
-
-        &.el-tag--warning {
-            background: rgba($s-warning, .3);
-            color: $s-warning;
-            border-color: $s-warning;
-        }
-
-        &.el-tag--success {
-            background: rgba($s-success, .3);
-            color: $s-success;
-            border-color: $s-success;
+    &:hover {
+        :deep(.el-scrollbar__bar.is-vertical) {
+            opacity: 1;
         }
     }
 }
-.el-table,
-.el-table tr,
-.el-table td,
-.el-table th {
-    background-color: transparent !important;
-}
 
-.mx-1 {
-    background-color: rgba(0, 0, 0, 0);
-    border-radius: 12px;
-}
-.el-tag--default {
-    height: 20px;
-}
-.warp {
-    width: 100%;
-    border-radius: 10px;
-    background-color: #181F30 !important;
-    margin-bottom: 15px;
-}
-.el-table {
-    --el-table-border-color: none;
-}
-/* 标题左边线 */
-.header {
-    height: 50px;
-    box-sizing: border-box;
-    top: 0;
-    left: 0;
+.section-header {
     display: flex;
     align-items: center;
-    gap: 30px;
+    gap: 8px;
+    margin-bottom: 20px;
+
+    .title-icon {
+        width: 4px;
+        height: 16px;
+        background: #ffffff;
+        border-radius: 2px;
+    }
+
+    .title-text {
+        color: #ffffff;
+        font-size: 16px;
+        font-weight: bold;
+    }
 }
-.header>h4 {
-    font-size: 16px;
-    position: relative;
-    margin-left: 30px;
-    line-height: 1em;
+
+.life-compare {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Outfit', sans-serif;
+    .divider { color: #394153; }
+    .rated { color: #676e82; font-size: 12px; }
+    
+    .actual {
+        font-weight: bold;
+        &.life-normal { color: #42ad5d; }
+        &.life-warning { color: #ffa55c; text-shadow: 0 0 8px rgba(255,165,92,0.4); }
+        &.life-danger { color: #e65355; text-shadow: 0 0 8px rgba(230,83,85,0.4); }
+    }
+
+    .placeholder {
+        color: #394153;
+        font-size: 13px;
+    }
 }
-.header>h4::before {
-    position: absolute;
-    content: "";
-    width: 4px;
-    height: 1em;
-    background: #fff;
-    margin-left: -10px;
+
+.suggestion-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    padding: 4px 12px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.03);
+    
+    &.text-success { color: #42ad5d; border-left: 3px solid #42ad5d; }
+    &.text-warning { color: #ffa55c; border-left: 3px solid #ffa55c; }
+    &.text-danger { color: #e65355; border-left: 3px solid #e65355; }
+    
+    .sug-icon { font-size: 16px; }
 }
+
+.no-data-box {
+    padding: 40px 0;
+    text-align: center;
+    color: #676e82;
+}
+
+:deep(.el-tag--dark.el-tag--success) { background-color: #42ad5d; border-color: #42ad5d; }
+:deep(.el-tag--dark.el-tag--warning) { background-color: #ffa55c; border-color: #ffa55c; }
+:deep(.el-tag--dark.el-tag--danger) { background-color: #e65355; border-color: #e65355; }
 </style>

@@ -1,20 +1,22 @@
 <template>
-    <div class="warp">
+    <div class="warp" @mouseenter="pauseScroll" @mouseleave="resumeScroll">
         <!-- 实时报警 -->
-        <div class="header">
-            <h4>实时报警</h4>
+        <div class="section-header">
+            <span class="title-icon"></span>
+            <span class="title-text">实时报警</span>
         </div>
-        <el-table :data="props.ActualWarningData" stripe height="245px" style="width: 100%;">
+        <el-table ref="tableRef" :data="props.ActualWarningData" stripe height="245px" style="width: 100%;">
             <el-table-column prop="carriage_no" label="车厢号" min-width="15%"></el-table-column>
             <el-table-column prop="name" label="报警名称" min-width="45%" show-overflow-tooltip></el-table-column>
             <el-table-column prop="alarm_time" label="报警时间" min-width="25%" show-overflow-tooltip></el-table-column>
             <el-table-column label="操作" min-width="15%">
                 <template #default="scope">
                     <el-popover
-                        class="item" effect="light"
+                        class="item" 
+                        popper-class="advice-popover"
                         placement="bottom"
                         title="指导建议"
-                        width="200"
+                        width="240"
                         trigger="hover"
                         :content="scope.row.precautions">
                         <template #reference>
@@ -23,11 +25,6 @@
                         </el-link>
                         </template>
                     </el-popover>
-                    <!-- <el-tooltip class="item" effect="light" :content="scope.row.precautions" placement="left">
-                        <el-link type="primary" :underline="false" :class="['btn_text']">
-                            指导建议
-                        </el-link>
-                    </el-tooltip> -->
                 </template>
             </el-table-column>
             <template #empty>
@@ -39,8 +36,9 @@
 </template>
 
 <script setup>
-// import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+
 const props = defineProps({
   ActualWarningData: {
     type: Array,
@@ -48,40 +46,45 @@ const props = defineProps({
   }
 })
 const router = useRouter();
+const tableRef = ref(null)
+let scrollTimer = null
 
-// const ActualWarningData = [
-//     {
-//         carriage_no: 'Tc1',
-//         name: '空调蒸发器A报警',
-//         alarm_time: '16:12:00',
-//         precautions: '建议'
-//     }, {
-//         carriage_no: 'Mp1',
-//         name: '空调蒸发器A报警',
-//         alarm_time: '16:12:00',
-//         precautions: '建议'
-//     }, {
-//         carriage_no: 'M1',
-//         name: '空调蒸发器A报警',
-//         alarm_time: '16:12:00',
-//         precautions: '建议'
-//     }, {
-//         carriage_no: 'M2',
-//         name: '空调蒸发器A报警',
-//         alarm_time: '16:12:00',
-//         precautions: '建议'
-//     }, {
-//         carriage_no: 'MP2',
-//         name: '空调蒸发器A报警',
-//         alarm_time: '16:12:00',
-//         precautions: '建议'
-//     }, {
-//         carriage_no: 'Tc2',
-//         name: '空调蒸发器A报警',
-//         alarm_time: '16:12:00',
-//         precautions: '建议'
-//     }
-// ]
+const startScroll = () => {
+  nextTick(() => {
+    setTimeout(() => {
+      const tableDiv = tableRef.value?.$el.querySelector('.el-scrollbar__wrap')
+      if (tableDiv) {
+        if(scrollTimer) clearInterval(scrollTimer)
+        // 只有当有数据且内容高度 > 容器高度时，才开启自动滚动
+        if (props.ActualWarningData.length > 0 && tableDiv.scrollHeight > tableDiv.clientHeight) {
+          const scrollFn = () => {
+            tableDiv.scrollTop += 1
+            if (Math.ceil(tableDiv.scrollTop) >= tableDiv.scrollHeight - tableDiv.clientHeight) {
+              tableDiv.scrollTop = 0
+            }
+          }
+          scrollTimer = setInterval(scrollFn, 50)
+        }
+      }
+    }, 500)
+  })
+}
+
+const pauseScroll = () => {
+  if (scrollTimer) clearInterval(scrollTimer)
+}
+
+const resumeScroll = () => {
+  startScroll()
+}
+
+watch(() => props.ActualWarningData, () => {
+  resumeScroll()
+}, { deep: true, immediate: true })
+
+onUnmounted(() => {
+  if(scrollTimer) clearInterval(scrollTimer)
+})
 </script>
 
 <style scoped>
@@ -94,39 +97,33 @@ const router = useRouter();
 
 .warp {
     width: 100%;
-    border-radius: 10px;
-    background-color: #181F30 !important;
 }
 
 .el-table {
     --el-table-border-color: none;
 }
-/* 标题左边线 */
-.header {
-    height: 50px;
-    box-sizing: border-box;
-    top: 0;
-    left: 0;
+
+.section-header {
     display: flex;
     align-items: center;
-    gap: 30px;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 0;
+
+    .title-icon {
+        width: 4px;
+        height: 16px;
+        background: #e65355;
+        border-radius: 2px;
+    }
+
+    .title-text {
+        color: #ffffff;
+        font-size: 15px;
+        font-weight: bold;
+    }
 }
 
-.header>h4 {
-    font-size: 16px;
-    position: relative;
-    margin-left: 30px;
-    line-height: 1em;
-}
-
-.header>h4::before {
-    position: absolute;
-    content: "";
-    width: 4px;
-    height: 1em;
-    background: #e65355;
-    margin-left: -10px;
-}
 .btn_text {
     font-size: 14px;
     color: #2186CF !important;

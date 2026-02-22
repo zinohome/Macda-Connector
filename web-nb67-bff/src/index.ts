@@ -181,6 +181,42 @@ async function bootstrap() {
             return { success: true, data };
         });
 
+        // ==========================
+        // 列车/车厢 详细 REST 接口 (适配原有前端)
+        // ==========================
+        fastify.get('/api/rest/train/StatusAlert/:trainId', async (request: any) => {
+            const trainId = parseInt(request.params.trainId);
+            return await StatusRepository.getRealtimeWarnings(trainId);
+        });
+
+        fastify.get('/api/rest/train/TrainSelection/:trainId', async (request: any) => {
+            return await StatusRepository.getTrainSelection(parseInt(request.params.trainId));
+        });
+
+        fastify.get('/api/rest/train/RunningState/:trainId', async (request: any) => {
+            return await StatusRepository.getTrainRunningState(parseInt(request.params.trainId));
+        });
+
+        fastify.get('/api/rest/carriage/SystemInfo/:carriageId', async (request: any) => {
+            return await StatusRepository.getCarriageSystemInfo(request.params.carriageId);
+        });
+
+        fastify.get('/api/rest/carriage/HealthAssessment/:carriageId', async (request: any) => {
+            return await StatusRepository.getCarriageHealthAssessment(request.params.carriageId);
+        });
+
+        fastify.post('/api/rest/carriage/TemperatureTrend', async (request: any) => {
+            const { carriageNo, type = 'hour' } = request.body; // 假设传入 "700203" 和 "day"
+            const trainId = parseInt(String(carriageNo).slice(0, 4));
+            const carriageId = parseInt(String(carriageNo).slice(-2));
+
+            // 根据传入的维度（时、天、周、月）调用聚合查询
+            const data = await HistoryRepository.getTemperatureTrend(trainId, carriageId, type as string);
+
+            // 返回格式适配前端： { [type]: data }
+            return { [type]: data };
+        });
+
         // 5. 启动 Kafka 消费者并广播
         const kafka = KafkaManager.getInstance();
         await kafka.start((topic, data) => {
@@ -195,7 +231,7 @@ async function bootstrap() {
 
         // 6. 运行监听
         await fastify.listen({ port: config.port, host: config.host });
-        console.log(`[BFF] Server is running at http://${config.host}:${config.port}`);
+        console.log(`[BFF] Server V2-DISTINCT is running at http://${config.host}:${config.port}`);
     } catch (err) {
         fastify.log.error(err);
         process.exit(1);
