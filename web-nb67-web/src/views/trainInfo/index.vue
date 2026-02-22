@@ -1646,7 +1646,7 @@ onUnmounted(() => {
 }
 
 .monitor-container {
-    padding: 10px 15px;
+    padding: 0 15px 10px 15px; // 移除顶部 10px 填充，消除粘性闪跳
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -1662,11 +1662,13 @@ onUnmounted(() => {
     
     &.sticky-section {
         position: sticky;
-        top: 50px; // 位于 header (50px) 下方
+        top: 50px; // 紧贴 height: 50px 的 header
         z-index: 999;
-        margin-bottom: 4px;
-        background: #141a2e; /* 确保背景不透明 */
-        border-top: 1px solid #262e45;
+        margin-bottom: 0px; // 消除底部间距，增强固定感
+        background: #0a0f1d; /* 与背景色对齐，防止半透明遮挡 */
+        border-top: none; // 移除顶部边框，与 header 融合
+        border-radius: 0 0 8px 8px; // 仅保留底部圆角
+        box-shadow: 0 4px 10px rgba(0,0,0,0.4);
     }
 }
 
