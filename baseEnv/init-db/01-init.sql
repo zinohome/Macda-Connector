@@ -61,6 +61,9 @@ COMMENT ON TABLE hvac.fact_raw IS '设备明细底层存根数据宽表';
 -- 将表转化为 Hypertable，极速写入及查询。以 event_time 作为时序切片键，分块长度7天
 SELECT create_hypertable('hvac.fact_raw', 'event_time', chunk_time_interval => INTERVAL '7 days');
 
+-- 为支持 DEV 模式下的解析时间分析，建立辅助索引
+CREATE INDEX IF NOT EXISTS ix_fact_raw_ingest_time ON hvac.fact_raw (ingest_time DESC);
+
 -- 为经常进行 UI 端过滤的 device_id (车厢级别) 加速建立索引
 CREATE INDEX IF NOT EXISTS ix_fact_raw_device_time ON hvac.fact_raw (device_id, event_time DESC);
 
@@ -75,7 +78,8 @@ COMMENT ON TABLE hvac.dim_alarm_mask IS '故障屏蔽/抑制状态表，用于�
 
 -- 6. 创建历史事件超表：存储计算后的告警、预警、寿命等事件
 CREATE TABLE IF NOT EXISTS hvac.fact_event (
-    event_time TIMESTAMPTZ NOT NULL,              -- 事件记录时间
+    event_time TIMESTAMPTZ NOT NULL,              -- 事件记录时间 (设备时间)
+    ingest_time TIMESTAMPTZ NOT NULL,             -- 网关接收解析时间分析 (解析时间)
     line_id INTEGER,                              -- 线路编号
     train_id INTEGER,                             -- 列车编号
     carriage_id INTEGER,                          -- 车厢编号
@@ -93,6 +97,7 @@ COMMENT ON TABLE hvac.fact_event IS '经规则引擎处理后的事件事实表�
 -- 将事件表转化为 Hypertable
 SELECT create_hypertable('hvac.fact_event', 'event_time', if_not_exists => TRUE);
 CREATE INDEX IF NOT EXISTS ix_fact_event_searching ON hvac.fact_event (train_id, event_type, event_time DESC);
+CREATE INDEX IF NOT EXISTS ix_fact_event_ingest_time ON hvac.fact_event (ingest_time DESC);
 
 -- =============================================================================
 -- 构建服务于前端 Web 展现的连续聚合层 (Continuous Aggregates)
