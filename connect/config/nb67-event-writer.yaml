@@ -19,9 +19,10 @@ pipeline:
         root.event_type = meta("kafka_topic").split("-").index(1)
     
     # 2. 将 hits 数组展开为多条消息，每条消息代表一个故障点
+    - mapping: |
+        root = this.hits
     - unarchive:
         format: json_array
-        path: hits
 
     # 3. 字段平铺与标准化
     - mapping: |
@@ -33,7 +34,7 @@ pipeline:
         root.event_type = this.event_type
         root.fault_code = this.code
         root.fault_name = this.name
-        root.severity = coalesce(this.level, this.severity, 0)
+        root.severity = this.level | this.severity | 0
         root.payload_json = this.event_meta.merge(this).string()
 
 output:
