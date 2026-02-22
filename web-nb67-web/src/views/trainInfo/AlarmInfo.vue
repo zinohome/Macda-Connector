@@ -40,13 +40,13 @@
                         trigger="hover"
                         :content="scope.row.precautions">
                         <template #reference>
-                         <el-link type="primary" :underline="false" :class="['btn_text']">
+                         <el-link type="primary" underline="never" :class="['btn_text']">
                             指导建议
                         </el-link>
                         </template>
                     </el-popover>
                         <!-- <el-tooltip class="item" effect="light" :content="scope.row.propose" placement="left">
-                            <el-link type="primary" :underline="false" :class="['btn_text']">
+                            <el-link type="primary" underline="never" :class="['btn_text']">
                                 指导建议
                             </el-link>
                         </el-tooltip> -->

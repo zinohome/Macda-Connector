@@ -67,7 +67,7 @@
                 <el-table-column label="操作" min-width="15%">
                     <template #default="scope">
                         <el-tooltip class="item" effect="light" :content="scope.row.precautions" placement="left">
-                            <el-link v-if="scope.row.health_status !== '健康'" type="primary" :underline="false" :class="['btn_text']">
+                            <el-link v-if="scope.row.health_status !== '健康'" type="primary" underline="never" :class="['btn_text']">
                                 指导建议
                             </el-link>
                         </el-tooltip>

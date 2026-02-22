@@ -7,19 +7,19 @@
     </div>
     <div class="right">
       <el-button
-        type="text"
+        link
         :class="['btn_text1', day == '7d' ? 'btn_text' : '']"
         @click="chooseDay('7d')"
         >近7天</el-button
       >
       <el-button
-        type="text"
+        link
         :class="['btn_text1', day == '30d' ? 'btn_text' : '']"
         @click="chooseDay('30d')"
         >近30天</el-button
       >
       <el-button
-        type="text"
+        link
         :class="['btn_text1', day == '365d' ? 'btn_text' : '']"
         @click="chooseDay('365d')"
         >近12个月</el-button
@@ -34,7 +34,7 @@
         end-placeholder="结束日期"
         @change="dateChange"
       ></el-date-picker>
-      <!-- <el-button type="text" class="btn_text" @click="reset">
+      <!-- <el-button link class="btn_text" @click="reset">
         &nbsp;&nbsp;重置
       </el-button> -->
     </div>

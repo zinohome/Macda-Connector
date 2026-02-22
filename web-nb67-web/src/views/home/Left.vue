@@ -89,7 +89,7 @@
         </el-table-column>
         <el-table-column label="操作" min-width="28%">
           <template #default="scope">
-            <el-link type="primary" :underline="false" @click="gotoPath(scope.row.train_no)" :class="['btn_text', activeClass(scope.row.start)]">
+            <el-link type="primary" underline="never" @click="gotoPath(scope.row.train_no)" :class="['btn_text', activeClass(scope.row.start)]">
               查看详情
             </el-link>
           </template>

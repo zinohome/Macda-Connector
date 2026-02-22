@@ -12,7 +12,7 @@
                 <template #default="scope">
                     <el-space>
                         <!-- <el-tooltip class="item" effect="light" content="运营结束后回库处理" placement="left">
-                            <el-link type="primary" :underline="false" :class="['btn_text']">
+                            <el-link type="primary" underline="never" :class="['btn_text']">
                                 指导建议
                             </el-link>
                         </el-tooltip> -->
@@ -24,7 +24,7 @@
                             trigger="hover"
                             :content="scope.row.precautions">
                             <template #reference>
-                            <el-link type="primary" :underline="false" :class="['btn_text']">
+                            <el-link type="primary" underline="never" :class="['btn_text']">
                                 指导建议
                             </el-link>
                             </template>

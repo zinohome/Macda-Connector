@@ -4,19 +4,19 @@
             <h4>温度趋势</h4>
             <div class="right">
       <el-button
-        type="text"
+        link
         :class="['btn_text1', day == 'hourly' ? 'btn_text' : '']"
         @click="chooseDay('hourly')"
         >时</el-button
       >
       <el-button
-        type="text"
+        link
         :class="['btn_text1', day == 'daily' ? 'btn_text' : '']"
         @click="chooseDay('daily')"
         >天</el-button
       >
       <el-button
-        type="text"
+        link
         :class="['btn_text1', day == 'monthly' ? 'btn_text' : '']"
         @click="chooseDay('monthly')"
         >月</el-button
@@ -170,9 +170,7 @@ const initEchart = (carID,data) => {
                 xAxis: {
                     data: echartData.time,  //set
                     axisLabel: {
-                        textStyle: {
-                            color: '#fff'
-                        }
+                        color: '#fff'
                     }
                 },
                 legend: {
@@ -190,9 +188,7 @@ const initEchart = (carID,data) => {
                         }
                     },
                     axisLabel: {
-                        textStyle: {
-                            color: '#fff'
-                        }
+                        color: '#fff'
                     }
                 },
                 series: [

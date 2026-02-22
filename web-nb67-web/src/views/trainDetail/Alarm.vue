@@ -40,10 +40,10 @@
               :content="scope.row.Advice"
               placement="left"
             >
-              <el-button type="text" class="btn_text">指导建议</el-button>
+              <el-button link class="btn_text">指导建议</el-button>
             </el-tooltip>
             <el-button
-              type="text"
+              link
               class="btn_text"
               @click="showDetail(scope.row.sig_list, scope.row.id)"
               v-if="
@@ -59,7 +59,7 @@
               placement="left"
               v-else
             >
-              <el-button type="text" class="btn_text">N/A</el-button>
+              <el-button link class="btn_text">N/A</el-button>
             </el-tooltip>
           </template>
         </el-table-column>
@@ -227,9 +227,7 @@ const initEchart = () => {
     xAxis: {
       data: echartData.value.xAxisData,
       axisLabel: {
-        textStyle: {
-          color: "#fff",
-        },
+        color: "#fff",
       },
     },
     legend: {
@@ -249,9 +247,7 @@ const initEchart = () => {
         },
       },
       axisLabel: {
-        textStyle: {
-          color: "#fff",
-        },
+        color: "#fff",
       },
     },
     series: echartData.value.series,

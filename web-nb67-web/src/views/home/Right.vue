@@ -34,7 +34,7 @@
                         trigger="hover"
                         :content="scope.row.precautions">
                         <template #reference>
-                         <el-link type="primary" :underline="false" class="btn_text">
+                         <el-link type="primary" underline="never" class="btn_text">
                             指导建议
                         </el-link>
                         </template>
@@ -82,7 +82,7 @@
                         trigger="hover"
                         :content="scope.row.precautions">
                         <template #reference>
-                         <el-link type="primary" :underline="false" class="btn_text">
+                         <el-link type="primary" underline="never" class="btn_text">
                           处理措施
                         </el-link>
                         </template>

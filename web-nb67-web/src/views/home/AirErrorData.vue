@@ -956,9 +956,7 @@ const initEchart = (xAxisData, seriesData) => {
       },
       axisLabel: {
         interval: 0,
-        textStyle: {
-          color: "#fff",
-        },
+        color: "#fff",
       },
     },
     yAxis: {
@@ -974,9 +972,7 @@ const initEchart = (xAxisData, seriesData) => {
         },
       },
       axisLabel: {
-        textStyle: {
-          color: "#fff",
-        },
+        color: "#fff",
       },
     },
 
