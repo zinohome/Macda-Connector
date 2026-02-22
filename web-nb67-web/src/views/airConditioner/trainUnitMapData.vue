@@ -205,11 +205,13 @@
             <div class="popup cardAlign">滤网前后压差值</div>
         </div>
 
-        <div class="bg"><img src="/src/assets/img/TrainUnitMapBg.svg" /></div>
+        <div class="bg"><img :src="mapBg" /></div>
     </div>
 </template>
 
 <script setup>
+import { computed } from 'vue'
+
 const props = defineProps({
     crewDetails: {
         type: Object,
@@ -219,6 +221,13 @@ const props = defineProps({
         type: String,  
     }
 })
+
+const mapBg = computed(() => {
+    return Object.keys(props.crewDetails).length > 0 
+        ? '/src/assets/img/TrainUnitMapBg_anim.svg' 
+        : '/src/assets/img/TrainUnitMapBg.svg'
+})
+
 
 const checkRun = (type, subIdx) => {
     if (!props.crewDetails) return false
