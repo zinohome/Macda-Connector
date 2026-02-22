@@ -114,6 +114,7 @@ type pendingMessage struct {
 
 type EventFlatRecord struct {
 	EventTime  string
+	IngestTime string
 	LineID     int32
 	TrainID    int32
 	CarriageID int32

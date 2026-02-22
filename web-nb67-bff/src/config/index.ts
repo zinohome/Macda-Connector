@@ -26,6 +26,9 @@ export const config = {
         }
     },
 
+    // 运行环境与时间分析逻辑 (DEV=解析时间分析, PRD=设备时间分析)
+    runtime: process.env.RUNTIME || 'PRD',
+
     // 日志等级
     logLevel: process.env.LOG_LEVEL || 'info',
 };

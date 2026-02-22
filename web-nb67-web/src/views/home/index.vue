@@ -1243,23 +1243,23 @@ function getApi(){
                 if(item[value]>0 && item[value +'_name']){
                     rightDataEA.value.push({
                         name:item[value +'_name'],
-                        code: value
+                        code: value,
+                        alarm_time: item.alarm_time,
+                        carriage_no: item.carriage_no
                     })
                 }
             })
-            const proposeAdvice = propose.concat(proposeWarn)
-            rightDataEA.value.forEach((values)=>{
-                values.alarm_time = newDate(item.alarm_time)
-                values.carriage_no = item.carriage_no
-                proposeAdvice.forEach((proposeValue)=>{
-                    if(proposeValue.value == values.code){
+        })
+        const proposeAdvice = propose.concat(proposeWarn)
+        rightDataEA.value.forEach((values)=>{
+            values.alarm_time = newDate(values.alarm_time)
+            proposeAdvice.forEach((proposeValue)=>{
+                if(proposeValue.value == values.code){
                     values.precautions = proposeValue.title
                     values.name = proposeValue.name
                 }
-                })
             })
         })
-    })
     })
     // getRealtimeAlarm().then((res)=>{
     //     rightDataEA.value = []
@@ -1282,33 +1282,35 @@ function getApi(){
     // })
     getRealtimeWarning().then((res)=>{
         rightDataPA.value = []
-        Object.entries(res).forEach(([key, item]) => {
-        if(item.length !== 0){
-                item.forEach((items)=>{
+        Object.entries(res).forEach(([key, itemsObj]) => {
+           if(Array.isArray(itemsObj) && itemsObj.length !== 0){
+                itemsObj.forEach((items)=>{
                     rightDataPA.value.push({...items, code: key})
                 })
+            } else if (typeof itemsObj === 'object' && itemsObj !== null) {
+                 // in case it's grouped via dict
+                 Object.values(itemsObj).forEach((itemArr) => {
+                     if(Array.isArray(itemArr)) {
+                         itemArr.forEach(i => rightDataPA.value.push({...i, code: key}))
+                     }
+                 })
             }
-            });
-//         Object.values(res).forEach((item)=>{
-//         if(item.length !== 0){
-//             item.forEach((items)=>{
-//                 rightDataPA.value.push(items)
-//             })
-//         }
-//        })
-       const proposeAdvice = propose.concat(proposeWarn)
-       rightDataPA.value.forEach((value)=>{
-        value.warning_time = newDate(value.warning_time)
-        proposeAdvice.forEach((proposeValue)=>{
-            if(proposeValue.value == value.code){
-                value.precautions = proposeValue.title
-                value.name = proposeValue.name
-            }
+        });
+        
+        const proposeAdvice = propose.concat(proposeWarn)
+        rightDataPA.value.forEach((value)=>{
+            value.warning_time = newDate(value.warning_time)
+            proposeAdvice.forEach((proposeValue)=>{
+                if(proposeValue.value == value.code){
+                    value.precautions = proposeValue.title
+                    value.name = proposeValue.name
+                }
+            })
         })
-       })
-       console.log(rightDataPA.value);
+        console.log("Warnings PA: ", rightDataPA.value);
     })
-    }
+    })
+}
 onMounted(() => {
     // initWebSocket()
     getApi()

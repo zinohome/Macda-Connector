@@ -2,8 +2,8 @@ import axios from 'axios'
 
 // 创建axios实例
 const instance = axios.create({
-    // 关键点：不再硬编码 IP，由 Vite Proxy 或反向代理处理
-    baseURL: '/api',
+    // 关键点：不再硬编码 IP，由 Vite Proxy 或反向代理处理。由于api.js里手写了/api，此处必须为空才能避免成为/api/api/
+    baseURL: '',
     timeout: 15000 // 修正原来的 2 小时延迟，改为 15 秒快速失败
 })
 

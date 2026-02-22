@@ -837,16 +837,14 @@ for (let i = 0; i < res.vw_alarm_info_all_date.length; i++) {
       // value.push(count[key]);
     }
     for (let key in count) {
+      let foundName = key; // fallback to raw code if dictionary doesn't have it
+      error.forEach((val)=>{
+        if(key === val.value){
+          foundName = val.name;
+        }
+      })
+      keysTitle.push(foundName);
       value.push(count[key]);
-     error.forEach((val)=>{
-      if(key == val.value){
-        console.log(key);
-        key = val.name
-        keysTitle.push(val.name);
-        
-        // count[key] = count[val.title];
-      }
-     })
     }
     if(keysTitle.length >8){
        keysTitle= keysTitle.slice(0,8)

@@ -1,10 +1,19 @@
 import { db } from '../config/db.js';
 import { sql } from 'kysely';
+import { config } from '../config/index.js';
 
 /**
  * 实时状态与聚合查询
  */
 export class StatusRepository {
+    /**
+     * 根据当前 RUNTIME 环境返回用于时序分析的列名
+     * DEV: 使用解析时间 (ingest_time)
+     * PRD: 使用设备时间 (event_time)
+     */
+    private static get timeCol() {
+        return config.runtime === 'DEV' ? 'ingest_time' : 'event_time';
+    }
     /**
      * 模拟原有的 /api/rest/AirSystem 结构
      * 返回各列车的报警统计摘要
@@ -20,7 +29,7 @@ export class StatusRepository {
             USING (
                 SELECT DISTINCT ON (device_id) device_id, payload_json->'raw' as raw
                 FROM hvac.fact_raw
-                ORDER BY device_id, event_time DESC
+                ORDER BY device_id, ${sql.raw(this.timeCol)} DESC
             ) latest
             WHERE m.device_id = latest.device_id
             AND (latest.raw->>m.fault_code)::boolean = false
@@ -37,7 +46,7 @@ export class StatusRepository {
                 .select(['train_id', 'device_id', 'payload_json'])
                 .distinctOn('device_id')
                 .orderBy('device_id')
-                .orderBy('event_time', 'desc')
+                .orderBy(this.timeCol as any, 'desc')
             )
             .selectFrom('latest_status')
             .select([
@@ -89,26 +98,82 @@ export class StatusRepository {
     }
 
     /**
-     * 获取列车详情
-     * 为了适配前端 Object.keys(item) 的遍历逻辑，我们将 payload_json 中的数据平铺
+     * 获取列车实时告警详情 (适配前端遍历逻辑)
      */
-    static async getTrainDetails(trainId: number) {
-        const data = await db
-            .selectFrom('hvac.fact_raw')
+    static async getTrainDetails(trainIds: number[]) {
+        let query = db
+            .selectFrom('hvac.fact_event')
             .selectAll()
-            .where('train_id', '=', trainId)
-            .orderBy('event_time', 'desc')
-            .limit(8)
+            .where('event_type', '=', 'alarm')
+            .orderBy(this.timeCol as any, 'desc')
+            .limit(100);
+
+        if (trainIds && trainIds.length > 0 && !isNaN(Number(trainIds[0]))) {
+            const validIds = trainIds.filter(id => id !== undefined && id !== null) as number[];
+            if (validIds.length > 0) {
+                query = query.where('train_id', 'in', validIds as any);
+            }
+        }
+
+        const data = await query.execute();
+
+        return data.map(row => ({
+            [row.fault_code as string]: 1,
+            [`${row.fault_code}_name`]: row.fault_name,
+            alarm_time: (row as any)[this.timeCol],
+            carriage_no: row.carriage_id || 0,
+            line_no: row.line_id || 0,
+            train_no: row.train_id || 0
+        }));
+    }
+
+    /**
+     * 获取实时预警详情 (适配前端 Object.entries 逻辑)
+     */
+    static async getRealtimeWarnings() {
+        const data = await db
+            .selectFrom('hvac.fact_event')
+            .selectAll()
+            .where('event_type', '=', 'predict') // 或者 life
+            .orderBy(this.timeCol as any, 'desc')
+            .limit(100)
             .execute();
 
-        return data.map(row => {
-            const { payload_json, ...rest } = row;
-            // 将 payload_json 里的字段解构到一级，这样前端 item[value] 就能拿到了
-            return {
-                ...rest,
-                ...(payload_json as object || {})
-            };
+        const grouped: Record<string, any[]> = {};
+        data.forEach(row => {
+            const code = row.fault_code;
+            if (code) {
+                if (!grouped[code]) {
+                    grouped[code] = [];
+                }
+                grouped[code].push({
+                    warning_time: (row as any)[this.timeCol],
+                    carriage_no: row.carriage_id || 0,
+                    train_no: row.train_id || 0,
+                    line_no: row.line_id || 0
+                });
+            }
         });
+        return grouped;
+    }
+
+    /**
+     * 获取故障统计供 Echart 渲染 (返回 vw_alarm_info_all_date)
+     */
+    static async getFaultStatistics() {
+        const data = await db
+            .selectFrom('hvac.fact_event')
+            .select(['fault_code'])
+            .where('event_type', '=', 'alarm')
+            .orderBy(this.timeCol as any, 'desc')
+            .limit(5000)
+            .execute();
+
+        return {
+            vw_alarm_info_all_date: data.map(r => ({
+                [r.fault_code as string]: 1
+            }))
+        };
     }
     /**
      * 获取历史事件列表 (包含告警、预警、寿命等)
@@ -122,9 +187,9 @@ export class StatusRepository {
         let query = db
             .selectFrom('hvac.fact_event')
             .selectAll()
-            .where('event_time', '>=', new Date(params.startTime))
-            .where('event_time', '<=', new Date(params.endTime))
-            .orderBy('event_time', 'desc');
+            .where(this.timeCol as any, '>=', new Date(params.startTime))
+            .where(this.timeCol as any, '<=', new Date(params.endTime))
+            .orderBy(this.timeCol as any, 'desc');
 
         if (params.trainId) {
             query = query.where('train_id', '=', params.trainId);

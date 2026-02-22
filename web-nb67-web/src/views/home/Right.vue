@@ -4,8 +4,8 @@
       <div class="header">
         <h4>实时报警</h4>
       </div>
-      <div>
-        <el-table :data="props.tableDataEa" stripe style="width: 100%" height="290">
+      <div @mouseenter="pauseScroll(1)" @mouseleave="resumeScroll(1)">
+        <el-table ref="tableRefEA" :data="props.tableDataEa" stripe style="width: 100%" height="290">
           <el-table-column prop="carriage_no" show-overflow-tooltip label="车厢号" min-width="20%"></el-table-column>
           <el-table-column
             prop="name"
@@ -20,10 +20,8 @@
             label="发生时间"
             min-width="25%"
           >
-            <!-- 时间去掉毫秒 -->
             <template #default="scope">
               {{ (scope.row.alarm_time)}}
-              <!-- {{ (scope.row.starttime_str).split(".")[0]}} -->
             </template>
           </el-table-column>
           <el-table-column label="操作" min-width="25%">
@@ -36,16 +34,11 @@
                         trigger="hover"
                         :content="scope.row.precautions">
                         <template #reference>
-                         <el-link type="primary" :underline="false" :class="['btn_text']">
+                         <el-link type="primary" :underline="false" class="btn_text">
                             指导建议
                         </el-link>
                         </template>
                     </el-popover>
-              <!-- <el-tooltip class="item" effect="light" :content="scope.row.precautions" placement="left">
-                <el-link type="primary" :underline="false" @click="gotoPathTrainInfo()" class="btn_text">
-                  处理措施
-                </el-link>
-              </el-tooltip> -->
             </template>
           </el-table-column>
           <template #empty>
@@ -53,46 +46,14 @@
             <p style="font-size:12px">当前暂无数据</p>
           </template>
         </el-table>
-        
-        <!-- <el-table :data="props.tableDataEa" stripe style="width: 100%" height="290">
-          <el-table-column prop="FL_dvcTrain" label="车号" min-width="20%"></el-table-column>
-          <el-table-column
-            prop="descText"
-            show-overflow-tooltip
-            label="报警名称"
-            min-width="30%"
-          ></el-table-column>
-          <el-table-column
-            prop="starttime_str"
-            show-overflow-tooltip
-            align="starttime_str"
-            label="发生时间"
-            min-width="30%"
-          >
-            <template #default="scope">
-              {{ (scope.row.starttime_str).split(".")[0]}}
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" min-width="20%">
-            <template #default="scope">
-              <el-tooltip class="item" effect="dark" :content="scope.row.Advice" placement="left">
-                <el-button type="text" class="btn_text">处理措施</el-button>
-              </el-tooltip>
-            </template>
-          </el-table-column>
-          <template #empty>
-            <img src="/src/assets/img/no-data.svg" width="80" height="50" />
-            <p style="font-size:12px">当前暂无数据</p>
-          </template>
-        </el-table> -->
       </div>
     </div>
     <div class="warp">
       <div class="header">
         <h4>实时预警</h4>
       </div>
-      <div>
-        <el-table :data="props.tableDataPa" stripe style="width: 100%" height="290">
+      <div @mouseenter="pauseScroll(2)" @mouseleave="resumeScroll(2)">
+        <el-table ref="tableRefPA" :data="props.tableDataPa" stripe style="width: 100%" height="290">
           <el-table-column prop="carriage_no" show-overflow-tooltip label="车厢号" min-width="20%"></el-table-column>
           <el-table-column
             prop="name"
@@ -109,7 +70,6 @@
           >
             <template #default="scope">
               {{ (scope.row.warning_time)}}
-              <!-- {{ (scope.row.starttime_str).split(".")[0]}} -->
             </template>
           </el-table-column>
           <el-table-column label="操作" align="center" min-width="25%">
@@ -122,16 +82,11 @@
                         trigger="hover"
                         :content="scope.row.precautions">
                         <template #reference>
-                         <el-link type="primary" :underline="false" :class="['btn_text']">
+                         <el-link type="primary" :underline="false" class="btn_text">
                           处理措施
                         </el-link>
                         </template>
                     </el-popover>
-              <!-- <el-tooltip class="item" effect="light" content="运营结束后回库处理" placement="left">
-                <el-link type="primary" :underline="false" class="btn_text">
-                  处理措施
-                </el-link>
-              </el-tooltip> -->
             </template>
           </el-table-column>
           <template #empty>
@@ -146,64 +101,79 @@
 
 <script setup>
 import { useRouter } from 'vue-router'
+import { ref, watch, onUnmounted, nextTick } from 'vue'
+
 const router = useRouter();
-// import { ref, onMounted } from 'vue'
 const props = defineProps({
   tableDataEa: {
     type: Array,
-    default: []
+    default: () => []
   },
   tableDataPa: {
     type: Array,
-    default: []
+    default: () => []
   }
 })
-const gtableData = [
-  {
-    F_trainID: '05003',
-    descText: '空调蒸发器A报警',
-    starttime_str: '23:52:11'
-  }, {
-    F_trainID: '05003',
-    descText: '空调蒸发器B报警',
-    starttime_str: '23:52:11'
-  }, {
-    F_trainID: '05003',
-    descText: '空调蒸发器B报警',
-    starttime_str: '23:52:11'
-  }, {
-    F_trainID: '05003',
-    descText: '空调蒸发器B报警',
-    starttime_str: '23:52:11'
-  }, {
-    F_trainID: '05003',
-    descText: '空调蒸发器B报警',
-    starttime_str: '23:52:11'
-  }, {
-    F_trainID: '05003',
-    descText: '空调蒸发器B报警',
-    starttime_str: '23:52:11'
-  }, {
-    F_trainID: '05003',
-    descText: '空调蒸发器B报警',
-    starttime_str: '23:52:11'
-  }, {
-    F_trainID: '05003',
-    descText: '空调蒸发器B报警',
-    starttime_str: '23:52:11'
-  }
-]
-// const gtableData = [
-//   {
-//     F_trainID: '05003',
-//     descText: '空调蒸发器A报警',
-//     starttime_str: '2022-10-19'
-//   }, {
-//     F_trainID: '05003',
-//     descText: '空调蒸发器B报警',
-//     starttime_str: '2022-10-19'
-//   }
-// ]
+
+// === 自动滚动逻辑 ===
+const tableRefEA = ref(null)
+const tableRefPA = ref(null)
+let scrollTimerEA = null
+let scrollTimerPA = null
+
+const startScroll = (tableRef, timerRefId) => {
+  nextTick(() => {
+    // 延迟更久等 DOM 完全加载
+    setTimeout(() => {
+      const tableDiv = tableRef.value?.$el.querySelector('.el-scrollbar__wrap')
+      if (tableDiv) {
+        // 先清除之前的防止叠加
+        if(timerRefId === 1 && scrollTimerEA) clearInterval(scrollTimerEA)
+        if(timerRefId === 2 && scrollTimerPA) clearInterval(scrollTimerPA)
+        
+        // 只有能够滚动时（内容高度 > 容器高度），才开启自动滚动
+        if (tableDiv.scrollHeight > tableDiv.clientHeight) {
+          const scrollFn = () => {
+            tableDiv.scrollTop += 1
+            // 当滚动到底部时返回顶部无缝循环
+            if (Math.ceil(tableDiv.scrollTop) >= tableDiv.scrollHeight - tableDiv.clientHeight) {
+              tableDiv.scrollTop = 0
+            }
+          }
+          if(timerRefId === 1) {
+            scrollTimerEA = setInterval(scrollFn, 50)
+          } else {
+            scrollTimerPA = setInterval(scrollFn, 50)
+          }
+        }
+      }
+    }, 500)
+  })
+}
+
+const pauseScroll = (id) => {
+  if (id === 1 && scrollTimerEA) clearInterval(scrollTimerEA)
+  if (id === 2 && scrollTimerPA) clearInterval(scrollTimerPA)
+}
+
+const resumeScroll = (id) => {
+  if (id === 1) startScroll(tableRefEA, 1)
+  if (id === 2) startScroll(tableRefPA, 2)
+}
+
+watch(() => props.tableDataEa, () => {
+  resumeScroll(1)
+}, { deep: true, immediate: true })
+
+watch(() => props.tableDataPa, () => {
+  resumeScroll(2)
+}, { deep: true, immediate: true })
+
+onUnmounted(() => {
+  if(scrollTimerEA) clearInterval(scrollTimerEA)
+  if(scrollTimerPA) clearInterval(scrollTimerPA)
+})
+// =================
 
 const gotoPathTrainDetail = (trainId) => {
   router.push({

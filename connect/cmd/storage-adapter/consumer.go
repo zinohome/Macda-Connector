@@ -58,10 +58,11 @@ ON CONFLICT (device_id, event_time, ingest_time) DO NOTHING;
 
 const insertEventSQL = `
 INSERT INTO hvac.fact_event (
-    event_time, line_id, train_id, carriage_id, device_id,
+    event_time, ingest_time, line_id, train_id, carriage_id, device_id,
     event_type, fault_code, fault_name, severity, payload_json
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-ON CONFLICT (event_time, device_id, fault_code) DO NOTHING;
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+ON CONFLICT (event_time, device_id, fault_code) DO UPDATE 
+SET ingest_time = EXCLUDED.ingest_time;
 `
 
 func (a *adapter) run(ctx context.Context) error {
@@ -171,6 +172,7 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 
 					flats = append(flats, EventFlatRecord{
 						EventTime:  hit.EventMeta.EventTimeText,
+						IngestTime: time.Now().Format(time.RFC3339),
 						LineID:     hit.EventMeta.LineID,
 						TrainID:    hit.EventMeta.TrainID,
 						CarriageID: hit.EventMeta.CarriageID,

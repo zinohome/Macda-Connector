@@ -104,14 +104,12 @@ async function bootstrap() {
             }
         }, async (request: any) => {
             const { trainNo } = request.body;
-            const data = await StatusRepository.getTrainDetails(parseInt(trainNo?.[0] || '0'));
-            // 这里的返回结构需要适配前端对 vw_train_alarm_info 的期望
+            // parse to array of numbers
+            const trainIds = Array.isArray(trainNo) ? trainNo.map(n => parseInt(n)) : [];
+            const data = await StatusRepository.getTrainDetails(trainIds);
+
             return {
-                vw_train_alarm_info: data.map(d => ({
-                    ...d,
-                    alarm_time: d.event_time,
-                    carriage_no: d.carriage_id
-                }))
+                vw_train_alarm_info: data
             };
         });
 
@@ -158,6 +156,21 @@ async function bootstrap() {
 
             const data = await HistoryRepository.getTemperatureTrend(deviceId, parseInt(hours || '24'));
             return { success: true, data };
+        });
+
+        // ==========================
+        // 兼容前端页面的统计与预警接口
+        // ==========================
+        fastify.post('/api/rest/v2/FaultStatistics', {
+            schema: { tags: ['Status'] }
+        }, async () => {
+            return await StatusRepository.getFaultStatistics();
+        });
+
+        fastify.get('/api/rest/RealtimeWarning', {
+            schema: { tags: ['Status'] }
+        }, async () => {
+            return await StatusRepository.getRealtimeWarnings();
         });
 
         fastify.get('/api/status/latest', async (request: any, reply) => {

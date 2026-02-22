@@ -89,9 +89,11 @@ func (r *StorageRecord) toInsertArgs(rawValue []byte) ([]any, error) {
 func (r *EventFlatRecord) toEventInsertArgs() ([]any, error) {
 	now := time.Now().UTC()
 	eventTime, _ := parseEventTime(r.EventTime, true, now)
+	ingestTime := parseOptionalTimeOrDefault(r.IngestTime, now)
 
 	return []any{
 		eventTime,
+		ingestTime,
 		r.LineID,
 		r.TrainID,
 		r.CarriageID,
