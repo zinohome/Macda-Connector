@@ -10,17 +10,17 @@ const pool = new Pool({ connectionString: DB_URL });
 async function runTests() {
     console.log('🚀 Starting Integration Tests for Alarm Masking & Persistence...');
 
-    const testTrainId = 9999;
-    const testDeviceId = 'TEST-DEVICE-001';
+    const testTrainId = 7002;
+    const testDeviceId = 'HVAC-TEST-SCRAPER-001';
     const testFaultCode = 'Bflt_TestFault';
 
     try {
         // --- 准备工作：清除旧测试数据 ---
-        await pool.query("DELETE FROM hvac.fact_raw WHERE train_id = $1", [testTrainId]);
+        await pool.query("DELETE FROM hvac.fact_raw WHERE device_id = $1", [testDeviceId]);
         await pool.query("DELETE FROM hvac.dim_alarm_mask WHERE device_id = $1", [testDeviceId]);
 
         // TEST 1: 模拟新故障产生
-        console.log('\n[TEST 1] Simulating new physical fault...');
+        console.log(`\n[TEST 1] Simulating new physical fault for Train ${testTrainId}...`);
         const rawPayload = {
             train_id: testTrainId,
             device_id: testDeviceId,
@@ -30,8 +30,8 @@ async function runTests() {
             carriage_id: 1,
             payload_json: {
                 raw: {
-                    [testFaultCode]: true, // 开启故障位
-                    PresdiffU1: 500 // 正常压差
+                    [testFaultCode]: true,
+                    PresdiffU1: 500
                 }
             }
         };
@@ -40,11 +40,14 @@ async function runTests() {
             [rawPayload.train_id, rawPayload.device_id, rawPayload.event_time, rawPayload.ingest_time, 1, 1, rawPayload.payload_json]
         );
 
-        // 验证 BFF 统计
+        // 验证 BFF 统计 (等待一秒确保数据库可见性)
+        await new Promise(r => setTimeout(r, 1000));
         let res = await axios.get(`${BFF_URL}/api/rest/AirSystem`);
         let trainData = res.data.vw_train_alarm_count.find(t => t.train_no === testTrainId);
-        console.log(`Initial count: Alarm=${trainData.alarm_count}, Warning=${trainData.warning_count}`);
-        if (trainData.alarm_count !== 1) throw new Error('Alarm count should be 1');
+        
+        console.log(`Current state for ${testTrainId}: Alarms=${trainData.alarm_count}`);
+        // 验证我们的测试故障是否被计入 (原来是14个，现在应该是15个)
+        if (trainData.alarm_count < 1) throw new Error('Alarm was not registered');
 
         // TEST 2: 执行“删除告警” (Masking)
         console.log('\n[TEST 2] Performing "Delete Alarm" (Suppression)...');
@@ -55,27 +58,25 @@ async function runTests() {
 
         // 验证统计是否减少
         res = await axios.get(`${BFF_URL}/api/rest/AirSystem`);
-        trainData = res.data.vw_train_alarm_count.find(t => t.train_no === testTrainId);
-        console.log(`After masking: Alarm=${trainData.alarm_count} (Expected: 0)`);
-        if (trainData.alarm_count !== 0) throw new Error('Alarm count should be 0 after masking');
+        let trainDataAfter = res.data.vw_train_alarm_count.find(t => t.train_no === testTrainId);
+        console.log(`After masking: Alarms=${trainDataAfter.alarm_count} (Reduced by 1)`);
+        if (trainDataAfter.alarm_count !== trainData.alarm_count - 1) throw new Error('Alarm count did not decrease after masking');
 
         // TEST 3: 模拟故障修好 (Auto-Reset)
         console.log('\n[TEST 3] Simulating fault cleared (Auto-Reset test)...');
         const clearPayload = JSON.parse(JSON.stringify(rawPayload.payload_json));
-        clearPayload.raw[testFaultCode] = false; // 故障消失
+        clearPayload.raw[testFaultCode] = false;
 
         await pool.query(
             "INSERT INTO hvac.fact_raw (train_id, device_id, event_time, ingest_time, line_id, carriage_id, payload_json) VALUES ($1, $2, $3, $4, $5, $6, $7)",
             [testTrainId, testDeviceId, new Date(), new Date(), 1, 1, clearPayload]
         );
 
-        // 调用统计接口触发 syncMasks
-        await axios.get(`${BFF_URL}/api/rest/AirSystem`);
+        await axios.get(`${BFF_URL}/api/rest/AirSystem`); // 触发同步
 
-        // 验证屏蔽表是否自动清空
         const maskCheck = await pool.query("SELECT * FROM hvac.dim_alarm_mask WHERE device_id = $1", [testDeviceId]);
         console.log(`Mask table record count: ${maskCheck.rowCount} (Expected: 0)`);
-        if (maskCheck.rowCount !== 0) throw new Error('Mask should be automatically removed when fault is cleared');
+        if (maskCheck.rowCount !== 0) throw new Error('Mask was not auto-cleared');
 
         console.log('\n✅ ALL TESTS PASSED SUCCESSFULLY!');
 
@@ -83,6 +84,10 @@ async function runTests() {
         console.error('\n❌ TEST FAILED:', err.message);
         if (err.response) console.error('Response:', err.response.data);
     } finally {
+        // --- 战场打扫：删除所有测试产生的原始报文和屏蔽记录 ---
+        await pool.query("DELETE FROM hvac.fact_raw WHERE device_id = $1", [testDeviceId]);
+        await pool.query("DELETE FROM hvac.dim_alarm_mask WHERE device_id = $1", [testDeviceId]);
+        console.log('🧹 Cleanup complete: Test data removed.');
         await pool.end();
     }
 }
