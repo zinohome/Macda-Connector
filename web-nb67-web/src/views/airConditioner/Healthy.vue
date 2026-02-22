@@ -146,23 +146,36 @@ const resumeScroll = () => {
 }
 
 const fetchData = () => {
-    assessmentData.value = [] 
+    // assessmentData.value = [] 
     if (!props.carriageId) return
     getHealthAssessment(props.carriageId).then(res => {
         assessmentData.value = res.data || res.vw_health_assessment || []
+        console.log('[Healthy] Data Updated')
         resumeScroll()
     })
 }
 
-watch(() => props.carriageId, fetchData)
+watch(() => props.carriageId, () => {
+    assessmentData.value = []
+    fetchData()
+})
+
 watch(() => assessmentData.value, () => {
   resumeScroll()
 }, { deep: true })
 
-onMounted(fetchData)
+import { MONITOR_CONFIG } from '@/config/monitorConfig.js'
+
+let dataTimer = null
+
+onMounted(() => {
+    fetchData()
+    dataTimer = setInterval(fetchData, MONITOR_CONFIG.refreshInterval)
+})
 
 onUnmounted(() => {
   if(scrollTimer) clearInterval(scrollTimer)
+  if(dataTimer) clearInterval(dataTimer)
 })
 </script>
 

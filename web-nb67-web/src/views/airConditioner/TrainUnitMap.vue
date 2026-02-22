@@ -30,7 +30,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { gettemperature } from '@/api/api.js'
 import trainUnitMapData from "./trainUnitMapData.vue";
 
@@ -40,12 +40,13 @@ const props = defineProps({
 
 const selectedUnit = ref(1)
 const crewDetails = ref({})
+let refreshTimer = null
 
 const fetchData = () => {
     if (!props.carriageId) return
     
     // 1. 先重置数据，防止无数据时残留上一节车厢的旧数据
-    crewDetails.value = {} 
+    // crewDetails.value = {} // 自动刷新时不需要重置，避免闪烁
 
     gettemperature(props.carriageId).then(res => {
         if (res && res.vw_system_info && res.vw_system_info.length > 0) {
@@ -68,10 +69,24 @@ const fetchData = () => {
 
 watch(() => props.carriageId, () => {
     selectedUnit.value = 1
+    crewDetails.value = {} // 车厢切换时重置
     fetchData()
 })
 
-onMounted(fetchData)
+import { MONITOR_CONFIG } from '@/config/monitorConfig.js'
+
+onMounted(() => {
+    fetchData()
+    refreshTimer = setInterval(fetchData, MONITOR_CONFIG.refreshInterval)
+    console.log('[TrainUnitMap] Timer Started')
+})
+
+onUnmounted(() => {
+    if (refreshTimer) {
+        clearInterval(refreshTimer)
+        console.log('[TrainUnitMap] Timer Cleared')
+    }
+})
 </script>
 
 <style lang="scss" scoped>

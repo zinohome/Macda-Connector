@@ -1471,92 +1471,93 @@ const gotoPath = (type) => {
     }
 }
 
-function getTrainApi() {
+async function getTrainApi() {
     if (!currentTrainNo.value) return;
 
     const tNo = [currentTrainNo.value]
     const proposeAdvice = propose.concat(proposeWarn)
 
-    // 1. 处理实时报警 (ActualWarning)
-    getRealtimeAlarm({trainNo: tNo}).then((res)=>{
+    console.log('[TrainDetail] Fetching data for:', currentTrainNo.value)
+
+    try {
+        // 1. 同时请求报警和预警，提升效率且互不干扰
+        const [alarmRes, alertRes] = await Promise.all([
+            getRealtimeAlarm({trainNo: tNo}).catch(e => ({vw_train_alarm_info: []})),
+            getStatusAlert(currentTrainNo.value).catch(e => ({}))
+        ]);
+
+        // --- 处理实时报警 (ActualWarning) ---
         const tempActual = []
-        const seen = new Set() // 用于点位去重
-
-        res.vw_train_alarm_info.forEach((item)=>{
-            Object.keys(item).forEach((value)=>{
-                if(item[value]>0 && (item[value +'_name'] || item.name)){
-                    const carNo = extractNumber(item.carriage_no) ? extractNumber(item.carriage_no).slice(-1) : item.carriage_no
-                    const uniqueKey = `${value}_${carNo}`
-                    
-                    if (!seen.has(uniqueKey)) {
-                        const newItem = {
-                            name: item[value + '_name'] || item.name || '未知故障',
-                            code: value,
-                            alarm_time: newDate(item.alarm_time),
-                            carriage_no: carNo,
-                            precautions: ''
-                        }
-                        // 匹配指导建议
-                        const cleanCode = newItem.code.replace('dvc_', '')
-                        proposeAdvice.forEach((proposeValue)=>{
-                            if(proposeValue.value == newItem.code || proposeValue.value == cleanCode){
-                                newItem.precautions = proposeValue.title
-                                if(!newItem.name || newItem.name === '未知故障') {
-                                    newItem.name = proposeValue.name
-                                }
+        const seenActual = new Set()
+        if (alarmRes.vw_train_alarm_info) {
+            alarmRes.vw_train_alarm_info.forEach((item) => {
+                Object.keys(item).forEach((key) => {
+                    if(item[key] > 0 && (item[key +'_name'] || item.name)){
+                        const carNo = extractNumber(item.carriage_no) ? extractNumber(item.carriage_no).slice(-1) : item.carriage_no
+                        const uniqueKey = `${key}_${carNo}`
+                        
+                        if (!seenActual.has(uniqueKey)) {
+                            const newItem = {
+                                name: item[key + '_name'] || item.name || '未知故障',
+                                code: key,
+                                alarm_time: newDate(item.alarm_time),
+                                carriage_no: carNo,
+                                precautions: ''
                             }
-                        })
-                        tempActual.push(newItem)
-                        seen.add(uniqueKey)
+                            const cleanCode = newItem.code.replace('dvc_', '')
+                            proposeAdvice.forEach((p) => {
+                                if(p.value == newItem.code || p.value == cleanCode){
+                                    newItem.precautions = p.title
+                                    if(!newItem.name || newItem.name === '未知故障') newItem.name = p.name
+                                }
+                            })
+                            tempActual.push(newItem)
+                            seenActual.add(uniqueKey)
+                        }
                     }
-                }
+                })
             })
-        })
-        // 一次性整块替换，解决异步追加导致的重复问题
+        }
         ActualWarningData.value = tempActual
-    })
 
-    // 2. 处理实时预警 (StateWarning)
-    getStatusAlert(currentTrainNo.value).then((res)=>{
+        // --- 处理实时预警 (StateWarning) ---
         const tempState = []
-        const seen = new Set()
-
-        Object.entries(res).forEach(([key, itemArr]) => {
+        const seenState = new Set()
+        Object.entries(alertRes).forEach(([key, itemArr]) => {
             if(key.startsWith('vw_') || key.includes('count')) return;
             
-            if(Array.isArray(itemArr) && itemArr.length !== 0){
+            if(Array.isArray(itemArr)){
                 itemArr.forEach((items)=>{
                     const carNo = extractNumber(items.carriage_no) ? extractNumber(items.carriage_no).slice(-1) : items.carriage_no
                     const uniqueKey = `${key}_${carNo}`
 
-                    if (!seen.has(uniqueKey)) {
+                    if (!seenState.has(uniqueKey)) {
                         const newItem = {
                             ...items, 
                             code: key,
                             warning_time: newDate(items.warning_time),
-                            name: items.name || items.alert_name || items.warning_info || items[key + '_name'] || '未知预警',
+                            name: items.name || items.alert_name || items.warning_info || '未知预警',
                             carriage_no: carNo,
                             precautions: ''
                         }
-                        // 匹配指导建议
                         const cleanCode = newItem.code.replace('dvc_', '')
-                        proposeAdvice.forEach((proposeValue)=>{
-                            if(proposeValue.value == newItem.code || proposeValue.value == cleanCode){
-                                newItem.precautions = proposeValue.title
-                                if(newItem.name === '未知预警' || !newItem.name) {
-                                    newItem.name = proposeValue.name
-                                }
+                        proposeAdvice.forEach((p) => {
+                            if(p.value == newItem.code || p.value == cleanCode){
+                                newItem.precautions = p.title
+                                if(newItem.name === '未知预警') newItem.name = p.name
                             }
                         })
                         tempState.push(newItem)
-                        seen.add(uniqueKey)
+                        seenState.add(uniqueKey)
                     }
                 })
             }
         });
-        // 一次性整块替换
         StateWarningData.value = tempState
-    })
+        console.log('[TrainDetail] Refresh Success:', new Date().toLocaleTimeString())
+    } catch (err) {
+        console.error('[TrainDetail] Refresh Error:', err)
+    }
 }
 
 watch(() => route.query, (newQuery) => {
@@ -1571,6 +1572,8 @@ watch(() => route.query, (newQuery) => {
     }
     getTrainApi()
 }, { deep: true, immediate: true })
+
+import { MONITOR_CONFIG } from '@/config/monitorConfig.js'
 
 onMounted(() => {
     // 初始进入时，如果 URL 没参数，设置默认值但不强制跳转
@@ -1587,7 +1590,8 @@ onMounted(() => {
 
 let timer = setInterval(() => {
     getTrainApi()
-}, 1000 * 60 * 2)
+    console.log('Train Info Refreshed')
+}, MONITOR_CONFIG.refreshInterval)
 
 onUnmounted(() => {
     clearInterval(timer)

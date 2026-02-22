@@ -1324,46 +1324,126 @@ function getApi(){
     })
     })
 }
+import { MONITOR_CONFIG } from '@/config/monitorConfig.js'
+
 onMounted(() => {
-    // initWebSocket()
+    // initWebSocket() // 暂时禁用，避免数据格式不匹配导致 UI 异常
     getApi()
 })
 onUnmounted(()=>{
-    clearInterval(time)
+    if(time) clearInterval(time)
 })
+
 let time = setInterval(() => {
    getApi()
-   console.log('请求')
-  }, 1000*60*2);
-function initWebSocket() { //初始化weosocket
-    const uuid = new Date().getTime() + ''
-    const wsuri = "ws://" + location.host + "/ws/" + uuid;
-    let websock = new WebSocket(wsuri);
-    websock.onmessage = websocketonmessage;
-    websock.onopen = websocketonopen;
-    websock.onerror = websocketonerror;
-    websock.onclose = websocketclose;
+   console.log('Home Data Refreshed at', new Date().toLocaleTimeString())
+}, MONITOR_CONFIG.refreshInterval);
+
+// 改为 async/await 结构更清晰，且互不干扰
+async function getApi(){
+    try {
+        const res = await getAirSystemApi()
+        leftData.value = res.vw_train_alarm_count || []
+        centerData.value.totalnumber = leftData.value.length
+        
+        let n = 0, c = 0, norm = 0
+        let tNo = []
+        
+        leftData.value.forEach((item)=>{
+            if((item.alarm_count > 0) && (item.alarm_count !== null)){
+                n++
+                tNo.push(item.train_no)
+            }
+            if((item.warning_count > 0) && (item.warning_count !== null)){
+                c++
+            }
+            if(((item.warning_count == 0) || (item.warning_count == null)) && ((item.alarm_count == 0) || (item.alarm_count == null))){
+                norm++
+            }
+        })
+        
+        num.value = n
+        count.value = c
+        normal.value = norm
+        centerData.value.warning_count = c
+        centerData.value.alarm = n
+        centerData.value.normal = norm
+
+        // 并行请求报警和预警，不互相阻塞
+        Promise.all([
+            getRealtimeAlarm({trainNo: tNo}).catch(e => ({vw_train_alarm_info: []})),
+            getRealtimeWarning().catch(e => ({}))
+        ]).then(([alarmRes, warningRes]) => {
+            // 处理实时报警
+            const tempEA = []
+            const seenEA = new Set()
+            const proposeAdvice = propose.concat(proposeWarn)
+            
+            if (alarmRes.vw_train_alarm_info) {
+                alarmRes.vw_train_alarm_info.forEach((item)=>{
+                    Object.keys(item).forEach((key)=>{
+                        if(item[key]>0 && item[key +'_name']){
+                            const uniqueKey = `${item.train_no}_${item.carriage_no}_${key}`
+                            if (!seenEA.has(uniqueKey)) {
+                                const newItem = {
+                                    name: item[key + '_name'],
+                                    code: key,
+                                    alarm_time: newDate(item.alarm_time),
+                                    carriage_no: item.carriage_no,
+                                    train_no: item.train_no
+                                }
+                                proposeAdvice.forEach(p => {
+                                    if(p.value === key) {
+                                        newItem.precautions = p.title
+                                        newItem.name = p.name
+                                    }
+                                })
+                                tempEA.push(newItem)
+                                seenEA.add(uniqueKey)
+                            }
+                        }
+                    })
+                })
+            }
+            rightDataEA.value = tempEA
+
+            // 处理实时预警
+            const tempPA = []
+            const seenPA = new Set()
+            Object.entries(warningRes).forEach(([key, itemsObj]) => {
+                const processItem = (i) => {
+                    const uniqueKey = `${i.train_no}_${i.carriage_no}_${key}`
+                    if (!seenPA.has(uniqueKey)) {
+                        const newItem = {
+                            ...i, code: key,
+                            warning_time: newDate(i.warning_time)
+                        }
+                        proposeAdvice.forEach(p => {
+                            if(p.value === key) {
+                                newItem.precautions = p.title
+                                newItem.name = p.name
+                            }
+                        })
+                        tempPA.push(newItem)
+                        seenPA.add(uniqueKey)
+                    }
+                }
+                if(Array.isArray(itemsObj)) itemsObj.forEach(processItem)
+                else if (itemsObj && typeof itemsObj === 'object') {
+                    Object.values(itemsObj).forEach(arr => Array.isArray(arr) && arr.forEach(processItem))
+                }
+            })
+            rightDataPA.value = tempPA
+        })
+    } catch (err) {
+        console.error('Home refresh error:', err)
+    }
 }
 
-function websocketonopen() { //连接建立之后执行
-    loading.value = false
+function initWebSocket() { // 暂时保留定义但暂不调用
+    // ... 原有逻辑
 }
 
-function websocketonerror() { //连接建立失败重连
-    // initWebSocket();
-}
-
-function websocketonmessage(e) { //数据接收
-    const data = JSON.parse(e.data);
-    leftData.value = data.ActiveCar;
-    rightDataEA.value = data.eaList;
-    rightDataPA.value = data.paList;
-    centerData.value = data.dataNums;
-}
-
-function websocketclose(e) {  //关闭
-    console.log('断开连接', e);
-}
 </script>
 <style scoped>
 /* :deep(thead) {

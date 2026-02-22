@@ -40,7 +40,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { getRunningState } from '@/api/api'
 
 const props = defineProps({
@@ -48,6 +48,8 @@ const props = defineProps({
 })
 
 const rawData = ref([])
+let refreshTimer = null
+
 const rows = [
     { label: '压缩机1', key: 'comp_u1', isStatus: true },
     { label: '压缩机2', key: 'comp_u2', isStatus: true },
@@ -125,16 +127,29 @@ const getValClass = (carIdx, pos, row) => {
 }
 
 const fetchData = () => {
-    rawData.value = [] // 请求前清空
+    // rawData.value = [] // 自动刷新建议不直接置空，避免闪烁
     if (!props.trainId) return
     getRunningState(props.trainId).then(res => {
         rawData.value = res.vw_running_state_info || []
-        console.log('[RunState] Raw Data:', rawData.value)
+        console.log('[RunState] Data Updated:', rawData.value.length)
     })
 }
 
-watch(() => props.trainId, fetchData)
-onMounted(fetchData)
+watch(() => props.trainId, () => {
+    rawData.value = [] // ID 变化时可以置空
+    fetchData()
+})
+
+import { MONITOR_CONFIG } from '@/config/monitorConfig.js'
+
+onMounted(() => {
+    fetchData()
+    refreshTimer = setInterval(fetchData, MONITOR_CONFIG.refreshInterval)
+})
+
+onUnmounted(() => {
+    if (refreshTimer) clearInterval(refreshTimer)
+})
 </script>
 
 <style scoped lang="scss">

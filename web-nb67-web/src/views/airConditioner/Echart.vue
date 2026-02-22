@@ -30,7 +30,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted, watch, nextTick, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 import { getThDataByDvcAddrApi } from '@/api/api.js'
 
@@ -42,6 +42,7 @@ const chartRef = ref(null)
 let myChart = null
 const currentTab = ref('hour')
 const hasData = ref(true)
+let refreshTimer = null
 
 const tabs = [
     { label: '时 (秒级)', value: 'hour' },
@@ -147,15 +148,13 @@ const getChartOptions = (data) => {
 const fetchData = async () => {
     if (!props.carriageId) return
     
-    // 根据状态构建不同的聚合参数
     let params = {
         carriageNo: props.carriageId,
-        type: currentTab.value // 假设后端支持此参数
+        type: currentTab.value
     }
     
     try {
         const res = await getThDataByDvcAddrApi(params)
-        // 兼容处理不同维度的 Key
         const list = res[currentTab.value] || res.data || []
         
         if (list.length === 0) {
@@ -165,15 +164,19 @@ const fetchData = async () => {
         hasData.value = true
 
         const formatted = {
-            time: list.map(i => formatTime(i.bucket)),
-            cabin: list.map(i => i.ras_sys),
-            fresh: list.map(i => i.fas_sys),
-            target: list.map(i => i.tic)
+            time: list.map(i => formatTime(i.bucket || i.time)), // 适配 bucket 或 time
+            cabin: list.map(i => i.ras_sys || i.temp_cabin),
+            fresh: list.map(i => i.fas_sys || i.temp_fresh),
+            target: list.map(i => i.tic || i.temp_set)
         }
 
         nextTick(() => {
-            if (!myChart) myChart = echarts.init(chartRef.value)
-            myChart.setOption(getChartOptions(formatted))
+            if (!myChart && chartRef.value) {
+                myChart = echarts.init(chartRef.value)
+            }
+            if (myChart) {
+                myChart.setOption(getChartOptions(formatted))
+            }
         })
     } catch (error) {
         console.error('Trend data error:', error)
@@ -181,11 +184,25 @@ const fetchData = async () => {
     }
 }
 
-watch(() => props.carriageId, fetchData)
+watch(() => props.carriageId, () => {
+    fetchData()
+})
+
+import { MONITOR_CONFIG } from '@/config/monitorConfig.js'
 
 onMounted(() => {
     fetchData()
+    refreshTimer = setInterval(fetchData, MONITOR_CONFIG.refreshInterval)
     window.addEventListener('resize', () => myChart?.resize())
+})
+
+onUnmounted(() => {
+    if (refreshTimer) clearInterval(refreshTimer)
+    window.removeEventListener('resize', () => myChart?.resize())
+    if (myChart) {
+        myChart.dispose()
+        myChart = null
+    }
 })
 </script>
 
