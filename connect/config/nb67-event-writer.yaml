@@ -39,7 +39,7 @@ pipeline:
 output:
   sql_raw:
     driver: postgres
-    dsn: postgres://postgres:passw0rd@192.168.32.17:5432/postgres?sslmode=disable
+    dsn: postgres://postgres:passw0rd@timescaledb:5432/postgres?sslmode=disable
     query: |
       INSERT INTO hvac.fact_event (
         event_time, line_id, train_id, carriage_id, device_id,

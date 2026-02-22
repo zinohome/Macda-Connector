@@ -3,6 +3,7 @@ package main
 import "encoding/json"
 
 type StorageRecord struct {
+	// ... existing fields ...
 	SchemaVersion string `json:"schema_version"`
 
 	EventTimeText  string `json:"event_time_text"`
@@ -85,7 +86,41 @@ type StorageRecord struct {
 	PayloadJSON json.RawMessage `json:"payload_json"`
 }
 
+type EventRecord struct {
+	Hits []Hit `json:"hits"`
+}
+
+type Hit struct {
+	Code      string    `json:"code"`
+	Name      string    `json:"name"`
+	Severity  int16     `json:"severity"`
+	Level     *int16    `json:"level,omitempty"`
+	EventMeta EventMeta `json:"event_meta"`
+}
+
+type EventMeta struct {
+	EventTimeText string `json:"event_time_text"`
+	LineID        int32  `json:"line_id"`
+	TrainID       int32  `json:"train_id"`
+	CarriageID    int32  `json:"carriage_id"`
+	DeviceID      string `json:"device_id"`
+}
+
 type pendingMessage struct {
-	record StorageRecord
-	msg    saramaMessage
+	isEvent bool
+	record  any // Can be StorageRecord or []EventFlatRecord (we'll flatten them)
+	msg     saramaMessage
+}
+
+type EventFlatRecord struct {
+	EventTime  string
+	LineID     int32
+	TrainID    int32
+	CarriageID int32
+	DeviceID   string
+	EventType  string
+	FaultCode  string
+	FaultName  string
+	Severity   int16
+	Payload    json.RawMessage
 }

@@ -312,6 +312,27 @@ services:
     networks:
       - macdanet
 
+  # Pipeline Stage 5: 事件历史持久化 (signal-alarm/predict/life → TimescaleDB)
+  connect-event-writer:
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full
+    container_name: connect-event-writer
+    restart: unless-stopped
+    command: [ "-c", "/etc/connect/nb67-event-writer.yaml" ]
+    volumes:
+      - "/data/MACDA2/connect/config/nb67-event-writer.yaml:/etc/connect/nb67-event-writer.yaml:ro"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      connect-event-builder:
+        condition: service_healthy
+      timescaledb:
+        condition: service_started
+    networks:
+      - macdanet
+
   # Pipeline Stage 4 (Plan B): 使用 Go 语言原生的极致性能写入 (备用方案)
   storage-adapter:
     # 鉴于需要在别处构建镜像，此处注释掉 build，改用外部构建好的 image:
@@ -322,8 +343,9 @@ services:
     restart: unless-stopped
     environment:
       - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
-      - KAFKA_TOPIC=signal-storage
+      - KAFKA_TOPICS=signal-storage,signal-alarm,signal-predict,signal-life
       - PG_DSN=postgres://postgres:passw0rd@timescaledb:5432/postgres?sslmode=disable
+      - LOG_LEVEL=INFO
     # 暂时将此高配版留存，当 Plan A 的 Connect 方案跑满瓶颈时切换使用。不启用时可通过 docker stop 暂停
     profiles: [ "plan_b" ]
     depends_on:

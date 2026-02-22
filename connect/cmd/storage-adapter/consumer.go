@@ -56,6 +56,14 @@ INSERT INTO hvac.fact_raw (
 ON CONFLICT (device_id, event_time, ingest_time) DO NOTHING;
 `
 
+const insertEventSQL = `
+INSERT INTO hvac.fact_event (
+    event_time, line_id, train_id, carriage_id, device_id,
+    event_type, fault_code, fault_name, severity, payload_json
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+ON CONFLICT (event_time, device_id, fault_code) DO NOTHING;
+`
+
 func (a *adapter) run(ctx context.Context) error {
 	kcfg := sarama.NewConfig()
 	kcfg.Version = sarama.V2_6_0_0
@@ -77,7 +85,7 @@ func (a *adapter) run(ctx context.Context) error {
 	}()
 
 	for {
-		if err := group.Consume(ctx, []string{a.cfg.KafkaTopic}, handler); err != nil {
+		if err := group.Consume(ctx, a.cfg.KafkaTopics, handler); err != nil {
 			if ctx.Err() != nil {
 				return nil
 			}
@@ -128,16 +136,63 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 				flush()
 				return nil
 			}
-			var record StorageRecord
-			if err := json.Unmarshal(msg.Value, &record); err != nil {
-				log.Printf("[WARN] invalid json topic=%s partition=%d offset=%d err=%v", msg.Topic, msg.Partition, msg.Offset, err)
-				sess.MarkMessage(msg, "invalid-json")
-				continue
+
+			// 日志：每收到一条消息
+			if h.adapter.cfg.LogLevel == "DEBUG" {
+				log.Printf("[DEBUG] received msg from topic=%s partition=%d offset=%d", msg.Topic, msg.Partition, msg.Offset)
 			}
-			if len(record.PayloadJSON) == 0 {
-				record.PayloadJSON = append(record.PayloadJSON, msg.Value...)
+
+			isEventTopic := msg.Topic == "signal-alarm" || msg.Topic == "signal-predict" || msg.Topic == "signal-life"
+
+			if isEventTopic {
+				var ev EventRecord
+				if err := json.Unmarshal(msg.Value, &ev); err != nil {
+					log.Printf("[WARN] invalid event json topic=%s err=%v", msg.Topic, err)
+					sess.MarkMessage(msg, "")
+					continue
+				}
+
+				eventType := "alarm"
+				if msg.Topic == "signal-predict" {
+					eventType = "predict"
+				} else if msg.Topic == "signal-life" {
+					eventType = "life"
+				}
+
+				flats := make([]EventFlatRecord, 0, len(ev.Hits))
+				for _, hit := range ev.Hits {
+					sev := hit.Severity
+					if hit.Level != nil {
+						sev = *hit.Level
+					}
+
+					// 为了方便以后分析，payload_json 包含原始 hit 信息
+					payload, _ := json.Marshal(hit)
+
+					flats = append(flats, EventFlatRecord{
+						EventTime:  hit.EventMeta.EventTimeText,
+						LineID:     hit.EventMeta.LineID,
+						TrainID:    hit.EventMeta.TrainID,
+						CarriageID: hit.EventMeta.CarriageID,
+						DeviceID:   hit.EventMeta.DeviceID,
+						EventType:  eventType,
+						FaultCode:  hit.Code,
+						FaultName:  hit.Name,
+						Severity:   sev,
+						Payload:    payload,
+					})
+				}
+				batch = append(batch, pendingMessage{isEvent: true, record: flats, msg: saramaMessage{inner: msg}})
+			} else {
+				var record StorageRecord
+				if err := json.Unmarshal(msg.Value, &record); err != nil {
+					log.Printf("[WARN] invalid storage json topic=%s err=%v", msg.Topic, err)
+					sess.MarkMessage(msg, "")
+					continue
+				}
+				batch = append(batch, pendingMessage{isEvent: false, record: record, msg: saramaMessage{inner: msg}})
 			}
-			batch = append(batch, pendingMessage{record: record, msg: saramaMessage{inner: msg}})
+
 			if len(batch) >= h.adapter.cfg.BatchSize {
 				flush()
 			}
@@ -146,30 +201,47 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 }
 
 func (a *adapter) flushBatch(ctx context.Context, batch []pendingMessage) error {
-	txCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	txCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	pgBatch := &pgx.Batch{}
-	count := 0
+	totalRaw := 0
+	totalEvents := 0
+
 	for _, item := range batch {
-		args, err := item.record.toInsertArgs(item.msg.inner.Value)
-		if err != nil {
-			log.Printf("[WARN] skip record topic=%s partition=%d offset=%d err=%v", item.msg.inner.Topic, item.msg.inner.Partition, item.msg.inner.Offset, err)
-			continue
+		if item.isEvent {
+			flats := item.record.([]EventFlatRecord)
+			for _, f := range flats {
+				args, _ := f.toEventInsertArgs()
+				pgBatch.Queue(insertEventSQL, args...)
+				totalEvents++
+			}
+		} else {
+			record := item.record.(StorageRecord)
+			args, err := record.toInsertArgs(item.msg.inner.Value)
+			if err != nil {
+				continue
+			}
+			pgBatch.Queue(insertSQL, args...)
+			totalRaw++
 		}
-		pgBatch.Queue(insertSQL, args...)
-		count++
 	}
-	if count == 0 {
+
+	totalCount := totalRaw + totalEvents
+	if totalCount == 0 {
 		return nil
 	}
 
+	start := time.Now()
 	batchResult := a.pool.SendBatch(txCtx, pgBatch)
 	defer batchResult.Close()
-	for i := 0; i < count; i++ {
+
+	for i := 0; i < totalCount; i++ {
 		if _, err := batchResult.Exec(); err != nil {
 			return fmt.Errorf("exec batch insert: %w", err)
 		}
 	}
+
+	log.Printf("[INFO] flushed batch: raw=%d events=%d took=%v", totalRaw, totalEvents, time.Since(start))
 	return nil
 }
