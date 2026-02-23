@@ -6,7 +6,7 @@ export const router = createRouter({
         {
             path: "/",
             name: "/",
-            redirect:'/KT',
+            redirect: '/KT',
             component: () => import("@/views/home/index.vue"),
             meta: {
                 keepAlive: false // 不需要被缓存
@@ -59,7 +59,18 @@ export const router = createRouter({
             },
         },
         {
+            path: "/historyData",
+            name: "historyData",
+            component: () => import("@/views/historyData/index.vue")
+        },
+        {
+            path: "/historyAlarm",
+            name: "historyAlarm",
+            component: () => import("@/views/historyAlarm/index.vue")
+        },
+        {
             path: "/KT/carrigeinfo",
+
             name: "carrigeinfo",
             component: () => import("@/views/airConditioner/index.vue")
         }

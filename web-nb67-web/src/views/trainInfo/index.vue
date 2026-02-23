@@ -1464,10 +1464,14 @@ const handleCarSelect = (carriageId) => {
 }
 
 const gotoPath = (type) => {
+    const query = {
+        trainNo: currentTrainNo.value,
+        trainCoach: currentCarriageNo.value
+    }
     if (type === 'historyData') {
-        router.push('/historyData') // 假设路径
+        router.push({ path: '/historyData', query })
     } else if (type === 'historyAlarm') {
-        router.push('/historyAlarm') // 假设路径
+        router.push({ path: '/historyAlarm', query })
     }
 }
 

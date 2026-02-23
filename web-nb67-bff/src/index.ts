@@ -181,6 +181,10 @@ async function bootstrap() {
             return { success: true, data };
         });
 
+        fastify.get('/api/test', async () => {
+            return { status: 'ok', time: new Date().toISOString() };
+        });
+
         // ==========================
         // 列车/车厢 详细 REST 接口 (适配原有前端)
         // ==========================
@@ -195,6 +199,88 @@ async function bootstrap() {
 
         fastify.get('/api/rest/train/RunningState/:trainId', async (request: any) => {
             return await StatusRepository.getTrainRunningState(parseInt(request.params.trainId));
+        });
+
+        // 历史报警接口 (适配原有前端)
+        fastify.post('/api/rest/train/AlarmInformation', async (request: any) => {
+            const { state, startTime, endTime, page, limit } = request.body;
+            console.log(`[BFF] AlarmInformation Request: state=${state}, startTime=${startTime}, endTime=${endTime}, page=${page}, limit=${limit}`);
+
+            const trainId = state ? parseInt(state.slice(0, 4)) : undefined;
+            const carriageId = state ? parseInt(state.slice(4, 6)) : undefined;
+
+            const { list, total } = await StatusRepository.getHistoricalEvents({
+                trainId,
+                carriageId,
+                startTime: startTime || '',
+                endTime: endTime || '',
+                eventType: 'alarm',
+                page: page ? parseInt(page) : 1,
+                limit: limit ? parseInt(limit) : 15
+            });
+
+            // 适配前端期望的格式 (HistoryAlarm 或 TrainInfo)
+            return {
+                total: total,
+                alarm_timeline: list ? list.map(row => ({
+                    train_id: row.train_id,
+                    carriage_no: row.carriage_id,
+                    fault_code: row.fault_code,
+                    name: row.fault_name,
+                    start_time: (row as any)[config.runtime === 'DEV' ? 'ingest_time' : 'event_time'],
+                    end_time: null, // 暂时不处理恢复时间
+                    state: `${row.train_id}${String(row.carriage_id).padStart(2, '0')}1` // 适配前端 state 字段, e.g., "7002031"
+                })) : [],
+                data: list ? list.map(row => {
+                    let level = '警告';
+                    if (row.event_type === 'alarm') {
+                        level = row.severity === 1 ? '严重' : '一般';
+                    } else {
+                        // 预警/寿命事件: 3-高(严重), 2-中(警告), 1-低(轻微)
+                        if (row.severity === 3) level = '严重';
+                        else if (row.severity === 2) level = '警告';
+                        else if (row.severity === 1) level = '轻微';
+                    }
+                    return {
+                        train_id: row.train_id,
+                        carriage_no: row.carriage_id,
+                        fault_code: row.fault_code,
+                        fault_desc: row.fault_name,
+                        fault_level: level,
+                        occurrence_time: (row as any)[config.runtime === 'DEV' ? 'ingest_time' : 'event_time'],
+                        recovery_time: null,
+                        status: '活动'
+                    };
+                }) : []
+            };
+        });
+
+        // 历史数据接口 (适配 HistoryData 页面)
+        fastify.get('/api/getTrainData', async (request: any) => {
+            const { state, startTime, endTime, page = 1, limit = 50 } = request.query;
+            const trainId = state ? parseInt(String(state).slice(0, 4)) : undefined;
+            const carriageId = state ? parseInt(String(state).slice(4, 6)) : undefined;
+
+            const result = await StatusRepository.getRawHistory({
+                trainId,
+                carriageId,
+                startTime: String(startTime || ''),
+                endTime: String(endTime || ''),
+                page: parseInt(page as string),
+                limit: parseInt(limit as string)
+            });
+
+            return {
+                code: 200,
+                data: {
+                    list: result.list.map(row => ({
+                        ...row,
+                        ...(row.payload_json?.raw || {}),
+                        event_time: (row as any)[config.runtime === 'DEV' ? 'ingest_time' : 'event_time']
+                    })),
+                    total: result.total
+                }
+            };
         });
 
         fastify.get('/api/rest/carriage/SystemInfo/:carriageId', async (request: any) => {
@@ -230,6 +316,10 @@ async function bootstrap() {
         });
 
         // 6. 运行监听
+        await fastify.ready();
+        console.log('[BFF] All Routes registered:');
+        console.log(fastify.printRoutes());
+
         await fastify.listen({ port: config.port, host: config.host });
         console.log(`[BFF] Server V2-DISTINCT is running at http://${config.host}:${config.port}`);
     } catch (err) {

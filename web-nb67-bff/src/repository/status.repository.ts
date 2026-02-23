@@ -356,15 +356,19 @@ export class StatusRepository {
         };
     }
 
-    /**
-     * 获取历史事件列表 (包含告警、预警、寿命等)
-     */
     static async getHistoricalEvents(params: {
-        trainId?: number;
-        eventType?: string;
+        trainId?: number | undefined;
+        carriageId?: number | undefined;
+        eventType?: string | undefined;
         startTime: string;
         endTime: string;
+        page?: number;
+        limit?: number;
     }) {
+        const page = params.page || 1;
+        const limit = params.limit || 500;
+        const offset = (page - 1) * limit;
+
         let query = db
             .selectFrom('hvac.fact_event')
             .selectAll()
@@ -375,11 +379,69 @@ export class StatusRepository {
         if (params.trainId) {
             query = query.where('train_id', '=', params.trainId);
         }
+        if (params.carriageId) {
+            query = query.where('carriage_id', '=', params.carriageId);
+        }
         if (params.eventType) {
             query = query.where('event_type', '=', params.eventType);
         }
 
-        return await query.limit(500).execute();
+        // Get total count
+        const totalResult = await query
+            .select(sql`count(*)`.as('count'))
+            .executeTakeFirst();
+        const total = Number((totalResult as any)?.count || 0);
+
+        // Get paginated list
+        const list = await query
+            .limit(limit)
+            .offset(offset)
+            .execute();
+
+        return { list, total };
+    }
+
+    /**
+     * 获取原始历史数据 (适配全量数据查询)
+     */
+    static async getRawHistory(params: {
+        trainId?: number | undefined;
+        carriageId?: number | undefined;
+        startTime: string;
+        endTime: string;
+        page: number;
+        limit: number;
+    }) {
+        const offset = (params.page - 1) * params.limit;
+
+        let query = db
+            .selectFrom('hvac.fact_raw')
+            .selectAll()
+            .where(this.timeCol as any, '>=', new Date(params.startTime))
+            .where(this.timeCol as any, '<=', new Date(params.endTime))
+            .orderBy(this.timeCol as any, 'desc');
+
+        if (params.trainId) {
+            query = query.where('train_id', '=', params.trainId);
+        }
+        if (params.carriageId) {
+            query = query.where('carriage_id', '=', params.carriageId);
+        }
+
+        // 获取总数
+        const totalResult = await query
+            .select(sql`count(*)`.as('count'))
+            .executeTakeFirst();
+
+        const total = Number((totalResult as any)?.count || 0);
+
+        // 获取列表
+        const list = await query
+            .limit(params.limit)
+            .offset(offset)
+            .execute();
+
+        return { list, total };
     }
 
     /**
