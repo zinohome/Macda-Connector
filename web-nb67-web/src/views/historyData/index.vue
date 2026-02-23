@@ -31,7 +31,6 @@
                     </el-form-item>
                     <el-form-item>
                         <el-button type="primary" class="nav-btn" icon="Search" @click="handleQuery">查询</el-button>
-                        <el-button type="success" class="export-btn" icon="Download" @click="handleExportAll">导出数据</el-button>
                     </el-form-item>
                 </el-form>
             </div>
@@ -49,9 +48,9 @@
                         <template #default="scope">{{ scope.row.carriageNo }}车厢</template>
                     </el-table-column>
                     <el-table-column label="日期" prop="date" align="center" />
-                    <el-table-column label="操作" align="center" width="250">
+                    <el-table-column label="操作" align="center" width="200">
                         <template #default="scope">
-                            <el-button link type="primary" icon="Download" @click="handleDownloadRow(scope.row)">下载</el-button>
+                            <el-button link type="primary" icon="Download" :loading="scope.row.downloading" @click="handleDownloadRow(scope.row)">下载 ZIP</el-button>
                             <el-button link type="primary" icon="View" @click="handleViewDetail(scope.row)">查看</el-button>
                         </template>
                     </el-table-column>
@@ -59,67 +58,73 @@
             </div>
         </div>
 
-        <!-- 详情对话框 (非模态) -->
+        <!-- 详情对话框：暗色主题 -->
         <el-dialog
             v-model="detailVisible"
             title="历史数据详情"
-            width="90%"
-            top="5vh"
-            :modal="false"
+            width="92%"
+            top="4vh"
             draggable
-            custom-class="history-detail-dialog"
+            :append-to-body="true"
+            class="dark-dialog"
         >
-            <div class="detail-filter">
-                <span class="detail-info">当前选择：{{ selectedDate }} | {{ filterForm.trainNo }}号车 | {{ filterForm.carriageNo }}车厢</span>
-            </div>
-            
-            <el-table :data="detailList" border stripe height="60vh" v-loading="detailLoading">
-                <el-table-column type="index" label="序号" width="60" fixed align="center" />
-                <el-table-column prop="train_id" label="列车号" width="100" />
-                <el-table-column prop="carriage_no" label="车厢号" width="100">
+            <template #header>
+                <div class="dialog-header">
+                    <span class="dialog-title">历史数据详情</span>
+                    <span class="dialog-sub">{{ selectedDate }} | {{ filterForm.trainNo }}号车 | {{ filterForm.carriageNo }}车厢</span>
+                </div>
+            </template>
+
+            <el-table
+                :data="detailList"
+                border
+                stripe
+                style="width: 100%"
+                height="58vh"
+                v-loading="detailLoading"
+                :scrollbar-always-on="true"
+            >
+                <el-table-column type="index" label="序" width="55" fixed align="center" />
+                <el-table-column prop="event_time" label="采集时间" width="175" fixed show-overflow-tooltip />
+                <el-table-column prop="train_id"    label="列车号"   width="90"  show-overflow-tooltip />
+                <el-table-column prop="carriage_no" label="车厢号"   width="80"  show-overflow-tooltip>
                     <template #default="scope">{{ scope.row.carriage_no }}车厢</template>
                 </el-table-column>
-                <el-table-column label="机组" width="100" align="center">
-                    <template #default="scope">
-                        {{  scope.row.unit_no || formatUnit(scope.row.device_id) }}
-                    </template>
-                </el-table-column>
-                <el-table-column prop="i_seat_temp" label="室内温度" width="100" />
-                <el-table-column prop="i_outer_temp" label="新风温度" width="100" />
-                <el-table-column prop="i_set_temp" label="设定温度" width="100" />
-                <el-table-column prop="i_hum" label="湿度" width="80" />
-                <el-table-column prop="i_co2" label="CO2浓度" width="100" />
-                <el-table-column prop="work_status" label="工作状态" width="100" />
-                <el-table-column prop="dwef_op_tm" label="通风机时间" width="120" />
-                <el-table-column prop="w_crnt_cf1" label="冷凝流1" width="100" />
-                <el-table-column prop="w_crnt_cf2" label="冷凝流2" width="100" />
-                <el-table-column prop="w_crnt_cp1" label="压机流1" width="100" />
-                <el-table-column prop="w_crnt_cp2" label="压机流2" width="100" />
-                <el-table-column prop="w_freq_cp1" label="压机频1" width="100" />
-                <el-table-column prop="w_freq_cp2" label="压机频2" width="100" />
-                <el-table-column prop="w_crnt_ef1" label="送风流1" width="100" />
-                <el-table-column prop="w_crnt_ef2" label="送风流2" width="100" />
-                <el-table-column prop="i_high_pres1" label="高压1" width="90" />
-                <el-table-column prop="i_low_pres1" label="低压1" width="90" />
-                <el-table-column prop="i_high_pres2" label="高压2" width="90" />
-                <el-table-column prop="i_low_pres2" label="低压2" width="90" />
-                <el-table-column prop="i_sat_u1" label="送风温1" width="100" />
-                <el-table-column prop="i_sat_u2" label="送风温2" width="100" />
-                <el-table-column prop="dwcf_op_tm1" label="冷凝时1" width="120" />
-                <el-table-column prop="dwcf_op_tm2" label="冷凝时2" width="120" />
-                <el-table-column prop="dwcp_op_tm1" label="压机时1" width="120" />
-                <el-table-column prop="dwcp_op_tm2" label="压机时2" width="120" />
-                <el-table-column prop="dwexufan_op_tm" label="废排时" width="120" />
-                <el-table-column prop="dwfad_op_cnt" label="新风开度" width="100" />
-                <el-table-column prop="dwrad_op_cnt" label="回风开度" width="100" />
-                <el-table-column prop="event_time" label="采集时间" width="180" fixed="right" />
+                <el-table-column prop="i_seat_temp"     label="室内温度"   width="95"  show-overflow-tooltip />
+                <el-table-column prop="i_outer_temp"    label="新风温度"   width="95"  show-overflow-tooltip />
+                <el-table-column prop="i_set_temp"      label="设定温度"   width="95"  show-overflow-tooltip />
+                <el-table-column prop="i_hum"           label="湿度"      width="80"  show-overflow-tooltip />
+                <el-table-column prop="i_co2"           label="CO2"      width="80"  show-overflow-tooltip />
+                <el-table-column prop="work_status"     label="工作状态"   width="100" show-overflow-tooltip />
+                <el-table-column prop="dwef_op_tm"      label="通风机时长"  width="110" show-overflow-tooltip />
+                <el-table-column prop="w_crnt_cf1"      label="冷凝流1"   width="95"  show-overflow-tooltip />
+                <el-table-column prop="w_crnt_cf2"      label="冷凝流2"   width="95"  show-overflow-tooltip />
+                <el-table-column prop="w_crnt_cp1"      label="压机流1"   width="95"  show-overflow-tooltip />
+                <el-table-column prop="w_crnt_cp2"      label="压机流2"   width="95"  show-overflow-tooltip />
+                <el-table-column prop="w_freq_cp1"      label="压机频1"   width="95"  show-overflow-tooltip />
+                <el-table-column prop="w_freq_cp2"      label="压机频2"   width="95"  show-overflow-tooltip />
+                <el-table-column prop="w_crnt_ef1"      label="送风流1"   width="95"  show-overflow-tooltip />
+                <el-table-column prop="w_crnt_ef2"      label="送风流2"   width="95"  show-overflow-tooltip />
+                <el-table-column prop="i_high_pres1"    label="高压1"    width="80"  show-overflow-tooltip />
+                <el-table-column prop="i_low_pres1"     label="低压1"    width="80"  show-overflow-tooltip />
+                <el-table-column prop="i_high_pres2"    label="高压2"    width="80"  show-overflow-tooltip />
+                <el-table-column prop="i_low_pres2"     label="低压2"    width="80"  show-overflow-tooltip />
+                <el-table-column prop="i_sat_u1"        label="送风温1"   width="95"  show-overflow-tooltip />
+                <el-table-column prop="i_sat_u2"        label="送风温2"   width="95"  show-overflow-tooltip />
+                <el-table-column prop="dwcf_op_tm1"     label="冷凝时1"   width="110" show-overflow-tooltip />
+                <el-table-column prop="dwcf_op_tm2"     label="冷凝时2"   width="110" show-overflow-tooltip />
+                <el-table-column prop="dwcp_op_tm1"     label="压机时1"   width="110" show-overflow-tooltip />
+                <el-table-column prop="dwcp_op_tm2"     label="压机时2"   width="110" show-overflow-tooltip />
+                <el-table-column prop="dwexufan_op_tm"  label="废排时"    width="110" show-overflow-tooltip />
+                <el-table-column prop="dwfad_op_cnt"    label="新风开度"   width="95"  show-overflow-tooltip />
+                <el-table-column prop="dwrad_op_cnt"    label="回风开度"   width="95"  show-overflow-tooltip />
             </el-table>
 
             <div class="detail-pagination">
                 <el-pagination
                     v-model:current-page="detailPage"
                     v-model:page-size="detailPageSize"
-                    :page-sizes="[10, 20, 50]"
+                    :page-sizes="[20, 50, 100]"
                     layout="total, sizes, prev, pager, next, jumper"
                     :total="detailTotal"
                     @size-change="handleDetailSizeChange"
@@ -132,11 +137,12 @@
 
 <script setup>
 import { ref, reactive, onMounted, watch } from 'vue'
-
 import { useRouter, useRoute } from 'vue-router'
 import { getTrainDataApi } from '@/api/api'
 import dayjs from 'dayjs'
 import { ElMessage } from 'element-plus'
+import JSZip from 'jszip'
+import { saveAs } from 'file-saver'
 
 const router = useRouter()
 const route = useRoute()
@@ -173,20 +179,10 @@ const carriageList = ref(Array.from({ length: 6 }, (_, i) => ({
 const loading = ref(false)
 const summaryData = ref([])
 
-// 辅助函数：格式化机组名称
-const formatUnit = (id) => {
-    if (!id) return '-'
-    const code = id.toLowerCase()
-    if (code.includes('u1')) return '机组一'
-    if (code.includes('u2')) return '机组二'
-    return '-'
-}
-
-
 const handleQuery = () => {
     loading.value = true
     summaryData.value = []
-    
+
     if (!filterForm.timeRange || filterForm.timeRange.length < 2) {
         loading.value = false
         return
@@ -195,17 +191,18 @@ const handleQuery = () => {
     const start = dayjs(filterForm.timeRange[0])
     const end = dayjs(filterForm.timeRange[1])
     const daysDiff = end.diff(start, 'day')
-    
+
     // 生成日期行
     for (let i = 0; i <= daysDiff; i++) {
         const currentDate = start.add(i, 'day').format('YYYY-MM-DD')
         summaryData.value.push({
             trainNo: filterForm.trainNo,
             carriageNo: filterForm.carriageNo,
-            date: currentDate
+            date: currentDate,
+            downloading: false
         })
     }
-    
+
     loading.value = false
 }
 
@@ -215,7 +212,7 @@ const detailLoading = ref(false)
 const detailList = ref([])
 const selectedDate = ref('')
 const detailPage = ref(1)
-const detailPageSize = ref(10)
+const detailPageSize = ref(20)
 const detailTotal = ref(0)
 
 const handleDetailSizeChange = (val) => {
@@ -242,8 +239,7 @@ const fetchDetailData = async () => {
             page: detailPage.value,
             limit: detailPageSize.value
         }
-        
-        // 假设接口 getTrainDataApi 返回明细
+
         const res = await getTrainDataApi(params)
         if (res && res.data) {
             detailList.value = res.data.list || []
@@ -261,21 +257,94 @@ const fetchDetailData = async () => {
     }
 }
 
-// 5. 导出逻辑
-const handleExportAll = () => {
-    ElMessage.success('正在准备全量数据导出，请稍候...')
+// 5. 按天下载 ZIP（拉取全天数据，打包成 CSV）
+const CSV_HEADERS = [
+    '采集时间', '列车号', '车厢号',
+    '室内温度', '新风温度', '设定温度', '湿度', 'CO2',
+    '工作状态', '通风机时长',
+    '冷凝流1', '冷凝流2', '压机流1', '压机流2',
+    '压机频1', '压机频2', '送风流1', '送风流2',
+    '高压1', '低压1', '高压2', '低压2',
+    '送风温1', '送风温2',
+    '冷凝时1', '冷凝时2', '压机时1', '压机时2',
+    '废排时', '新风开度', '回风开度'
+]
+
+const rowToCsv = (row) => {
+    const fields = [
+        row.event_time, row.train_id, `${row.carriage_no}车厢`,
+        row.i_seat_temp, row.i_outer_temp, row.i_set_temp, row.i_hum, row.i_co2,
+        row.work_status, row.dwef_op_tm,
+        row.w_crnt_cf1, row.w_crnt_cf2, row.w_crnt_cp1, row.w_crnt_cp2,
+        row.w_freq_cp1, row.w_freq_cp2, row.w_crnt_ef1, row.w_crnt_ef2,
+        row.i_high_pres1, row.i_low_pres1, row.i_high_pres2, row.i_low_pres2,
+        row.i_sat_u1, row.i_sat_u2,
+        row.dwcf_op_tm1, row.dwcf_op_tm2, row.dwcp_op_tm1, row.dwcp_op_tm2,
+        row.dwexufan_op_tm, row.dwfad_op_cnt, row.dwrad_op_cnt
+    ]
+    return fields.map(v => (v === undefined || v === null) ? '' : String(v)).join(',')
 }
 
-const handleDownloadRow = (row) => {
-    ElMessage.success(`正在下载 ${row.date} 的数据包...`)
+const handleDownloadRow = async (row) => {
+    row.downloading = true
+    try {
+        const fullCarId = `${filterForm.trainNo}0${filterForm.carriageNo}`
+        // 分批拉取全天数据（每批 500 条，最多 10 批 = 5000 条）
+        let page = 1
+        const pageLimit = 500
+        let allRows = []
+
+        while (true) {
+            const res = await getTrainDataApi({
+                state: fullCarId,
+                startTime: row.date + ' 00:00:00',
+                endTime:   row.date + ' 23:59:59',
+                page,
+                limit: pageLimit
+            })
+            const batch = res?.data?.list || []
+            allRows = allRows.concat(batch)
+            const total = res?.data?.total || 0
+            if (allRows.length >= total || batch.length < pageLimit || page >= 10) break
+            page++
+        }
+
+        if (allRows.length === 0) {
+            ElMessage.warning(`${row.date} 暂无数据`)
+            return
+        }
+
+        // 生成 CSV（UTF-8 BOM 确保 Excel 正常打开）
+        const bom = '\uFEFF'
+        const csvContent = bom + CSV_HEADERS.join(',') + '\n' + allRows.map(rowToCsv).join('\n')
+
+        // 打包 ZIP
+        const zip = new JSZip()
+        const fileName = `历史数据_${filterForm.trainNo}号车_${filterForm.carriageNo}车厢_${row.date}.csv`
+        zip.file(fileName, csvContent)
+        const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } })
+        saveAs(blob, fileName.replace('.csv', '.zip'))
+
+        ElMessage.success(`${row.date} 数据已下载，共 ${allRows.length} 条`)
+    } catch (err) {
+        console.error('下载失败:', err)
+        ElMessage.error('下载失败，请检查网络或联系管理员')
+    } finally {
+        row.downloading = false
+    }
 }
 
 const goBack = () => {
-    router.back()
+    router.push({
+        name: 'trainInfo',
+        query: {
+            trainNo:    filterForm.trainNo,
+            trainCoach: filterForm.carriageNo
+        }
+    })
 }
 
 const initializeTime = () => {
-    // 默认当前至24小时前
     const now = dayjs()
     const yesterday = now.subtract(24, 'hour')
     filterForm.timeRange = [yesterday.format('YYYY-MM-DD HH:mm:ss'), now.format('YYYY-MM-DD HH:mm:ss')]
@@ -311,12 +380,6 @@ onMounted(() => {
         display: flex;
         align-items: center;
         gap: 15px;
-        .page-title {
-            color: #2186cf;
-            font-size: 16px;
-            font-weight: bold;
-            text-shadow: 0 0 10px rgba(33, 134, 207, 0.3);
-        }
     }
 
     .header-right {
@@ -340,6 +403,10 @@ onMounted(() => {
     }
 }
 
+.monitor-container {
+    padding: 20px;
+}
+
 .section-box {
     background: #141a2e;
     border-radius: 8px;
@@ -353,7 +420,6 @@ onMounted(() => {
     align-items: center;
     gap: 8px;
     margin-bottom: 15px;
-    padding: 0;
 
     .title-icon {
         width: 4px;
@@ -369,7 +435,7 @@ onMounted(() => {
     }
 }
 
-.nav-btn, .export-btn {
+.nav-btn {
     background: #0a0f1d !important;
     border: 1px solid #2186cf !important;
     color: #ffffff !important;
@@ -379,10 +445,7 @@ onMounted(() => {
     padding: 0 15px !important;
     border-radius: 4px !important;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    
+
     &:hover, &:focus {
         background: rgba(33, 134, 207, 0.2) !important;
         border-color: #409eff !important;
@@ -390,7 +453,6 @@ onMounted(() => {
         box-shadow: 0 0 10px rgba(33, 134, 207, 0.3) !important;
     }
 
-    /* 图标样式微调 */
     :deep(.el-icon) {
         font-size: 14px !important;
         margin-right: 5px !important;
@@ -405,14 +467,14 @@ onMounted(() => {
     --el-table-header-bg-color: #1a2234;
     --el-table-tr-bg-color: transparent;
     --el-table-row-hover-bg-color: rgba(33, 134, 207, 0.1);
-    
+
     th.el-table__cell {
         background: #1a2234 !important;
         color: #2186cf;
         font-weight: bold;
         border-bottom: 2px solid #2186cf;
     }
-    
+
     td.el-table__cell {
         border-bottom: 1px solid #262e45;
     }
@@ -422,58 +484,118 @@ onMounted(() => {
     }
 }
 
-/* 详情对话框样式 */
-:deep(.history-detail-dialog) {
-    background: #0a1124 !important;
-    border: 1px solid #2186cf !important;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
-    border-radius: 8px;
-    
-    .el-dialog__header {
-        margin: 0;
-        padding: 15px 20px;
-        border-bottom: 1px solid rgba(33, 134, 207, 0.2);
-        .el-dialog__title { 
-            color: #2186cf; 
-            font-weight: bold;
-            font-size: 16px;
-        }
-    }
-    
-    .el-dialog__body { 
-        padding: 20px; 
-        background: #0a0f1d;
-    }
-    
-    .el-dialog__headerbtn .el-dialog__close {
-        color: #2186cf;
-        &:hover { color: #fff; }
-    }
-}
-
-.detail-filter {
-    margin-bottom: 15px;
-    .detail-info {
-        color: #2186CF;
-        font-weight: bold;
-        font-size: 14px;
-    }
-}
-
 .detail-pagination {
     margin-top: 20px;
     display: flex;
     justify-content: center;
 }
 
-/* 统一 Select 样式 */
 .train-select, .carriage-select {
     width: 110px !important;
+}
+
+/* 对话框头部自定义布局 */
+.dialog-header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+
+    .dialog-title {
+        color: #2186cf;
+        font-size: 16px;
+        font-weight: bold;
+    }
+
+    .dialog-sub {
+        color: #8899bb;
+        font-size: 13px;
+    }
 }
 </style>
 
 <style lang="scss">
-/* 全局样式覆盖，确保暗色主题和蓝色边框生效 */
+/* 暗色对话框：全局覆盖（el-dialog appended to body，必须用非 scoped） */
+.dark-dialog.el-dialog {
+    background: #0e1628 !important;
+    border: 1px solid #2186cf !important;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(33, 134, 207, 0.3);
+    border-radius: 10px;
+
+    .el-dialog__header {
+        margin: 0;
+        padding: 14px 20px;
+        border-bottom: 1px solid rgba(33, 134, 207, 0.25);
+        background: #141b2e;
+        border-radius: 10px 10px 0 0;
+    }
+
+    .el-dialog__headerbtn {
+        top: 14px;
+        .el-dialog__close {
+            color: #2186cf;
+            font-size: 18px;
+            &:hover { color: #fff; }
+        }
+    }
+
+    .el-dialog__body {
+        padding: 20px;
+        background: #0e1628;
+    }
+
+    /* 内部表格继承暗色 */
+    .el-table {
+        background: transparent !important;
+        color: #d1d9e7 !important;
+        --el-table-border-color: #262e45;
+        --el-table-header-bg-color: #1a2234;
+        --el-table-tr-bg-color: transparent;
+        --el-table-row-hover-bg-color: rgba(33, 134, 207, 0.1);
+        --el-fill-color-lighter: #1e2840;
+
+        th.el-table__cell {
+            background: #1a2234 !important;
+            color: #2186cf !important;
+            font-weight: bold;
+            border-bottom: 2px solid #2186cf;
+        }
+
+        td.el-table__cell {
+            border-bottom: 1px solid #262e45;
+            background: transparent !important;
+        }
+
+        .el-table__body-wrapper {
+            background: transparent !important;
+        }
+
+        .el-table__inner-wrapper::before { display: none; }
+    }
+
+    /* 内部分页 */
+    .el-pagination {
+        --el-pagination-bg-color: transparent;
+        --el-pagination-button-bg-color: transparent;
+        --el-pagination-button-color: #ffffff;
+        color: #d1d9e7;
+
+        .el-pager li {
+            background: transparent !important;
+            color: #d1d9e7 !important;
+            &.is-active { color: #2186cf !important; font-weight: bold; }
+        }
+
+        .el-input__wrapper {
+            background-color: #0a0f1d !important;
+            box-shadow: 0 0 0 1px #2186cf inset !important;
+            .el-input__inner { color: #fff !important; }
+        }
+
+        .el-pagination__total, .el-pagination__jump { color: #d1d9e7 !important; }
+    }
+}
+
+/* 全局筛选框暗色 */
 .filter-form {
     --el-fill-color-blank: #0a0f1d !important;
     --el-border-color: #2186cf !important;
@@ -485,35 +607,20 @@ onMounted(() => {
         box-shadow: 0 0 0 1px #2186cf inset !important;
         border-radius: 4px !important;
         height: 32px !important;
-        
-        &:hover {
-            box-shadow: 0 0 0 1px #409eff inset, 0 0 10px rgba(33, 134, 207, 0.4) !important;
-        }
-        
-        &.is-focus {
-            box-shadow: 0 0 0 1px #409eff inset, 0 0 15px rgba(33, 134, 207, 0.6) !important;
-        }
-        
-        .el-input__inner {
-            color: #ffffff !important;
-            font-size: 13px !important;
-        }
+
+        &:hover { box-shadow: 0 0 0 1px #409eff inset, 0 0 10px rgba(33, 134, 207, 0.4) !important; }
+        &.is-focus { box-shadow: 0 0 0 1px #409eff inset, 0 0 15px rgba(33, 134, 207, 0.6) !important; }
+
+        .el-input__inner { color: #ffffff !important; font-size: 13px !important; }
     }
 
-    /* 时间选择器特定覆盖 */
-    .el-range-editor.el-input__wrapper {
-        width: 350px !important;
-    }
-    .el-range-input {
-        color: #fff !important;
-    }
-    .el-range-separator {
-        color: #2186cf !important;
-    }
+    .el-range-editor.el-input__wrapper { width: 350px !important; }
+    .el-range-input { color: #fff !important; }
+    .el-range-separator { color: #2186cf !important; }
 }
 
-/* 下拉菜单与时间弹出层样式对齐 */
-.el-select__popper.el-popper, 
+/* 下拉菜单 & 日期弹窗 */
+.el-select__popper.el-popper,
 .el-picker__popper.el-popper {
     background-color: #141a2e !important;
     border: 1px solid #2186cf !important;
@@ -522,64 +629,29 @@ onMounted(() => {
 
     .el-select-dropdown__item {
         color: #d1d9e7 !important;
-        &:hover, &.hover {
-            background-color: rgba(33, 134, 207, 0.2) !important;
-            color: #ffffff !important;
-        }
-        &.selected {
-            color: #2186cf !important;
-            font-weight: bold;
-            background-color: rgba(33, 134, 207, 0.1) !important;
-        }
+        &:hover, &.hover { background-color: rgba(33, 134, 207, 0.2) !important; color: #ffffff !important; }
+        &.selected { color: #2186cf !important; font-weight: bold; background-color: rgba(33, 134, 207, 0.1) !important; }
     }
 
-    /* 时间选择器内部样式深度覆盖 */
-    .el-picker-panel {
-        background-color: #141a2e !important;
-        color: #fff !important;
-        border: none !important;
-    }
+    .el-picker-panel { background-color: #141a2e !important; color: #fff !important; border: none !important; }
 
     .el-date-range-picker__time-header,
     .el-date-range-picker__header {
         border-bottom: 1px solid #262e45 !important;
-        .el-input__wrapper {
-            background-color: #0a0f1d !important;
-            box-shadow: 0 0 0 1px #2186cf inset !important;
-            .el-input__inner { color: #fff !important; }
-        }
+        .el-input__wrapper { background-color: #0a0f1d !important; box-shadow: 0 0 0 1px #2186cf inset !important; .el-input__inner { color: #fff !important; } }
     }
 
-    .el-date-range-picker__content.is-left {
-        border-right: 1px solid #262e45 !important;
-    }
-    .el-date-table th {
-        color: #2186cf !important;
-        border-bottom: 1px solid #262e45 !important;
-    }
-    .el-date-table td.next-month, .el-date-table td.prev-month {
-        color: #4e5969 !important;
-    }
-    .el-date-table td.available:hover {
-        color: #2186cf !important;
-    }
-    .el-date-table td.in-range .el-date-table-cell {
-        background-color: rgba(33, 134, 207, 0.1) !important;
-    }
-    .el-time-panel {
-        background-color: #141a2e !important;
-        border: 1px solid #2186cf !important;
-    }
-    .el-time-spinner__item {
-        color: #d1d9e7 !important;
-        &:hover { background: rgba(33, 134, 207, 0.2) !important; }
-        &.is-active { color: #2186cf !important; font-weight: bold; }
-    }
+    .el-date-range-picker__content.is-left { border-right: 1px solid #262e45 !important; }
+    .el-date-table th { color: #2186cf !important; border-bottom: 1px solid #262e45 !important; }
+    .el-date-table td.next-month, .el-date-table td.prev-month { color: #4e5969 !important; }
+    .el-date-table td.available:hover { color: #2186cf !important; }
+    .el-date-table td.in-range .el-date-table-cell { background-color: rgba(33, 134, 207, 0.1) !important; }
+    .el-time-panel { background-color: #141a2e !important; border: 1px solid #2186cf !important; }
+    .el-time-spinner__item { color: #d1d9e7 !important; &:hover { background: rgba(33, 134, 207, 0.2) !important; } &.is-active { color: #2186cf !important; font-weight: bold; } }
     .el-picker-panel__footer {
         background-color: #141a2e !important;
         border-top: 1px solid #262e45 !important;
         padding: 10px !important;
-        
         .el-button {
             background: #0a0f1d !important;
             border: 1px solid #2186cf !important;
@@ -587,78 +659,8 @@ onMounted(() => {
             height: 28px !important;
             padding: 0 12px !important;
             font-size: 12px !important;
-            
-            &.is-text {
-                 /* 清空按钮 */
-                border: 1px solid #2186cf !important;
-            }
-            
-            &--primary {
-                /* 确定按钮 */
-                background: #2186cf !important;
-                border-color: #2186cf !important;
-                &:hover {
-                    background: #409eff !important;
-                    border-color: #409eff !important;
-                }
-            }
-
-            &:hover {
-                background: rgba(33, 134, 207, 0.2) !important;
-                border-color: #409eff !important;
-                color: #ffffff !important;
-            }
-        }
-    }
-}
-
-/* 分页组件样式深度对齐 */
-.el-pagination {
-    --el-pagination-bg-color: transparent !important;
-    --el-pagination-button-bg-color: transparent !important;
-    --el-pagination-button-color: #ffffff !important;
-    --el-pagination-button-disabled-bg-color: transparent !important;
-    
-    /* 强力覆盖分页内部的 select 和 input */
-    .el-select, .el-input {
-        --el-fill-color-blank: #0a0f1d !important;
-        --el-border-color: #2186cf !important;
-        --el-text-color-regular: #ffffff !important;
-        
-        .el-input__wrapper {
-            background-color: #0a0f1d !important;
-            box-shadow: 0 0 0 1px #2186cf inset !important;
-            background: #0a0f1d !important;
-            border: none !important; /* 移除外层可能的边框线 */
-            
-            &:hover {
-                box-shadow: 0 0 0 1px #409eff inset !important;
-            }
-            
-            &.is-focus {
-                box-shadow: 0 0 0 1px #409eff inset !important;
-            }
-        }
-        
-        .el-input__inner {
-            color: #ffffff !important;
-            background-color: transparent !important;
-            border: none !important; /* 移除内层灰色边框线 */
-            box-shadow: none !important;
-            text-align: center;
-        }
-    }
-    
-    .el-pagination__total, .el-pagination__jump {
-        color: #d1d9e7 !important;
-    }
-    
-    .el-pager li {
-        background: transparent !important;
-        color: #d1d9e7 !important;
-        &.is-active {
-            color: #2186cf !important;
-            font-weight: bold;
+            &--primary { background: #2186cf !important; border-color: #2186cf !important; &:hover { background: #409eff !important; } }
+            &:hover { background: rgba(33, 134, 207, 0.2) !important; border-color: #409eff !important; }
         }
     }
 }
