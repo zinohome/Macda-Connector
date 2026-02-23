@@ -8,10 +8,12 @@ import { checkDbConnection } from './config/db.js';
 import { KafkaManager } from './config/kafka.js';
 import { HistoryRepository } from './repository/history.repository.js';
 import { StatusRepository } from './repository/status.repository.js';
+import { formatTime } from './utils/time.js';
 
 const fastify = Fastify({
     logger: {
         level: config.logLevel,
+        timestamp: () => `,"time":"${formatTime(new Date())}"`
     },
 });
 
@@ -151,10 +153,14 @@ async function bootstrap() {
         });
 
         fastify.get('/api/history/temperature', async (request: any, reply) => {
-            const { deviceId, hours } = request.query;
+            const { deviceId, type = 'hour' } = request.query;
             if (!deviceId) return reply.status(400).send({ error: 'deviceId is required' });
 
-            const data = await HistoryRepository.getTemperatureTrend(deviceId, parseInt(hours || '24'));
+            // 假设 deviceId 格式为 700203
+            const trainId = parseInt(String(deviceId).slice(0, 4));
+            const carriageId = parseInt(String(deviceId).slice(-2));
+
+            const data = await HistoryRepository.getTemperatureTrend(trainId, carriageId, type as string);
             return { success: true, data };
         });
 
@@ -182,7 +188,7 @@ async function bootstrap() {
         });
 
         fastify.get('/api/test', async () => {
-            return { status: 'ok', time: new Date().toISOString() };
+            return { status: 'ok', time: formatTime(new Date()) };
         });
 
         // ==========================
@@ -209,10 +215,15 @@ async function bootstrap() {
             const trainId = state ? parseInt(state.slice(0, 4)) : undefined;
             const carriageId = state ? parseInt(state.slice(4, 6)) : undefined;
 
-            // 【防御修复】前端 DatePicker 在某些交互后会传来空时间，自动补充默认范围（最近24小时）
-            const now = new Date();
-            const safeEndTime = endTime || new Date(now).toISOString();
-            const safeStartTime = startTime || new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+            // 直接使用前端传递的时间戳，严禁在后端动态生成时间（防止翻页漂移）
+            const safeStartTime = startTime || '';
+            const safeEndTime = endTime || '';
+
+            // 强制类型转换，杜绝 NaN 或字符串导致的计算错误
+            const safePage = Math.max(1, parseInt(page as string) || 1);
+            const safeLimit = Math.max(1, parseInt(limit as string) || 10);
+
+            fastify.log.info(`[BFF] AlarmInformation Parsed: trainId=${trainId}, carriageId=${carriageId}, range=[${safeStartTime} - ${safeEndTime}], page=${safePage}, limit=${safeLimit}`);
 
             try {
                 const result = await StatusRepository.getHistoricalEvents({
@@ -221,8 +232,8 @@ async function bootstrap() {
                     startTime: safeStartTime,
                     endTime: safeEndTime,
                     eventType: 'alarm',
-                    page: page ? Number(page) : 1,
-                    limit: limit ? Number(limit) : 10
+                    page: safePage,
+                    limit: safeLimit
                 });
 
                 const list = (result.list || []).map((row: any) => {
@@ -237,7 +248,7 @@ async function bootstrap() {
                         fault_code: row.fault_code,
                         fault_desc: row.fault_name,
                         fault_level: level,
-                        occurrence_time: row[config.runtime === 'DEV' ? 'ingest_time' : 'event_time'],
+                        occurrence_time: formatTime(row[config.runtime === 'DEV' ? 'ingest_time' : 'event_time']),
                         recovery_time: null,
                         status: '活动'
                     };
@@ -248,7 +259,7 @@ async function bootstrap() {
                     carriage_no: row.carriage_id,
                     fault_code: row.fault_code,
                     name: row.fault_name,
-                    start_time: row[config.runtime === 'DEV' ? 'ingest_time' : 'event_time'],
+                    start_time: formatTime(row[config.runtime === 'DEV' ? 'ingest_time' : 'event_time']),
                     end_time: null,
                     state: `${row.train_id}${String(row.carriage_id).padStart(2, '0')}1`
                 }));

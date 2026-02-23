@@ -21,7 +21,7 @@
             min-width="25%"
           >
             <template #default="scope">
-              {{ (scope.row.alarm_time)}}
+              {{ formatTime(scope.row.alarm_time) }}
             </template>
           </el-table-column>
           <el-table-column label="操作" min-width="25%">
@@ -70,7 +70,7 @@
             min-width="25%"
           >
             <template #default="scope">
-              {{ (scope.row.warning_time)}}
+              {{ formatTime(scope.row.warning_time) }}
             </template>
           </el-table-column>
           <el-table-column label="操作" align="center" min-width="25%">
@@ -104,6 +104,7 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { ref, watch, onUnmounted, nextTick } from 'vue'
+import { formatTime } from '@/utils/time'
 
 const router = useRouter();
 const props = defineProps({

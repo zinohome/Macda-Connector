@@ -1,6 +1,7 @@
 import { db } from '../config/db.js';
 import { sql } from 'kysely';
 import { config } from '../config/index.js';
+import { formatTime } from '../utils/time.js';
 
 /**
  * 实时状态与聚合查询
@@ -125,7 +126,7 @@ export class StatusRepository {
         return data.map(row => ({
             [row.fault_code as string]: 1,
             [`${row.fault_code}_name`]: row.fault_name,
-            alarm_time: (row as any)[this.timeCol],
+            alarm_time: formatTime((row as any)[this.timeCol]),
             carriage_no: row.carriage_id || 0,
             line_no: row.line_id || 0,
             train_no: row.train_id || 0
@@ -163,7 +164,7 @@ export class StatusRepository {
                 }
                 grouped[code].push({
                     name: row.fault_name,
-                    warning_time: (row as any)[this.timeCol],
+                    warning_time: formatTime((row as any)[this.timeCol]),
                     carriage_no: row.carriage_id || 0,
                     train_no: row.train_id || 0,
                     line_no: row.line_id || 0
@@ -375,15 +376,25 @@ export class StatusRepository {
         // 但共享同一个 QB 实例在某些版本中会导致 select 子句污染。
         // 这里通过工厂函数每次重新构建，彻底隔离两路查询。
         const buildBase = () => {
-            let q = db
-                .selectFrom('hvac.fact_event')
-                .where(this.timeCol as any, '>=', new Date(params.startTime))
-                .where(this.timeCol as any, '<=', new Date(params.endTime));
+            let q = db.selectFrom('hvac.fact_event');
+
+            // 只有当时间参数有效时才应用过滤器
+            if (params.startTime) {
+                const start = new Date(params.startTime);
+                if (!isNaN(start.getTime())) {
+                    q = q.where(this.timeCol as any, '>=', start);
+                }
+            }
+            if (params.endTime) {
+                const end = new Date(params.endTime);
+                if (!isNaN(end.getTime())) {
+                    q = q.where(this.timeCol as any, '<=', end);
+                }
+            }
 
             if (params.trainId) {
                 q = q.where('train_id', '=', params.trainId);
             }
-            // carriageId 在 BFF 层已被解析为整数，直接使用
             if (params.carriageId) {
                 q = q.where('carriage_id', '=', params.carriageId);
             }
@@ -400,12 +411,17 @@ export class StatusRepository {
         const total = Number((totalResult as any)?.count || 0);
 
         // 2. 独立执行分页 list 查询
+        // 增加 event_time 和 fault_code 作为 tie-breakers，确保结果集顺序在分页间绝对稳定
         const list = await buildBase()
             .selectAll()
             .orderBy(this.timeCol as any, 'desc')
+            .orderBy('event_time', 'desc')
+            .orderBy('fault_code', 'asc')
             .limit(limit)
             .offset(offset)
             .execute();
+
+        console.log(`[Repository] Query Alarms: total=${total}, returned=${list.length}, page=${page}, offset=${offset}, range=[${params.startTime} - ${params.endTime}]`);
 
         return { list, total };
     }

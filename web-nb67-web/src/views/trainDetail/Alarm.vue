@@ -22,13 +22,13 @@
         <el-table-column prop="startTime" label="开始时间" sortable>
           <!-- 时间去掉毫秒 -->
           <template #default="scope">{{
-            scope.row.startTime.split(".")[0]
+            formatTime(scope.row.startTime)
           }}</template>
         </el-table-column>
         <el-table-column prop="endTime" label="结束时间" sortable>
           <!-- 时间去掉毫秒 -->
           <template #default="scope">{{
-            scope.row.endTime.split(".")[0]
+            formatTime(scope.row.endTime)
           }}</template>
         </el-table-column>
         <el-table-column prop="desc" :label="props.title"></el-table-column>
@@ -97,6 +97,7 @@
 import { ref, onMounted, computed } from "vue";
 import * as echarts from "echarts";
 import TitleHeader from "@/components/TitleHeader.vue";
+import { formatTime } from '@/utils/time'
 import { getEaOrPaById } from "@/api/api.js";
 
 let interval;
@@ -141,10 +142,7 @@ const tagType = (state) => {
 const setEchartData = (list) => {
   let obj = {
     xAxisData: list.map((item) => {
-      if (item["时间"] != undefined) {
-        return item["时间"].split(".")[0];
-      }
-      return "";
+      return formatTime(item["时间"])
     }),
     legendData: [],
     series: [],

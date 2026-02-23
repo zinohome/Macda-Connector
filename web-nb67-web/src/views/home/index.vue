@@ -35,6 +35,7 @@ import Right from "./Right.vue";
 import AirErrorData from "./AirErrorData.vue";
 import Center from "./Center.vue";
 import { getActiveCarApi, getAirSystemApi, getRealtimeAlarm, getRealtimeWarning } from '@/api/api'
+import { formatTime } from '@/utils/time'
 
 let loading = ref(true)
 let leftData = ref([])
@@ -1168,44 +1169,7 @@ const propose = [
 //      title: '检查主回路电路是否短路、漏电流是否过大；检查断路器是否损坏'
 //     }
 // ]
-    function getLocalTime(i,data) { 
-    if (typeof i !== 'number') return;
- 
-   var d = new Date(data); 
-//   2023-02-20T13:50:20.954Z
-//   2023-02-08T00:00:00+00:00
-    //得到1970年一月一日到现在的秒数 
-    var len = d.getTime();
-    
-    //本地时间与GMT时间的时间偏移差(注意：GMT这是UTC的民间名称。GMT=UTC）
-    var offset = d.getTimezoneOffset() * 60000;
- 
-    //得到现在的格林尼治时间
-    var utcTime = len + offset;
- 
-    return new Date(utcTime + 3600000 * i);
-}
-function newDate(time) {
-    let temp = time.split('T')
-    const year = temp[0].slice(0,4)
-    const month = temp[0].slice(5,7)
-     const day = temp[0].slice(8,10)
-     const times = temp[1].slice(0,8)
-     return `${year}-${month}-${day}-${times}`
-    // var date = new Date(time)
-    // var y = date.getFullYear()
-    // var m = date.getMonth() + 1
-    // m = m < 10 ? '0' + m : m
-    // var d = date.getDate()
-    // d = d < 10 ? '0' + d : d
-    // var h = date.getHours()
-    // h = h < 10 ? '0' + h : h
-    // var minute = date.getMinutes()
-    // minute = minute < 10 ? '0' + minute : minute
-    // var s = date.getSeconds()
-    // s = s < 10 ? '0' + s : s
-    // return y + '-' + m + '-' + d + ' ' + h + ':' + minute + ':' + s
-}
+// 移除过时的 getLocalTime 和 newDate 格式化函数，统一使用 /src/utils/time.ts
 
 import { MONITOR_CONFIG } from '@/config/monitorConfig.js'
 
@@ -1271,7 +1235,7 @@ async function getApi(){
                                 const newItem = {
                                     name: item[key + '_name'],
                                     code: key,
-                                    alarm_time: newDate(item.alarm_time),
+                                    alarm_time: formatTime(item.alarm_time),
                                     carriage_no: item.carriage_no,
                                     train_no: item.train_no
                                 }
@@ -1299,7 +1263,7 @@ async function getApi(){
                     if (!seenPA.has(uniqueKey)) {
                         const newItem = {
                             ...i, code: key,
-                            warning_time: newDate(i.warning_time)
+                            warning_time: formatTime(i.warning_time)
                         }
                         proposeAdvice.forEach(p => {
                             if(p.value === key) {

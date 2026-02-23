@@ -81,6 +81,7 @@ import Healthy from "@/views/airConditioner/Healthy.vue"
 import ActualWarning from "./ActualWarning.vue"
 import StateWarning from "./StateWarning.vue"
 import Echart from "@/views/airConditioner/Echart.vue"
+import { formatTime } from '@/utils/time'
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { 
@@ -128,6 +129,18 @@ let ActualWarningData = ref([]) //实时报警
 let StateWarningData = ref([]) //状态预警
 let RunStateData = ref([]) //运行状态信息
 let CarTemperatureData = ref([]) //车厢温度信息
+
+const getCarriageName = (no) => {
+    const map = {
+        '1': 'TC1',
+        '2': 'MP1',
+        '3': 'M1',
+        '4': 'M2',
+        '5': 'MP2',
+        '6': 'TC2'
+    }
+    return map[String(no)] || `${no}车厢`
+}
 
 // 计算过滤后的报警（仅限当前车厢，排除寿命预测预警）
 const filteredActualAlarms = computed(() => {
@@ -1280,27 +1293,7 @@ function getLocalTime(i,data) {
  
     return new Date(utcTime + 3600000 * i);
 }
-function newDate(time) {
-    let temp = time.split('T')
-    const year = temp[0].slice(0,4)
-    const month = temp[0].slice(5,7)
-     const day = temp[0].slice(8,10)
-     const times = temp[1].slice(0,8)
-     return `${year}-${month}-${day}-${times}`
-    // var date = new Date(time)
-    // var y = date.getFullYear()
-    // var m = date.getMonth() + 1
-    // m = m < 10 ? '0' + m : m
-    // var d = date.getDate()
-    // d = d < 10 ? '0' + d : d
-    // var h = date.getHours()
-    // h = h < 10 ? '0' + h : h
-    // var minute = date.getMinutes()
-    // minute = minute < 10 ? '0' + minute : minute
-    // var s = date.getSeconds()
-    // s = s < 10 ? '0' + s : s
-    // return y + '-' + m + '-' + d + ' ' + h + ':' + minute + ':' + s
-}
+// 移除过时的 newDate 格式化函数，统一使用 /src/utils/time.ts
 
   function runningState(items){
      return  items ==1?'运行':'停机'
@@ -1402,8 +1395,8 @@ async function listData (){
     if(res && res.code === 200 && res.data && res.data.alarm_timeline){
         res.data.alarm_timeline.forEach((item)=>{
             item.state = item.state.slice(0, -1)
-            item.start_time = newDate(item.start_time)
-            item.end_time = newDate(item.end_time)
+            item.start_time = formatTime(item.start_time)
+            item.end_time = formatTime(item.end_time)
             // console.log(item.propose,extractNumber(item.propose),extractNumber(item.propose).length);
             if(!extractNumber(item.propose)){
                 item.unit_no = '-'
@@ -1469,9 +1462,9 @@ const gotoPath = (type) => {
         trainCoach: currentCarriageNo.value
     }
     if (type === 'historyData') {
-        router.push({ path: '/historyData', query })
+        router.push({ name: 'historyData', query })
     } else if (type === 'historyAlarm') {
-        router.push({ path: '/historyAlarm', query })
+        router.push({ name: 'historyAlarm', query })
     }
 }
 
@@ -1504,7 +1497,7 @@ async function getTrainApi() {
                             const newItem = {
                                 name: item[key + '_name'] || item.name || '未知故障',
                                 code: key,
-                                alarm_time: newDate(item.alarm_time),
+                                alarm_time: formatTime(item.alarm_time),
                                 carriage_no: carNo,
                                 precautions: ''
                             }
@@ -1539,7 +1532,7 @@ async function getTrainApi() {
                         const newItem = {
                             ...items, 
                             code: key,
-                            warning_time: newDate(items.warning_time),
+                            warning_time: formatTime(items.warning_time),
                             name: items.name || items.alert_name || items.warning_info || '未知预警',
                             carriage_no: carNo,
                             precautions: ''

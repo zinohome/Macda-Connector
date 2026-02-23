@@ -59,12 +59,12 @@ export const router = createRouter({
             },
         },
         {
-            path: "/historyData",
+            path: "/KT/historyData",
             name: "historyData",
             component: () => import("@/views/historyData/index.vue")
         },
         {
-            path: "/historyAlarm",
+            path: "/KT/historyAlarm",
             name: "historyAlarm",
             component: () => import("@/views/historyAlarm/index.vue")
         },

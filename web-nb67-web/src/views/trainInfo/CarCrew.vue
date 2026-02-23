@@ -39,12 +39,12 @@ const props = defineProps({
 const emit = defineEmits(['select'])
 
 const trainSelectionData = ref([
-    { name: 'Tc1', carriage_no: '1', alarm_count: 0, warning_count: 0, hasData: false },
-    { name: 'Mp1', carriage_no: '2', alarm_count: 0, warning_count: 0, hasData: false },
+    { name: 'TC1', carriage_no: '1', alarm_count: 0, warning_count: 0, hasData: false },
+    { name: 'MP1', carriage_no: '2', alarm_count: 0, warning_count: 0, hasData: false },
     { name: 'M1', carriage_no: '3', alarm_count: 0, warning_count: 0, hasData: false },
     { name: 'M2', carriage_no: '4', alarm_count: 0, warning_count: 0, hasData: false },
-    { name: 'Mp2', carriage_no: '5', alarm_count: 0, warning_count: 0, hasData: false },
-    { name: 'Tc2', carriage_no: '6', alarm_count: 0, warning_count: 0, hasData: false }
+    { name: 'MP2', carriage_no: '5', alarm_count: 0, warning_count: 0, hasData: false },
+    { name: 'TC2', carriage_no: '6', alarm_count: 0, warning_count: 0, hasData: false }
 ])
 
 const getCarImage = (index) => {
