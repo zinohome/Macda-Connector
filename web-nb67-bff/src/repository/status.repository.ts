@@ -365,35 +365,44 @@ export class StatusRepository {
         page?: number;
         limit?: number;
     }) {
-        const page = params.page || 1;
-        const limit = params.limit || 500;
+        // 分页参数处理，确保类型正确
+        const page = Math.max(1, Number(params.page) || 1);
+        const limit = Math.min(500, Math.max(1, Number(params.limit) || 500));
         const offset = (page - 1) * limit;
 
-        let query = db
-            .selectFrom('hvac.fact_event')
-            .selectAll()
-            .where(this.timeCol as any, '>=', new Date(params.startTime))
-            .where(this.timeCol as any, '<=', new Date(params.endTime))
-            .orderBy(this.timeCol as any, 'desc');
+        // 【关键修复】count 查询和 list 查询必须分别独立构建
+        // Kysely 的 QB 对象在调用 .select()/.selectAll() 后返回新对象，
+        // 但共享同一个 QB 实例在某些版本中会导致 select 子句污染。
+        // 这里通过工厂函数每次重新构建，彻底隔离两路查询。
+        const buildBase = () => {
+            let q = db
+                .selectFrom('hvac.fact_event')
+                .where(this.timeCol as any, '>=', new Date(params.startTime))
+                .where(this.timeCol as any, '<=', new Date(params.endTime));
 
-        if (params.trainId) {
-            query = query.where('train_id', '=', params.trainId);
-        }
-        if (params.carriageId) {
-            query = query.where('carriage_id', '=', params.carriageId);
-        }
-        if (params.eventType) {
-            query = query.where('event_type', '=', params.eventType);
-        }
+            if (params.trainId) {
+                q = q.where('train_id', '=', params.trainId);
+            }
+            // carriageId 在 BFF 层已被解析为整数，直接使用
+            if (params.carriageId) {
+                q = q.where('carriage_id', '=', params.carriageId);
+            }
+            if (params.eventType) {
+                q = q.where('event_type', '=', params.eventType);
+            }
+            return q;
+        };
 
-        // Get total count
-        const totalResult = await query
-            .select(sql`count(*)`.as('count'))
+        // 1. 独立执行 count 查询，获取总数
+        const totalResult = await buildBase()
+            .select(sql<number>`count(*)`.as('count'))
             .executeTakeFirst();
         const total = Number((totalResult as any)?.count || 0);
 
-        // Get paginated list
-        const list = await query
+        // 2. 独立执行分页 list 查询
+        const list = await buildBase()
+            .selectAll()
+            .orderBy(this.timeCol as any, 'desc')
             .limit(limit)
             .offset(offset)
             .execute();
@@ -414,29 +423,28 @@ export class StatusRepository {
     }) {
         const offset = (params.page - 1) * params.limit;
 
-        let query = db
+        let baseQuery = db
             .selectFrom('hvac.fact_raw')
-            .selectAll()
             .where(this.timeCol as any, '>=', new Date(params.startTime))
-            .where(this.timeCol as any, '<=', new Date(params.endTime))
-            .orderBy(this.timeCol as any, 'desc');
+            .where(this.timeCol as any, '<=', new Date(params.endTime));
 
         if (params.trainId) {
-            query = query.where('train_id', '=', params.trainId);
+            baseQuery = baseQuery.where('train_id', '=', params.trainId);
         }
         if (params.carriageId) {
-            query = query.where('carriage_id', '=', params.carriageId);
+            baseQuery = baseQuery.where('carriage_id', '=', params.carriageId);
         }
 
         // 获取总数
-        const totalResult = await query
+        const totalResult = await baseQuery
             .select(sql`count(*)`.as('count'))
             .executeTakeFirst();
-
         const total = Number((totalResult as any)?.count || 0);
 
         // 获取列表
-        const list = await query
+        const list = await baseQuery
+            .selectAll()
+            .orderBy(this.timeCol as any, 'desc')
             .limit(params.limit)
             .offset(offset)
             .execute();

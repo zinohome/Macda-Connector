@@ -479,27 +479,27 @@ const proposeWarn = [
     },{
      value: 'bocflt_cf_u11',
      name: '冷凝风机1-1过流故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查风机是否堵转
              \n2.检查电机主电路绝缘是否正常
              \n3.检查电机保护器是否损坏`
     },{
      value: 'bocflt_cf_u12',
      name: '冷凝风机1-2过流故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查风机是否堵转
              \n2.检查电机主电路绝缘是否正常
              \n3.检查电机保护器是否损坏`
     },{
      value: 'bflt_vfd_u11',
      name: '变频器1-1故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查变频器运行是否正常
              \n2.检查反馈线路是否正常`
     },{
      value: 'bflt_vfd_com_u11',
      name: '变频器通讯故障U1-1',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查变频器上通讯接口针孔件连接是否牢靠，并重新紧固
              \n2.检查扩展模块上通讯接口插头连接是否牢靠，针孔件是否安装到位，并重新紧固
              \n3.检查变频器和扩展模块之间各接点位置连线是否有虚接情况，重新紧固
@@ -507,13 +507,13 @@ const proposeWarn = [
     },{
      value: 'bflt_vfd_u12',
      name: '变频器1-2故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查变频器运行是否正常
             \n2.检查反馈线路是否正常`
     },{
      value: 'bflt_vfd_com_u12',
      name: '变频器通讯故障U1-2',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查变频器上通讯接口针孔件连接是否牢靠，并重新紧固
             \n2.检查扩展模块上通讯接口插头连接是否牢靠，针孔件是否安装到位，并重新紧固
             \n3.检查变频器和扩展模块之间各接点位置连线是否有虚接情况，重新紧固
@@ -522,42 +522,42 @@ const proposeWarn = [
     },{
      value: 'blpflt_comp_u11',
      name: '压缩机1-1低压故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查制冷剂是否泄漏
             \n2.检查通风机运转是否正常
             \n3.检查低压开关是否损坏`
     },{
      value: 'bscflt_comp_u11',
      name: '压缩机1-1高压连锁故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查冷凝风机是否正常运转，转向是否正确
             \n2.检查高压开关、排气温度保护是否正常
             \n3.检查反馈线路是否正常`
     },{
      value: 'bscflt_vent_u11',
      name: '排气故障U1-1',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查冷凝风机是否正常运转，转向是否正确
             \n2.检查冷凝器是否有大面积异物遮挡或脏堵是否很严重
             \n3.检查空调四周散热是否顺畅`
     },{
      value: 'blpflt_comp_u12',
      name: '压缩机1-2低压故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查制冷剂是否泄漏
             \n2.检查通风机运转是否正常
             \n3.检查低压开关是否损坏`
     },{
      value: 'bscflt_comp_u12',
      name: '压缩机1-2高压连锁故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查冷凝风机运转是否正常
             \n2.检查高压开关、排气温度保护是否正常
             \n3.检查反馈线路是否正常`
     },{
      value: 'bscflt_vent_u12',
      name: '排气故障U1-2',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查冷凝风机是否正常运转，转向是否正确
             \n2.检查冷凝器是否有大面积异物遮挡或脏堵是否很严重
             \n3.检查空调四周散热是否顺畅`
@@ -618,7 +618,7 @@ const proposeWarn = [
     },{
      value: 'bflt_expboard_u1',
      name: '扩展模块U1故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查扩展模块供电是否正常
             \n2.检查扩展模块通讯线路是否存在虚接情况`
     },{
@@ -661,37 +661,37 @@ const proposeWarn = [
     },{
      value: 'bflt_insptemp_u11',
      name: '吸气温度传感器故障U1-1',
-     classify: '中等',
+     classify: '一般',
      title: `1.拔掉传感器插头，直接测量传感器电阻阻值，对照温度-阻值表，计算温度值和环境温度比对
             \n2.阻值无异常的情况下，检查传感器到扩展模块之间的线路是否有短路或虚接的情况`
     },{
      value: 'bflt_insptemp_u12',
      name: '吸气温度传感器故障U1-2',
-     classify: '中等',
+     classify: '一般',
      title: `1.拔掉传感器插头，直接测量传感器电阻阻值，对照温度-阻值表，计算温度值和环境温度比对
             \n2.阻值无异常的情况下，检查传感器到扩展模块之间的线路是否有短路或虚接的情况`
     },{
      value: 'bflt_lowpres_u11',
      name: '低压压力传感器故障U1-1',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查吸气压力传感器和扩展模块之间的接线点位是否牢固，重新紧固
             \n2.更换新的压力传感器，然后通过PTU顺序启动制冷，查看压力变化值是否正常`
     },{
      value: 'bflt_lowpres_u12',
      name: '低压压力传感器故障U1-2',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查吸气压力传感器和扩展模块之间的接线点位是否牢固，重新紧固
             \n2.更换新的压力传感器，然后通过PTU顺序启动制冷，查看压力变化值是否正常`
     },{
      value: 'bflt_highpres_u11',
      name: '高压压力传感器故障U1-1',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查高压传感器和扩展模块之间的接线点位是否牢固，重新紧固
             \n2.更换新的压力传感器，然后通过PTU顺序启动制冷，查看压力变化值是否正常`
     },{
      value: 'bflt_highpres_u12',
      name: '高压压力传感器故障U1-2',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查高压传感器和扩展模块之间的接线点位是否牢固，重新紧固
             \n2.更换新的压力传感器，然后通过PTU顺序启动制冷，查看压力变化值是否正常`
     },{
@@ -716,25 +716,25 @@ const proposeWarn = [
     },{
      value: 'bocflt_cf_u21',
      name: '冷凝风机2-1过流故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查风机是否堵转；检查电机主电路绝缘是否正常
             \n2.检查电机保护器是否损坏`
     },{
      value: 'bocflt_cf_u22',
      name: '冷凝风机过流故障U2-2',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查风机是否堵转；检查电机主电路绝缘是否正常
             \n2.检查电机保护器是否损坏`
     },{
      value: 'bflt_vfd_u21',
      name: '变频器2-1故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查变频器运行是否正常
             \n2.检查反馈线路是否正常`
     },{
      value: 'bflt_vfd_com_u21',
      name: '变频器通讯故障U2-1',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查变频器上通讯接口针孔件连接是否牢靠，并重新紧固
             \n2.检查扩展模块上通讯接口插头连接是否牢靠，针孔件是否安装到位，并重新紧固
             \n3.检查变频器和扩展模块之间各接点位置连线是否有虚接情况，重新紧固
@@ -743,13 +743,13 @@ const proposeWarn = [
     },{
      value: 'bflt_vfd_u22',
      name: '变频器2-2故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查变频器运行是否正常
             \n2.检查反馈线路是否正常`
     },{
      value: 'bflt_vfd_com_u22',
      name: '变频器通讯故障U2-2',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查变频器上通讯接口针孔件连接是否牢靠，并重新紧固
             \n2.检查扩展模块上通讯接口插头连接是否牢靠，针孔件是否安装到位，并重新紧固
             \n3.检查变频器和扩展模块之间各接点位置连线是否有虚接情况，重新紧固
@@ -758,42 +758,42 @@ const proposeWarn = [
     },{
      value: 'blpflt_comp_u21',
      name: '压缩机2-1低压故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查制冷剂是否泄漏
             \n2.检查通风机运转是否正常
             \n3.检查低压开关是否损坏`
     },{
      value: 'bscflt_comp_u21',
      name: '压缩机2-1高压连锁故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查冷凝风机运转是否正常
             \n2.检查高压开关、排气温度保护是否正常
             \n3.检查反馈线路是否正常`
     },{
      value: 'bscflt_vent_u21',
      name: '排气故障U2-1',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查冷凝风机是否正常运转，转向是否正确
             \n2.检查冷凝器是否有大面积异物遮挡或脏堵是否很严重
             \n3.检查空调四周散热是否顺畅`
     },{
      value: 'blpflt_comp_u22',
      name: '压缩机2-2低压故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查制冷剂是否泄漏
             \n2.检查通风机运转是否正常
             \n3.检查低压开关是否损坏`
     },{
      value: 'bscflt_comp_u22',
      name: '压缩机2-2高压连锁故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查冷凝风机运转是否正常
             \n2.检查高压开关、排气温度保护是否正常
             \n3.检查反馈线路是否正常`
     },{
      value: 'bscflt_vent_u22',
      name: '排气故障U2-2',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查冷凝风机是否正常运转，转向是否正确
             \n2.检查冷凝器是否有大面积异物遮挡或脏堵是否很严重
             \n3.检查空调四周散热是否顺畅`
@@ -801,7 +801,7 @@ const proposeWarn = [
     {
      value: 'bflt_fad_u2',
      name: '新风阀U2故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查风阀执行器动作、反馈指示是否正常
             \n2.检查全开反馈线路是否正常`
     },
@@ -810,14 +810,14 @@ const proposeWarn = [
     {
      value: 'bflt_fad_u21',
      name: '新风阀故障U2-1',
-     classify: '中等',
+     classify: '一般',
      title: `1.使用PTU控制新风阀全开，接着全关，观察新风阀是否正常动作
             \n2.新风阀动作正常的情况下，手动打开新风阀到全开位置，在本车厢触摸屏或PTU上查看新风阀的反馈信号是否导通
             \n3.如果反馈信号异常，检查反馈回路各接线位置是否虚接`
     },{
      value: 'bflt_fad_u22',
      name: '新风阀故障U2-2',
-     classify: '中等',
+     classify: '一般',
      title: `1.使用PTU控制新风阀全开，接着全关，观察新风阀是否正常动作
             \n2.新风阀动作正常的情况下，手动打开新风阀到全开位置，在本车厢触摸屏或PTU上查看新风阀的反馈信号是否导通
             \n3.如果反馈信号异常，检查反馈回路各接线位置是否虚接`
@@ -853,7 +853,7 @@ const proposeWarn = [
     },{
      value: 'bflt_expboard_u2',
      name: '扩展模块U2故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查扩展模块供电是否正常
             \n2.检查扩展模块通讯线路是否存在虚接情况`
     },{
@@ -895,37 +895,37 @@ const proposeWarn = [
     },{
      value: 'bflt_insptemp_u21',
      name: '吸气温度传感器故障U2-1',
-     classify: '中等',
+     classify: '一般',
      title: `1.拔掉传感器插头，直接测量传感器电阻阻值，对照温度-阻值表，计算温度值和环境温度比对
             \n2.阻值无异常的情况下，检查传感器到扩展模块之间的线路是否有短路或虚接的情况`
     },{
      value: 'bflt_insptemp_u22',
      name: '吸气温度传感器故障U2-2',
-     classify: '中等',
+     classify: '一般',
      title: `1.拔掉传感器插头，直接测量传感器电阻阻值，对照温度-阻值表，计算温度值和环境温度比对
             \n2.阻值无异常的情况下，检查传感器到扩展模块之间的线路是否有短路或虚接的情况`
     },{
      value: 'bflt_lowpres_u21',
      name: '低压压力传感器故障U2-1',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查吸气压力传感器和扩展模块之间的接线点位是否牢固，重新紧固
             \n2.更换新的压力传感器，然后通过PTU顺序启动制冷，查看压力变化值是否正常`
     },{
      value: 'bflt_lowpres_u22',
      name: '低压压力传感器故障U2-2',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查吸气压力传感器和扩展模块之间的接线点位是否牢固，重新紧固
             \n2.更换新的压力传感器，然后通过PTU顺序启动制冷，查看压力变化值是否正常`
     },{
      value: 'bflt_highpres_u21',
      name: '高压压力传感器故障U2-1',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查高压传感器和扩展模块之间的接线点位是否牢固，重新紧固
             \n2.更换新的压力传感器，然后通过PTU顺序启动制冷，查看压力变化值是否正常`
     },{
      value: 'bflt_highpres_u22',
      name: '高压压力传感器故障U2-2',
-     classify: '中等',
+     classify: '一般',
      title: `1.检查高压传感器和扩展模块之间的接线点位是否牢固，重新紧固
             \n2.更换新的压力传感器，然后通过PTU顺序启动制冷，查看压力变化值是否正常`
     },{
@@ -974,7 +974,7 @@ const proposeWarn = [
     },{
      value: 'bflt_exhaustfan',  //不
      name: '废排风机过流故障',
-     classify: '中等',
+     classify: '一般',
      title: `1.首先检查电机保护器是否跳闸，如果没有跳闸那就是反馈回路断开触发的故障
             \n2.手动开合电机保护器，通过PTU或本车厢触摸屏查看输入信号状态，检查反馈回路是否正常
             \n3.跳闸引起的原因需要检查三相电路是否缺相或有虚接情况
@@ -1397,10 +1397,10 @@ async function listData (){
             startTime: startTime.value,
             endTime: endTime.value
         }
-    const logStr = await getAlarmInformation(params)
+    const res = await getAlarmInformation(params)
     const proposeAdvice = propose.concat(proposeWarn)
-    if(logStr.alarm_timeline.length !==0){
-        logStr.alarm_timeline.forEach((item)=>{
+    if(res && res.code === 200 && res.data && res.data.alarm_timeline){
+        res.data.alarm_timeline.forEach((item)=>{
             item.state = item.state.slice(0, -1)
             item.start_time = newDate(item.start_time)
             item.end_time = newDate(item.end_time)

@@ -204,55 +204,71 @@ async function bootstrap() {
         // 历史报警接口 (适配原有前端)
         fastify.post('/api/rest/train/AlarmInformation', async (request: any) => {
             const { state, startTime, endTime, page, limit } = request.body;
-            console.log(`[BFF] AlarmInformation Request: state=${state}, startTime=${startTime}, endTime=${endTime}, page=${page}, limit=${limit}`);
+            fastify.log.info(`[BFF] AlarmInformation Request Body: ${JSON.stringify(request.body)}`);
 
             const trainId = state ? parseInt(state.slice(0, 4)) : undefined;
             const carriageId = state ? parseInt(state.slice(4, 6)) : undefined;
 
-            const { list, total } = await StatusRepository.getHistoricalEvents({
-                trainId,
-                carriageId,
-                startTime: startTime || '',
-                endTime: endTime || '',
-                eventType: 'alarm',
-                page: page ? parseInt(page) : 1,
-                limit: limit ? parseInt(limit) : 15
-            });
+            // 【防御修复】前端 DatePicker 在某些交互后会传来空时间，自动补充默认范围（最近24小时）
+            const now = new Date();
+            const safeEndTime = endTime || new Date(now).toISOString();
+            const safeStartTime = startTime || new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
 
-            // 适配前端期望的格式 (HistoryAlarm 或 TrainInfo)
-            return {
-                total: total,
-                alarm_timeline: list ? list.map(row => ({
-                    train_id: row.train_id,
-                    carriage_no: row.carriage_id,
-                    fault_code: row.fault_code,
-                    name: row.fault_name,
-                    start_time: (row as any)[config.runtime === 'DEV' ? 'ingest_time' : 'event_time'],
-                    end_time: null, // 暂时不处理恢复时间
-                    state: `${row.train_id}${String(row.carriage_id).padStart(2, '0')}1` // 适配前端 state 字段, e.g., "7002031"
-                })) : [],
-                data: list ? list.map(row => {
-                    let level = '警告';
-                    if (row.event_type === 'alarm') {
-                        level = row.severity === 1 ? '严重' : '一般';
-                    } else {
-                        // 预警/寿命事件: 3-高(严重), 2-中(警告), 1-低(轻微)
-                        if (row.severity === 3) level = '严重';
-                        else if (row.severity === 2) level = '警告';
-                        else if (row.severity === 1) level = '轻微';
-                    }
+            try {
+                const result = await StatusRepository.getHistoricalEvents({
+                    trainId,
+                    carriageId,
+                    startTime: safeStartTime,
+                    endTime: safeEndTime,
+                    eventType: 'alarm',
+                    page: page ? Number(page) : 1,
+                    limit: limit ? Number(limit) : 10
+                });
+
+                const list = (result.list || []).map((row: any) => {
+                    let level = '一般';
+                    if (row.severity === 3) level = '严重';
+                    else if (row.severity === 2) level = '一般';
+                    else if (row.severity === 1) level = '轻微';
+
                     return {
                         train_id: row.train_id,
                         carriage_no: row.carriage_id,
                         fault_code: row.fault_code,
                         fault_desc: row.fault_name,
                         fault_level: level,
-                        occurrence_time: (row as any)[config.runtime === 'DEV' ? 'ingest_time' : 'event_time'],
+                        occurrence_time: row[config.runtime === 'DEV' ? 'ingest_time' : 'event_time'],
                         recovery_time: null,
                         status: '活动'
                     };
-                }) : []
-            };
+                });
+
+                const timeline = (result.list || []).map((row: any) => ({
+                    train_id: row.train_id,
+                    carriage_no: row.carriage_id,
+                    fault_code: row.fault_code,
+                    name: row.fault_name,
+                    start_time: row[config.runtime === 'DEV' ? 'ingest_time' : 'event_time'],
+                    end_time: null,
+                    state: `${row.train_id}${String(row.carriage_id).padStart(2, '0')}1`
+                }));
+
+                return {
+                    code: 200,
+                    data: {
+                        list: list,
+                        total: result.total,
+                        alarm_timeline: timeline
+                    }
+                };
+            } catch (err: any) {
+                fastify.log.error(err);
+                return {
+                    code: 500,
+                    message: err.message,
+                    data: { list: [], total: 0, alarm_timeline: [] }
+                };
+            }
         });
 
         // 历史数据接口 (适配 HistoryData 页面)

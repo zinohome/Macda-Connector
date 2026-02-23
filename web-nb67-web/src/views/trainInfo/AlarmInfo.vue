@@ -22,7 +22,7 @@
                     <template #default="scope">
                         <el-tag class="s-tag-yellow" effect="plain" round v-if="scope.row.classify.indexOf('轻微') !==-1">轻微</el-tag>
                         <el-tag effect="plain" round v-if="scope.row.classify.indexOf('正常') !==-1">正常</el-tag>
-                        <el-tag type="warning" effect="plain" round v-if="scope.row.classify.indexOf('中等') !==-1">中等</el-tag>
+                        <el-tag type="warning" effect="plain" round v-if="scope.row.classify.indexOf('一般') !==-1">一般</el-tag>
                         <el-tag type="danger" effect="plain" round v-if="scope.row.classify.indexOf('严重') !==-1">严重</el-tag>
                         <el-tag class="s-tag-yellow" effect="plain" round v-if="scope.row.classify.indexOf('预警') !==-1">预警</el-tag>
                     </template>
@@ -95,12 +95,14 @@ function getCurrentDate() {
 const dateValue = ref([getCurrentDate(),getCurrentDate()])
 const tagType = (state) => {
     switch (state) {
-        case "中等":
-            return ["warning", "中等"];
+        case "一般":
+            return ["warning", "一般"];
         case "轻微":
-            return ["warning", "轻微"];
+            return ["info", "轻微"];
         case "严重":
             return ["danger", "严重"];
+        default:
+            return ["info", state];
     }
 }
 const AlarmInfoData = [
@@ -123,7 +125,7 @@ const AlarmInfoData = [
     }, {
         state: 'TC3',
         unit_no: '1号机组',
-        classify: '中等',
+        classify: '一般',
         start_time: '2022-09-20 16:12:00',
         end_time: '2022-09-20 16:12:00',
         name: '新风阀U1故障',

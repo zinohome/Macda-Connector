@@ -27,6 +27,7 @@
                             end-placeholder="结束时间"
                             format="YYYY-MM-DD HH:mm"
                             value-format="YYYY-MM-DD HH:mm:ss"
+                            :shortcuts="shortcuts"
                             :default-time="[new Date(2000, 1, 1, 0, 0, 0), new Date(2000, 1, 1, 23, 59, 59)]"
                         />
                     </el-form-item>
@@ -63,11 +64,11 @@
                     <el-table-column prop="fault_desc" label="故障详情" header-align="center" min-width="250" show-overflow-tooltip />
                     <el-table-column prop="occurrence_time" label="故障时间" align="center" width="180" />
                 </el-table>
-                
+
                 <div class="pagination-container">
                     <el-pagination
-                        v-model:current-page="currentPage"
-                        v-model:page-size="pageSize"
+                        :current-page="currentPage"
+                        :page-size="pageSize"
                         :page-sizes="[10, 20, 50]"
                         layout="total, sizes, prev, pager, next, jumper"
                         :total="total"
@@ -89,7 +90,38 @@ import dayjs from 'dayjs'
 const router = useRouter()
 const route = useRoute()
 
-// 1. 筛选状态
+// ============================================================
+// 1. UI 筛选表单 —— 只绑定 UI 组件，不直接参与查询
+// ============================================================
+const shortcuts = [
+  {
+    text: '最近1小时',
+    value: () => {
+      const end = dayjs()
+      const start = dayjs().subtract(1, 'hour')
+      return [start.format('YYYY-MM-DD HH:mm:ss'), end.format('YYYY-MM-DD HH:mm:ss')]
+    },
+  },
+  {
+    text: '最近24小时',
+    value: () => {
+      const end = dayjs()
+      const start = dayjs().subtract(24, 'hour')
+      return [start.format('YYYY-MM-DD HH:mm:ss'), end.format('YYYY-MM-DD HH:mm:ss')]
+    },
+  },
+  {
+    text: '最近7天',
+    value: () => {
+      const end = dayjs()
+      const start = dayjs().subtract(7, 'day')
+      return [start.format('YYYY-MM-DD HH:mm:ss'), end.format('YYYY-MM-DD HH:mm:ss')]
+    },
+  }
+]
+
+// filterForm 仅绑定 UI 组件（el-select / el-date-picker）
+// DatePicker blur/关闭时可能将 timeRange 置为 null，但不影响实际查询
 const filterForm = reactive({
     trainNo: String(route.query.trainNo || '7001'),
     carriageNo: String(route.query.trainCoach || '1'),
@@ -99,12 +131,33 @@ const filterForm = reactive({
     ]
 })
 
-// 监听路由参数变化
-watch(() => route.query, (newQuery) => {
-    if (newQuery.trainNo) filterForm.trainNo = String(newQuery.trainNo)
-    if (newQuery.trainCoach) filterForm.carriageNo = String(newQuery.trainCoach)
-    handleQuery()
-}, { deep: true })
+// ============================================================
+// 2. 查询参数锁 —— fetchData 唯一的数据来源
+//    与 filterForm 完全解耦，只有点「查询」按钮才会更新
+//    分页操作（翻页/改 pageSize）永远不会修改此对象
+// ============================================================
+const queryParams = reactive({
+    trainNo: filterForm.trainNo,
+    carriageNo: filterForm.carriageNo,
+    startTime: filterForm.timeRange[0],
+    endTime: filterForm.timeRange[1]
+})
+
+// 监听路由参数变化（只在 trainNo/trainCoach 真正改变时触发）
+watch(
+    () => [route.query.trainNo, route.query.trainCoach],
+    (newVals, oldVals) => {
+        const newTrainNo = newVals[0]
+        const newCoach = newVals[1]
+        const oldTrainNo = oldVals ? oldVals[0] : undefined
+        const oldCoach = oldVals ? oldVals[1] : undefined
+        if (newTrainNo !== oldTrainNo || newCoach !== oldCoach) {
+            if (newTrainNo) filterForm.trainNo = String(newTrainNo)
+            if (newCoach) filterForm.carriageNo = String(newCoach)
+            handleQuery()
+        }
+    }
+)
 
 // 辅助函数：格式化机组名称
 const formatUnit = (faultCode) => {
@@ -115,7 +168,9 @@ const formatUnit = (faultCode) => {
     return '-'
 }
 
-// 2. 基础数据列表
+// ============================================================
+// 3. 基础数据
+// ============================================================
 const trainList = ref(Array.from({ length: 40 }, (_, i) => ({
     train_id: (7001 + i).toString()
 })))
@@ -125,36 +180,55 @@ const carriageList = ref(Array.from({ length: 6 }, (_, i) => ({
     label: (i + 1) + '车厢'
 })))
 
-// 3. 表格数据相关
+// ============================================================
+// 4. 表格状态
+// ============================================================
 const loading = ref(false)
 const tableData = ref([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
 
+/**
+ * 核心数据获取函数
+ * ★ 只从 queryParams 读时间/列车/车厢参数，永远不读 filterForm
+ * ★ 分页相关的 page/limit 在进入函数时立即快照，防止并发修改
+ */
 const fetchData = async () => {
     loading.value = true
+    // 立即快照分页参数
+    const page = currentPage.value
+    const limit = pageSize.value
+    // 从稳定的查询锁读参数
+    const fullCarId = `${queryParams.trainNo}0${queryParams.carriageNo}1`
+    const params = {
+        state: fullCarId,
+        startTime: queryParams.startTime,
+        endTime: queryParams.endTime,
+        page: page,
+        limit: limit
+    }
+    console.log('[HistoryAlarm] fetchData:', JSON.stringify(params))
+
     try {
-        const fullCarId = `${filterForm.trainNo}0${filterForm.carriageNo}1`
-        const params = {
-            state: fullCarId,
-            startTime: filterForm.timeRange ? filterForm.timeRange[0] : '',
-            endTime: filterForm.timeRange ? filterForm.timeRange[1] : '',
-            page: currentPage.value,
-            limit: pageSize.value
-        }
-        
         const res = await getAlarmInformation(params)
-        // BFF 现在返回 { data: [...], total: ... }
-        if (res) {
-            tableData.value = res.data || []
+        console.log('[HistoryAlarm] Response → code:', res?.code, 'total:', res?.data?.total, 'list:', res?.data?.list?.length)
+
+        if (res && res.code === 200 && res.data) {
+            tableData.value = res.data.list || []
+            total.value = res.data.total || 0
+        } else if (res && Array.isArray(res.data)) {
+            tableData.value = res.data
             total.value = res.total || 0
+        } else if (Array.isArray(res)) {
+            tableData.value = res
+            total.value = res.length
         } else {
-            tableData.value = [] 
+            tableData.value = []
             total.value = 0
         }
     } catch (err) {
-        console.error('获取历史报警失败:', err)
+        console.error('[HistoryAlarm] 请求失败:', err)
         tableData.value = []
         total.value = 0
     } finally {
@@ -162,16 +236,37 @@ const fetchData = async () => {
     }
 }
 
+/**
+ * 点击「查询」按钮
+ * ★ 这是唯一将 filterForm 同步到 queryParams 的入口
+ * ★ 时间无效时保留上次有效值（不传空给后端）
+ */
 const handleQuery = () => {
+    // 同步车号/车厢
+    queryParams.trainNo = filterForm.trainNo
+    queryParams.carriageNo = filterForm.carriageNo
+    // 只在时间有效时才更新（DatePicker blur 可能传 null，此时保留上次有效值）
+    if (filterForm.timeRange && filterForm.timeRange[0] && filterForm.timeRange[1]) {
+        queryParams.startTime = filterForm.timeRange[0]
+        queryParams.endTime = filterForm.timeRange[1]
+    }
     currentPage.value = 1
     fetchData()
 }
 
+/**
+ * 改变每页条数
+ * 必须重置 currentPage=1，否则 offset=(page-1)*newLimit 超出数据量→空页
+ */
 const handleSizeChange = (val) => {
     pageSize.value = val
+    currentPage.value = 1
     fetchData()
 }
 
+/**
+ * 切换页码
+ */
 const handleCurrentChange = (val) => {
     currentPage.value = val
     fetchData()
@@ -210,7 +305,7 @@ onMounted(() => {
         display: flex;
         align-items: center;
         gap: 15px;
-        
+
         .page-title {
             color: #2186cf;
             font-size: 16px;
@@ -289,7 +384,7 @@ onMounted(() => {
     display: flex;
     align-items: center;
     justify-content: center;
-    
+
     &:hover, &:focus {
         background: rgba(33, 134, 207, 0.2) !important;
         border-color: #409eff !important;
@@ -297,7 +392,6 @@ onMounted(() => {
         box-shadow: 0 0 10px rgba(33, 134, 207, 0.3) !important;
     }
 
-    /* 图标样式微调 */
     :deep(.el-icon) {
         font-size: 14px !important;
         margin-right: 5px !important;
@@ -312,14 +406,14 @@ onMounted(() => {
     --el-table-header-bg-color: #1a2234;
     --el-table-tr-bg-color: transparent;
     --el-table-row-hover-bg-color: rgba(33, 134, 207, 0.1);
-    
+
     th.el-table__cell {
         background: #1a2234 !important;
         color: #2186cf;
         font-weight: bold;
         border-bottom: 2px solid #2186cf;
     }
-    
+
     td.el-table__cell {
         border-bottom: 1px solid #262e45;
     }
@@ -335,14 +429,12 @@ onMounted(() => {
     justify-content: flex-end;
 }
 
-/* 统一 Select 样式 */
 .train-select, .carriage-select {
     width: 110px !important;
 }
 </style>
 
 <style lang="scss">
-/* 全局样式覆盖，确保暗色主题和蓝色边框生效 */
 .filter-form {
     --el-fill-color-blank: #0a0f1d !important;
     --el-border-color: #2186cf !important;
@@ -354,22 +446,21 @@ onMounted(() => {
         box-shadow: 0 0 0 1px #2186cf inset !important;
         border-radius: 4px !important;
         height: 32px !important;
-        
+
         &:hover {
             box-shadow: 0 0 0 1px #409eff inset, 0 0 10px rgba(33, 134, 207, 0.4) !important;
         }
-        
+
         &.is-focus {
             box-shadow: 0 0 0 1px #409eff inset, 0 0 15px rgba(33, 134, 207, 0.6) !important;
         }
-        
+
         .el-input__inner {
             color: #ffffff !important;
             font-size: 13px !important;
         }
     }
 
-    /* 时间选择器特定覆盖 */
     .el-range-editor.el-input__wrapper {
         width: 350px !important;
     }
@@ -381,8 +472,7 @@ onMounted(() => {
     }
 }
 
-/* 下拉菜单与时间弹出层样式对齐 */
-.el-select__popper.el-popper, 
+.el-select__popper.el-popper,
 .el-picker__popper.el-popper {
     background-color: #141a2e !important;
     border: 1px solid #2186cf !important;
@@ -402,13 +492,12 @@ onMounted(() => {
         }
     }
 
-    /* 时间选择器内部样式深度覆盖 */
     .el-picker-panel {
         background-color: #141a2e !important;
         color: #fff !important;
         border: none !important;
     }
-    
+
     .el-date-range-picker__time-header,
     .el-date-range-picker__header {
         border-bottom: 1px solid #262e45 !important;
@@ -448,7 +537,7 @@ onMounted(() => {
         background-color: #141a2e !important;
         border-top: 1px solid #262e45 !important;
         padding: 10px !important;
-        
+
         .el-button {
             background: #0a0f1d !important;
             border: 1px solid #2186cf !important;
@@ -456,14 +545,12 @@ onMounted(() => {
             height: 28px !important;
             padding: 0 12px !important;
             font-size: 12px !important;
-            
+
             &.is-text {
-                 /* 清空按钮 */
                 border: 1px solid #2186cf !important;
             }
-            
+
             &--primary {
-                /* 确定按钮 */
                 background: #2186cf !important;
                 border-color: #2186cf !important;
                 &:hover {
@@ -481,47 +568,45 @@ onMounted(() => {
     }
 }
 
-/* 分页组件样式深度对齐 */
 .el-pagination {
     --el-pagination-bg-color: transparent !important;
     --el-pagination-button-bg-color: transparent !important;
     --el-pagination-button-color: #ffffff !important;
     --el-pagination-button-disabled-bg-color: transparent !important;
-    
-    /* 强力覆盖分页内部的 select 和 input */
+
     .el-select, .el-input {
         --el-fill-color-blank: #0a0f1d !important;
         --el-border-color: #2186cf !important;
         --el-text-color-regular: #ffffff !important;
-        
+
         .el-input__wrapper {
             background-color: #0a0f1d !important;
             box-shadow: 0 0 0 1px #2186cf inset !important;
             background: #0a0f1d !important;
-            border: none !important; /* 移除外层可能的边框线 */
-            
+            border: none !important;
+
             &:hover {
                 box-shadow: 0 0 0 1px #409eff inset !important;
             }
-            
+
             &.is-focus {
                 box-shadow: 0 0 0 1px #409eff inset !important;
             }
         }
-        
+
         .el-input__inner {
             color: #ffffff !important;
             background-color: transparent !important;
-            border: none !important; /* 移除内层灰色边框线 */
+            border: none !important;
             box-shadow: none !important;
             text-align: center;
         }
     }
-    
+
     .el-pagination__total, .el-pagination__jump {
         color: #d1d9e7 !important;
     }
-    
+
     .el-pager li {
         background: transparent !important;
         color: #d1d9e7 !important;
