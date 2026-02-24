@@ -15,7 +15,7 @@ services:
       - LC_ALL=zh_CN.UTF-8
       - NO_GAMEPAD=true
     volumes:
-      - /data/MACDA2/macdatop/config:/config
+      - ${DATA_DIR}/macdatop/config:/config
     ports:
       - 10001:3001
     restart: unless-stopped

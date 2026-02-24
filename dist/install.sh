@@ -3,23 +3,43 @@
 # install.sh — MACDA Connector 初始化安装脚本
 #
 # 功能：
-#   1. 创建所有 docker-compose 挂载所需的宿主机目录
-#   2. 复制配置文件到对应挂载目录
-#   3. 设置正确的目录权限（Redpanda 需要 101:101）
+#   1. 接受可选的 --data-dir 参数自定义数据根目录
+#   2. 生成 .env 文件（docker-compose 自动读取，无需手动修改 yml）
+#   3. 创建所有 docker-compose 挂载所需的宿主机目录
+#   4. 复制配置文件到对应挂载目录
+#   5. 设置正确的目录权限（Redpanda 需要 101:101）
 #
 # 用法：
-#   sudo ./install.sh           # 首次部署，完整安装
-#   sudo ./install.sh --update  # 仅更新配置文件（不覆盖已有数据目录）
+#   sudo ./install.sh                            # 使用默认目录 /data/MACDA2
+#   sudo ./install.sh --data-dir /opt/macda      # 自定义数据根目录
+#   sudo ./install.sh --update                   # 仅更新配置文件（不覆盖已有数据）
+#   sudo ./install.sh --data-dir /opt/macda --update
 # =============================================================
 
 set -euo pipefail
 
-# ── 配置 ─────────────────────────────────────────────────────
+# ── 参数解析 ─────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_DATA_DIR="/data/MACDA2"
+BASE_DATA_DIR="/data/MACDA2"   # 默认数据根目录
 UPDATE_ONLY=false
+ENV_FILE="${SCRIPT_DIR}/.env"
 
-[[ "${1:-}" == "--update" ]] && UPDATE_ONLY=true
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --data-dir)
+            BASE_DATA_DIR="${2:?--data-dir 需要指定路径}"
+            shift 2
+            ;;
+        --update)
+            UPDATE_ONLY=true
+            shift
+            ;;
+        *)
+            echo "用法: $0 [--data-dir <路径>] [--update]"
+            exit 1
+            ;;
+    esac
+done
 
 # ── 工具函数 ─────────────────────────────────────────────────
 log_info()    { echo -e "\033[0;32m[INFO]\033[0m  $*"; }
@@ -38,7 +58,7 @@ mk_dir() {
     fi
 }
 
-# 复制文件（目标存在时给出提示，--update 模式下强制覆盖）
+# 复制文件（--update 模式强制覆盖，否则目标存在时跳过）
 cp_file() {
     local src="$1"
     local dst="$2"
@@ -54,8 +74,35 @@ cp_file() {
     fi
 }
 
+# ── 0. 生成 .env 文件 ─────────────────────────────────────────
+# docker-compose 会自动读取同目录下的 .env，
+# 所有 compose 文件里的 ${DATA_DIR} 会被自动替换。
+log_step "生成 .env 配置"
+
+if [[ -f "${ENV_FILE}" ]] && [[ "${UPDATE_ONLY}" == "false" ]]; then
+    # 已经存在时，读取已有的 DATA_DIR（除非用户显式指定了 --data-dir）
+    existing_dir=$(grep "^DATA_DIR=" "${ENV_FILE}" 2>/dev/null | cut -d= -f2 || echo "")
+    if [[ -n "${existing_dir}" && "${existing_dir}" != "${BASE_DATA_DIR}" \
+          && "${BASE_DATA_DIR}" == "/data/MACDA2" ]]; then
+        # 没有显式指定 --data-dir，沿用已有配置
+        BASE_DATA_DIR="${existing_dir}"
+        log_info ".env 已存在，沿用数据目录: ${BASE_DATA_DIR}"
+    fi
+fi
+
+cat > "${ENV_FILE}" <<EOF
+# MACDA Connector 环境配置
+# 由 install.sh 自动生成，请勿手动编辑（重新运行 install.sh 可更新）
+# 生成时间: $(date '+%Y-%m-%d %H:%M:%S')
+
+# 数据根目录：所有 docker-compose 挂载路径的前缀
+DATA_DIR=${BASE_DATA_DIR}
+EOF
+
+log_success ".env 已生成: DATA_DIR=${BASE_DATA_DIR}"
+
 # ── 1. 创建数据目录 ───────────────────────────────────────────
-log_step "创建数据目录"
+log_step "创建数据目录 (基于 ${BASE_DATA_DIR})"
 
 # Redpanda 3节点集群数据目录
 mk_dir "${BASE_DATA_DIR}/redpanda/redpanda1"
@@ -80,7 +127,7 @@ mk_dir "${BASE_DATA_DIR}/mock/connect/data/input"
 # ── 2. 设置目录权限 ───────────────────────────────────────────
 log_step "设置目录权限"
 
-# Redpanda 容器以 uid=101 运行，需要对应权限
+# Redpanda 容器以 uid=101 运行
 chown -R 101:101 "${BASE_DATA_DIR}/redpanda/redpanda1" \
                   "${BASE_DATA_DIR}/redpanda/redpanda2" \
                   "${BASE_DATA_DIR}/redpanda/redpanda3" \
@@ -99,7 +146,6 @@ log_success "TimescaleDB 数据目录权限设置完成 (1000:1000)"
 chown -R 5050:5050 "${BASE_DATA_DIR}/pgadmin"
 log_success "PgAdmin 目录权限设置完成 (5050:5050)"
 
-# Connect 配置目录和 mock-connect 数据目录设置为全可读写
 chmod -R a+rwX "${BASE_DATA_DIR}/connect/config"
 chmod -R a+rwX "${BASE_DATA_DIR}/mock/connect/data"
 log_success "Connect 目录权限设置完成"
@@ -128,10 +174,12 @@ done
 # ── 6. 完成摘要 ───────────────────────────────────────────────
 log_step "安装完成"
 echo ""
-echo "  数据根目录: ${BASE_DATA_DIR}"
+echo "  数据根目录 : ${BASE_DATA_DIR}"
+echo "  .env 文件  : ${ENV_FILE}"
 echo ""
 echo "  目录结构:"
-find "${BASE_DATA_DIR}" -maxdepth 3 -type d | sort | sed 's|'"${BASE_DATA_DIR}"'|  /data/MACDA2|'
+find "${BASE_DATA_DIR}" -maxdepth 3 -type d | sort | \
+    sed "s|${BASE_DATA_DIR}|  \${DATA_DIR}|"
 echo ""
 echo "  下一步："
 echo "    chmod +x start.sh"

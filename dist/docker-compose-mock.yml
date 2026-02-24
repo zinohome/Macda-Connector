@@ -6,8 +6,8 @@ services:
     command: >
       /bin/sh -c " mkdir -p /host-redpanda-data /host-connect-data; chown -R 101:101 /host-redpanda-data; chmod -R ug+rwX /host-redpanda-data; chmod -R a+rwX /host-connect-data; "
     volumes:
-      - "/data/MACDA2/mock/redpanda/data:/host-redpanda-data"
-      - "/data/MACDA2/mock/connect/data:/host-connect-data"
+      - "${DATA_DIR}/mock/redpanda/data:/host-redpanda-data"
+      - "${DATA_DIR}/mock/connect/data:/host-connect-data"
     networks:
       - macdanet
 
@@ -40,7 +40,7 @@ services:
       - --set redpanda.core_balancing_continuous=false
       - --set redpanda.enable_schema_id_validation=false
     volumes:
-      - "/data/MACDA2/mock/redpanda/data:/var/lib/redpanda/data"
+      - "${DATA_DIR}/mock/redpanda/data:/var/lib/redpanda/data"
     ports:
       - 48081:8081
       - 48082:8082
@@ -109,7 +109,7 @@ services:
       mock-create-topic:
         condition: service_completed_successfully
     volumes:
-      - "/data/MACDA2/mock/connect/data:/data"
+      - "${DATA_DIR}/mock/connect/data:/data"
     entrypoint: /bin/sh
     command: -c "echo \"$$CONNECT_CONFIG\" > /tmp/connect.yaml && /redpanda-connect -c /tmp/connect.yaml"
     environment:

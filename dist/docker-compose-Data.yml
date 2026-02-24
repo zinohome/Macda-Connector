@@ -7,11 +7,11 @@ services:
     command: >
       /bin/sh -c " mkdir -p /host-redpanda-1 /host-redpanda-2 /host-redpanda-3 /host-timescaledb /host-pgadmin; chown -R 101:101 /host-redpanda-1 /host-redpanda-2 /host-redpanda-3; chown -R 1000:1000 /host-timescaledb; chown -R 5050:5050  /host-pgadmin; chmod -R ug+rwX /host-redpanda-1 /host-redpanda-2 /host-redpanda-3 /host-timescaledb /host-pgadmin; "
     volumes:
-      - "/data/MACDA2/redpanda/redpanda1:/host-redpanda-1"
-      - "/data/MACDA2/redpanda/redpanda2:/host-redpanda-2"
-      - "/data/MACDA2/redpanda/redpanda3:/host-redpanda-3"
-      - "/data/MACDA2/timescaledb/data:/host-timescaledb"
-      - "/data/MACDA2/pgadmin:/host-pgadmin"
+      - "${DATA_DIR}/redpanda/redpanda1:/host-redpanda-1"
+      - "${DATA_DIR}/redpanda/redpanda2:/host-redpanda-2"
+      - "${DATA_DIR}/redpanda/redpanda3:/host-redpanda-3"
+      - "${DATA_DIR}/timescaledb/data:/host-timescaledb"
+      - "${DATA_DIR}/pgadmin:/host-pgadmin"
     networks:
       - macdanet
 
@@ -45,7 +45,7 @@ services:
       - --set redpanda.enable_schema_id_validation=false
       - --set redpanda.auto_create_topics_enabled=false
     volumes:
-      - "/data/MACDA2/redpanda/redpanda1:/var/lib/redpanda/data"
+      - "${DATA_DIR}/redpanda/redpanda1:/var/lib/redpanda/data"
     ports:
       - 18081:18081
       - 18082:18082
@@ -86,7 +86,7 @@ services:
       - --set redpanda.enable_schema_id_validation=false
       - --set redpanda.auto_create_topics_enabled=false
     volumes:
-      - "/data/MACDA2/redpanda/redpanda2:/var/lib/redpanda/data"
+      - "${DATA_DIR}/redpanda/redpanda2:/var/lib/redpanda/data"
     ports:
       - 28081:28081
       - 28082:28082
@@ -127,7 +127,7 @@ services:
       - --set redpanda.enable_schema_id_validation=false
       - --set redpanda.auto_create_topics_enabled=false
     volumes:
-      - "/data/MACDA2/redpanda/redpanda3:/var/lib/redpanda/data"
+      - "${DATA_DIR}/redpanda/redpanda3:/var/lib/redpanda/data"
     ports:
       - 38081:38081
       - 38082:38082
@@ -235,7 +235,7 @@ services:
     restart: unless-stopped
     command: [ "-c", "/etc/connect/nb67-parser.yaml" ]
     volumes:
-      - "/data/MACDA2/connect/config/nb67-parser.yaml:/etc/connect/nb67-parser.yaml:ro"
+      - "${DATA_DIR}/connect/config/nb67-parser.yaml:/etc/connect/nb67-parser.yaml:ro"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
       interval: 30s
@@ -253,7 +253,7 @@ services:
     restart: unless-stopped
     command: [ "-c", "/etc/connect/nb67-storage-writer.yaml" ]
     volumes:
-      - "/data/MACDA2/connect/config/nb67-storage-writer.yaml:/etc/connect/nb67-storage-writer.yaml:ro"
+      - "${DATA_DIR}/connect/config/nb67-storage-writer.yaml:/etc/connect/nb67-storage-writer.yaml:ro"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
       interval: 30s
@@ -275,7 +275,7 @@ services:
     environment:
       - RUNTIME=DEV
     volumes:
-      - "/data/MACDA2/connect/config/nb67-event-builder.yaml:/etc/connect/nb67-event-builder.yaml:ro"
+      - "${DATA_DIR}/connect/config/nb67-event-builder.yaml:/etc/connect/nb67-event-builder.yaml:ro"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
       interval: 30s
@@ -296,7 +296,7 @@ services:
     restart: unless-stopped
     command: [ "-c", "/etc/connect/nb67-pg-writer.yaml" ]
     volumes:
-      - "/data/MACDA2/connect/config/nb67-pg-writer.yaml:/etc/connect/nb67-pg-writer.yaml:ro"
+      - "${DATA_DIR}/connect/config/nb67-pg-writer.yaml:/etc/connect/nb67-pg-writer.yaml:ro"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
       interval: 30s
@@ -317,7 +317,7 @@ services:
     restart: unless-stopped
     command: [ "-c", "/etc/connect/nb67-event-writer.yaml" ]
     volumes:
-      - "/data/MACDA2/connect/config/nb67-event-writer.yaml:/etc/connect/nb67-event-writer.yaml:ro"
+      - "${DATA_DIR}/connect/config/nb67-event-writer.yaml:/etc/connect/nb67-event-writer.yaml:ro"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
       interval: 30s
@@ -364,8 +364,8 @@ services:
     #ports:
     #  - 5432:5432
     volumes:
-      - "/data/MACDA2/timescaledb/data:/home/postgres/pgdata"
-      - "/data/MACDA2/timescaledb/init-db:/docker-entrypoint-initdb.d:ro"
+      - "${DATA_DIR}/timescaledb/data:/home/postgres/pgdata"
+      - "${DATA_DIR}/timescaledb/init-db:/docker-entrypoint-initdb.d:ro"
     #healthcheck:
     #    test: ["CMD", "netstat", "-anp", "|", "grep 5432", "||", "exit 1"]
     #    interval: 30s
@@ -387,7 +387,7 @@ services:
     #ports:
     #  - 8280:80
     volumes:
-      - "/data/MACDA2/pgadmin:/var/lib/pgadmin"
+      - "${DATA_DIR}/pgadmin:/var/lib/pgadmin"
     #healthcheck:
     #    test: ["CMD", "netstat", "-anp", "|", "grep 8280", "||", "exit 1"]
     #    interval: 30s

@@ -76,19 +76,23 @@ dist/
 # 赋予执行权限
 chmod +x install.sh start.sh
 
-# 以 root 运行安装脚本（需要创建系统目录并设置权限）
+# 以 root 运行安装脚本（默认数据目录: /data/MACDA2）
 sudo ./install.sh
 
-# 如需更新配置文件（不影响已有数据）
+# 自定义数据目录（所有 docker-compose 挂载路径随之更改）
+sudo ./install.sh --data-dir /opt/macda
+
+# 仅更新配置文件，不影响已有数据
 sudo ./install.sh --update
 ```
 
 安装脚本会自动完成：
-- 创建 `/data/MACDA2/` 下所有必要的挂载目录
+- 生成 `.env` 文件（写入 `DATA_DIR=<路径>`，docker-compose 自动读取，**无需手动修改任何 yml**）
+- 创建 `${DATA_DIR}/` 下所有必要的挂载目录
 - 设置 Redpanda (101:101)、TimescaleDB (1000:1000)、PgAdmin (5050:5050) 目录权限
-- 复制 `config/*.yaml` → `/data/MACDA2/connect/config/`
-- 复制 `init-db/01-init.sql` → `/data/MACDA2/timescaledb/init-db/`
-- 复制 `mock-data/*` → `/data/MACDA2/mock/connect/data/input/`
+- 复制 `config/*.yaml` → `${DATA_DIR}/connect/config/`
+- 复制 `init-db/01-init.sql` → `${DATA_DIR}/timescaledb/init-db/`
+- 复制 `mock-data/*` → `${DATA_DIR}/mock/connect/data/input/`
 
 ### 2. 准备镜像
 
