@@ -396,52 +396,6 @@ services:
     networks:
       - macdanet
 
-  nb67-web:
-    image: harbor.naivehero.top:8443/macda2/nb67-web:v2.1.2
-    container_name: nb67-web
-    hostname: nb67-web
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    depends_on:
-      nb67-bff:
-        condition: service_healthy
-    healthcheck:
-      test: [ "CMD", "wget", "-qO-", "http://127.0.0.1:8080/health" ]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    networks:
-      - macdanet
-
-  nb67-bff:
-    image: harbor.naivehero.top:8443/macda2/nb67-bff:v2.1.2
-    container_name: nb67-bff
-    hostname: nb67-bff
-    restart: unless-stopped
-    # 注意：BFF 不对外暴露端口，仅在 macdanet 内网可访问
-    # 如需本地调试，可临时取消注释下方 ports
-    # ports:
-    #   - "3000:3000"
-    environment:
-      # ── 运行模式 ──────────────────────────────────────────────
-      # DEV: 使用 ingest_time（数据入库时间）
-      # PRD: 使用 event_time（设备上报事件时间）
-      - RUNTIME=DEV
-      - DATABASE_URL=postgres://postgres:passw0rd@timescaledb:5432/postgres?sslmode=disable
-      - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
-      - LOG_LEVEL=info
-      - PORT=3000
-      - HOST=0.0.0.0
-    healthcheck:
-      test: [ "CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/test" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    networks:
-      - macdanet
-
 networks:
   macdanet:
     name: macdanet
