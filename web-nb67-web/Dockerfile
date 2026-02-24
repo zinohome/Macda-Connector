@@ -6,7 +6,7 @@
 # =============================================================
 
 # ── Stage 1: 构建阶段 ─────────────────────────────────────────
-FROM harbor.naivehero.top:8443/macda2/node:22-alpine AS builder
+FROM node:22-alpine AS builder
 
 # 设置工作目录
 WORKDIR /app
@@ -26,7 +26,7 @@ COPY . .
 RUN npm run build
 
 # ── Stage 2: 运行阶段 ─────────────────────────────────────────
-FROM harbor.naivehero.top:8443/macda2/nginx:alpine AS runtime
+FROM nginx:alpine AS runtime
 
 # 删除 Nginx 默认配置，替换为项目定制配置
 RUN rm /etc/nginx/conf.d/default.conf

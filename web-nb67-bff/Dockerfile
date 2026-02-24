@@ -8,7 +8,7 @@
 # =============================================================
 
 # ── Stage 1: 依赖安装阶段 ─────────────────────────────────────
-FROM harbor.naivehero.top:8443/macda2/node:22-alpine AS deps
+FROM node:22-alpine AS deps
 
 WORKDIR /app
 
@@ -19,7 +19,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 # ── Stage 2: 运行阶段 ─────────────────────────────────────────
-FROM harbor.naivehero.top:8443/macda2/node:22-alpine AS runtime
+FROM node:22-alpine AS runtime
 
 # 设置工作目录
 WORKDIR /app
