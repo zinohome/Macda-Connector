@@ -400,3 +400,4 @@ networks:
   macdanet:
     name: macdanet
     driver: bridge
+    external: true

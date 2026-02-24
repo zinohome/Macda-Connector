@@ -1,0 +1,27 @@
+# web-nb67-web/.dockerignore
+# 排除不需要进入 Docker 构建上下文的文件，加速 COPY 速度
+
+# 依赖目录（镜像内会重新 npm ci）
+node_modules/
+
+# 上次构建产物（镜像内会重新 build）
+dist/
+
+# 开发工具配置
+.vscode/
+.DS_Store
+
+# 日志文件
+*.log
+
+# 本地环境变量（不进镜像，通过 docker-compose environment 注入）
+.env.local
+.env.*.local
+
+# Git 相关
+.git/
+.gitignore
+
+# 测试和临时文件
+*.py
+temp/

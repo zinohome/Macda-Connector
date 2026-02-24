@@ -1,0 +1,35 @@
+# web-nb67-bff/.dockerignore
+# 排除不需要进入 Docker 构建上下文的文件
+
+# 依赖目录（镜像内会重新 npm ci）
+node_modules/
+
+# 开发调试文件
+*.log
+*.json
+!package.json
+!package-lock.json
+
+# 开发工具配置
+.vscode/
+.DS_Store
+
+# 本地环境变量（敏感信息不进镜像）
+.env
+.env.local
+
+# Git 相关
+.git/
+.gitignore
+
+# 测试文件
+tests/
+test-*.js
+test-*.ts
+*.test.ts
+inspect-*.js
+list-*.js
+socket-test.js
+ssl-test.js
+proto-test.js
+debug_*.json

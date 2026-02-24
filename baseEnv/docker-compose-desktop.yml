@@ -23,5 +23,6 @@ services:
       - macdanet
 networks:
   macdanet:
+    external: true
     name: macdanet
     driver: bridge
