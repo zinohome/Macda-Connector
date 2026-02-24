@@ -189,6 +189,12 @@ async function bootstrap() {
             return { success: true, data };
         });
 
+        // ── 健康检查端点（Docker healthcheck 专用）────────────────
+        // 此端点不访问数据库，保证容器启动阶段能快速通过健康检查
+        fastify.get('/health', async () => {
+            return { status: 'ok', time: formatTime(new Date()) };
+        });
+
         fastify.get('/api/test', async () => {
             return { status: 'ok', time: formatTime(new Date()) };
         });

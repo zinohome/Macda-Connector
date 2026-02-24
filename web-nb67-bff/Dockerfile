@@ -57,8 +57,9 @@ ENV KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
 # 声明对外端口
 EXPOSE 3000
 
-# 健康检查：探测 Fastify 服务根路径（10s间隔，5次失败则标记不健康）
-HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
+# 健康检查：探测 /health 端点
+# --start-period=30s 给 BFF 充足的启动时间（连接 DB + Kafka 可能较慢）
+HEALTHCHECK --interval=10s --timeout=5s --retries=5 --start-period=30s \
     CMD wget -qO- http://localhost:3000/health || exit 1
 
 # 启动命令：用 tsx 直接运行 TypeScript 入口文件
