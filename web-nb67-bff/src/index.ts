@@ -4,7 +4,9 @@ import swaggerUi from '@fastify/swagger-ui';
 import websocket from '@fastify/websocket';
 import cors from '@fastify/cors';
 import { config } from './config/index.js';
+import { db } from './config/db.js';
 import { checkDbConnection } from './config/db.js';
+import { sql } from 'kysely';
 import { KafkaManager } from './config/kafka.js';
 import { HistoryRepository } from './repository/history.repository.js';
 import { StatusRepository } from './repository/status.repository.js';
@@ -191,6 +193,29 @@ async function bootstrap() {
             return { status: 'ok', time: formatTime(new Date()) };
         });
 
+        // 调试接口：获取最新一条原始报文的所有字段名和示例值，方便前端对齐字段名
+        fastify.get('/api/debug/raw-fields', async (request: any) => {
+            const { trainId, carriageId } = request.query;
+            const row = await db
+                .selectFrom('hvac.fact_raw')
+                .selectAll()
+                .where('train_id', '=', parseInt(trainId || '7002'))
+                .where('carriage_id', '=', parseInt(carriageId || '1'))
+                .orderBy('ingest_time', 'desc')
+                .limit(1)
+                .executeTakeFirst();
+            if (!row) return { error: 'no data' };
+            const raw = (row as any).payload_json?.raw || {};
+            return {
+                // 顶层 DB 列（排除大字段）
+                db_columns: Object.keys(row).filter(k => k !== 'payload_json'),
+                db_sample: Object.fromEntries(Object.entries(row).filter(([k]) => k !== 'payload_json')),
+                // payload_json.raw 内的信号字段
+                raw_keys: Object.keys(raw),
+                raw_sample: raw
+            };
+        });
+
         // ==========================
         // 列车/车厢 详细 REST 接口 (适配原有前端)
         // ==========================
@@ -282,7 +307,37 @@ async function bootstrap() {
             }
         });
 
+        // 历史数据接口 (适配 HistoryData 页面提取存在数据的日期)
+        fastify.get('/api/getTrainDataDates', async (request: any) => {
+            const { state, startTime, endTime } = request.query;
+            const trainId = state ? parseInt(String(state).slice(0, 4)) : undefined;
+            const carriageId = state ? parseInt(String(state).slice(4, 6)) : undefined;
+
+            try {
+                const queryStartTime = new Date(String(startTime || ''));
+                const queryEndTime = new Date(String(endTime || ''));
+                const timeCol = config.runtime === 'DEV' ? 'ingest_time' : 'event_time';
+
+                let q = db.selectFrom('hvac.fact_raw')
+                    .select(sql<string>`TO_CHAR(${sql.raw(timeCol)}, 'YYYY-MM-DD')`.as('date'))
+                    .distinct()
+                    .where(timeCol as any, '>=', queryStartTime)
+                    .where(timeCol as any, '<=', queryEndTime);
+
+                if (trainId) q = q.where('train_id', '=', trainId);
+                if (carriageId) q = q.where('carriage_id', '=', carriageId);
+
+                const records = await q.execute();
+                const dates = records.map((r: any) => r.date).filter(Boolean).sort((a: string, b: string) => b.localeCompare(a));
+                return { code: 200, data: dates };
+            } catch (err: any) {
+                fastify.log.error(err);
+                return { code: 500, message: err.message, data: [] };
+            }
+        });
+
         // 历史数据接口 (适配 HistoryData 页面)
+        // 每条 DB 记录按机组一/机组二拆成两行输出
         fastify.get('/api/getTrainData', async (request: any) => {
             const { state, startTime, endTime, page = 1, limit = 50 } = request.query;
             const trainId = state ? parseInt(String(state).slice(0, 4)) : undefined;
@@ -297,15 +352,108 @@ async function bootstrap() {
                 limit: parseInt(limit as string)
             });
 
+            // ms 转小时，保留 1 位小数
+            const ms2h = (ms: any) =>
+                ms !== undefined && ms !== null && ms !== ''
+                    ? (Number(ms) / 3600000).toFixed(1) + 'h'
+                    : '';
+
             return {
                 code: 200,
                 data: {
-                    list: result.list.map(row => ({
-                        ...row,
-                        ...(row.payload_json?.raw || {}),
-                        event_time: (row as any)[config.runtime === 'DEV' ? 'ingest_time' : 'event_time']
-                    })),
-                    total: result.total
+                    list: result.list.flatMap((row: any) => {
+                        const raw = row.payload_json?.raw || {};
+
+                        // ── 机组一 (U1x) ─────────────────────────────────
+                        const unit1 = {
+                            train_id: row.train_id,
+                            carriage_id: row.carriage_id,
+                            ingest_time: formatTime(row.ingest_time),
+                            event_time: formatTime(row.event_time),
+                            unit_name: '机组一',
+
+                            i_inner_temp: raw.Tic !== undefined ? (Number(raw.Tic) / 10).toFixed(1) : '',
+                            i_outer_temp: raw.FasU1 !== undefined ? (Number(raw.FasU1) / 10).toFixed(1) : '',
+                            i_set_temp: raw.SpU11 !== undefined ? (Number(raw.SpU11) / 10).toFixed(1) : '',
+                            i_hum: raw.Humdity1 ?? '',
+                            i_co2: raw.AqCo2U1 ?? '',
+                            work_status: raw.WmodeU1 ?? '',
+
+                            dwef_op_tm: raw.DwefOpTmU11 ?? '',
+                            w_crnt_cf1: raw.ICfU11 ?? '',
+                            w_crnt_cf2: raw.ICfU12 ?? '',
+                            w_crnt_cp1: raw.ICpU11 ?? '',
+                            w_crnt_cp2: raw.ICpU12 ?? '',
+                            w_freq_cp1: raw.FCpU11 ?? '',
+                            w_freq_cp2: raw.FCpU12 ?? '',
+                            w_crnt_ef1: raw.IEfU11 ?? '',
+                            w_crnt_ef2: raw.IEfU12 ?? '',
+
+                            i_high_pres1: raw.HighpressU11 ?? '',
+                            i_low_pres1: raw.SuckpU11 ?? '',
+                            i_high_pres2: raw.HighpressU12 ?? '',
+                            i_low_pres2: raw.SuckpU12 ?? '',
+
+                            i_sat1: raw.SasU11 !== undefined ? (Number(raw.SasU11) / 10).toFixed(1) : '',
+                            i_sat2: raw.SasU12 !== undefined ? (Number(raw.SasU12) / 10).toFixed(1) : '',
+
+                            dwcf_op_tm1: raw.DwcfOpTmU11 ?? '',
+                            dwcf_op_tm2: raw.DwcfOpTmU12 ?? '',
+                            dwcp_op_tm1: raw.DwcpOpTmU11 ?? '',
+                            dwcp_op_tm2: raw.DwcpOpTmU12 ?? '',
+                            dwexufan_op_tm: raw.DwexufanOpTm ?? '',
+
+                            dwfad_op_cnt: raw.FadposU1 ?? '',
+                            dwrad_op_cnt: raw.RadposU1 ?? '',
+                        };
+
+                        // ── 机组二 (U2x) ─────────────────────────────────
+                        const unit2 = {
+                            train_id: row.train_id,
+                            carriage_id: row.carriage_id,
+                            ingest_time: formatTime(row.ingest_time),
+                            event_time: formatTime(row.event_time),
+                            unit_name: '机组二',
+
+                            i_inner_temp: raw.Tic !== undefined ? (Number(raw.Tic) / 10).toFixed(1) : '',
+                            i_outer_temp: raw.FasU2 !== undefined ? (Number(raw.FasU2) / 10).toFixed(1) : '',
+                            i_set_temp: raw.SpU21 !== undefined ? (Number(raw.SpU21) / 10).toFixed(1) : '',
+                            i_hum: raw.Humdity2 ?? '',
+                            i_co2: raw.AqCo2U2 ?? '',
+                            work_status: raw.WmodeU2 ?? '',
+
+                            dwef_op_tm: raw.DwefOpTmU21 ?? '',
+                            w_crnt_cf1: raw.ICfU21 ?? '',
+                            w_crnt_cf2: raw.ICfU22 ?? '',
+                            w_crnt_cp1: raw.ICpU21 ?? '',
+                            w_crnt_cp2: raw.ICpU22 ?? '',
+                            w_freq_cp1: raw.FCpU21 ?? '',
+                            w_freq_cp2: raw.FCpU22 ?? '',
+                            w_crnt_ef1: raw.IEfU21 ?? '',
+                            w_crnt_ef2: raw.IEfU22 ?? '',
+
+                            i_high_pres1: raw.HighpressU21 ?? '',
+                            i_low_pres1: raw.SuckpU21 ?? '',
+                            i_high_pres2: raw.HighpressU22 ?? '',
+                            i_low_pres2: raw.SuckpU22 ?? '',
+
+                            i_sat1: raw.SasU21 !== undefined ? (Number(raw.SasU21) / 10).toFixed(1) : '',
+                            i_sat2: raw.SasU22 !== undefined ? (Number(raw.SasU22) / 10).toFixed(1) : '',
+
+                            dwcf_op_tm1: raw.DwcfOpTmU21 ?? '',
+                            dwcf_op_tm2: raw.DwcfOpTmU22 ?? '',
+                            dwcp_op_tm1: raw.DwcpOpTmU21 ?? '',
+                            dwcp_op_tm2: raw.DwcpOpTmU22 ?? '',
+                            dwexufan_op_tm: '', // 仅在机组一展示，避免重复
+
+                            dwfad_op_cnt: raw.FadposU2 ?? '',
+                            dwrad_op_cnt: raw.RadposU2 ?? '',
+                        };
+
+                        return [unit1, unit2];
+                    }),
+                    // 每条 DB 记录拆成 2 行，总数同步 ×2
+                    total: result.total * 2
                 }
             };
         });

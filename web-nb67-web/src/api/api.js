@@ -70,5 +70,8 @@ export const getThDataByDvcAddrApi = (params) => request('/api/rest/carriage/Tem
 // 获取指定列车最近10分钟的各节车厢数据
 export const getTrainDataApi = (params) => request('/api/getTrainData', 'get', params)
 
+// 获取指定时间范围内存有数据的对应日期列表
+export const getTrainDataDatesApi = (params) => request('/api/getTrainDataDates', 'get', params)
+
 //根据id获取数据
 export const getEaOrPaById = (params) => request('/api/getEaOrPaById', 'get', params)

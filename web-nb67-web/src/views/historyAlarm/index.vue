@@ -100,15 +100,21 @@ const STORAGE_KEY = 'macda_history_alarm_filter'
 
 // 初始化：优先从缓存恢复，否则使用稳定默认值
 const getInitialFilter = () => {
+    let cached = null
     const saved = sessionStorage.getItem(STORAGE_KEY)
     if (saved) {
-        try { return JSON.parse(saved) } catch(e) {}
+        try { cached = JSON.parse(saved) } catch(e) {}
     }
+    
+    // 强制优先使用 URL query 传过来的参数（例如从列车详情跳转过来）
+    const qTrain = route.query.trainNo
+    const qCoach = route.query.trainCoach
+
     return {
-        trainNo:    String(route.query.trainNo   || '7001'),
-        carriageNo: String(route.query.trainCoach || '1'),
+        trainNo:    String(qTrain || cached?.trainNo || '7001'),
+        carriageNo: String(qCoach || cached?.carriageNo || '1'),
         timeRange: [
-            dayjs().subtract(1, 'day').startOf('day').format('YYYY-MM-DD HH:mm:ss'),
+            dayjs().subtract(7, 'day').startOf('day').format('YYYY-MM-DD HH:mm:ss'),
             dayjs().endOf('day').format('YYYY-MM-DD HH:mm:ss')
         ]
     }
@@ -177,7 +183,9 @@ const fetchData = async (p, l) => {
     // 直接读取 DatePicker 当前值，不做任何修改
     const startTime = filterForm.timeRange?.[0] || ''
     const endTime   = filterForm.timeRange?.[1] || ''
-    const state     = `${filterForm.trainNo}0${filterForm.carriageNo}1`
+    // 将车厢号转为两位字符串（如 "3" -> "03", "03" -> "03"），生成 6位 state (如 700203)
+    const carriageStr = String(filterForm.carriageNo).replace(/^0+/, '').padStart(2, '0')
+    const state     = `${filterForm.trainNo}${carriageStr}`
 
     console.log(`[HistoryAlarm] req#${reqId} start`, { state, startTime, endTime, page, limit })
 
