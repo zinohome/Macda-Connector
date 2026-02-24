@@ -93,9 +93,28 @@ verify() {
         esac
     done < "${MANIFEST}"
 
+    # 处理由于文件未以空行结尾导致最后一块镜像遗漏验证的问题
+    if [[ -n "${file}" && -n "${expected_md5}" && "${expected_md5}" != "N/A" ]]; then
+        local tar_path="${IMAGES_DIR}/${file}"
+        if [[ ! -f "${tar_path}" ]]; then
+            log_warn "文件不存在: ${file}"
+            ((fail++)) || true
+        elif [[ "$(calc_md5 "${tar_path}")" == "${expected_md5}" ]]; then
+            log_success "MD5 校验通过: ${file}"
+            ((pass++)) || true
+        else
+            log_error "MD5 校验失败: ${file}（文件可能损坏）"
+            ((fail++)) || true
+        fi
+    fi
+
     echo ""
     echo "  校验结果: 通过 ${pass} 个，失败 ${fail} 个"
-    [[ ${fail} -gt 0 ]] && log_error "存在文件损坏，请重新传输损坏的 .tar 文件" && exit 1
+    
+    if [[ ${fail} -gt 0 ]]; then
+        log_error "存在文件损坏，请重新传输损坏的 .tar 文件"
+        exit 1
+    fi
 }
 
 # ── 加载镜像 ─────────────────────────────────────────────────
