@@ -2,7 +2,7 @@
   <div class="warp">
     <!-- <div class="header">
       <div class="img">
-        <img src="@/assets/img/kongtiao.png" />
+        <img src="/img/kongtiao.png" />
       </div>
       <div class="line">
           5号线
@@ -44,7 +44,7 @@
             </div>
           </div>
           <div class="svgBg">
-            <img src="/src/assets/img/bg3.svg" />
+            <img src="/img/bg3.svg" />
           </div>
         </div>
       </el-col>

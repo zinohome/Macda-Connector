@@ -65,7 +65,7 @@
         </el-table-column>
 
         <template #empty>
-          <img src="/src/assets/img/no-data.svg" width="80" height="50" />
+          <img src="/img/no-data.svg" width="80" height="50" />
           <p style="font-size: 12px">当前暂无数据</p>
         </template>
       </el-table>

@@ -22,7 +22,7 @@
         <div class="chart-content">
             <div ref="chartRef" class="main-echart"></div>
             <div v-if="!hasData" class="no-data-overlay">
-                <img src="/src/assets/img/no-data.svg" width="60" />
+                <img src="/img/no-data.svg" width="60" />
                 <p>该时间段暂无历史趋势数据</p>
             </div>
         </div>

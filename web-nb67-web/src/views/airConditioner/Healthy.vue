@@ -66,7 +66,7 @@
 
                 <template #empty>
                     <div class="no-data-box">
-                        <img src="/src/assets/img/no-data.svg" width="60" />
+                        <img src="/img/no-data.svg" width="60" />
                         <p>暂无评估数据</p>
                     </div>
                 </template>

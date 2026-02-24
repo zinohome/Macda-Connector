@@ -48,9 +48,9 @@ const trainSelectionData = ref([
 ])
 
 const getCarImage = (index) => {
-    if (index === 0) return '/src/assets/img/carHeader.svg'
-    if (index === 5) return '/src/assets/img/carEnd.svg'
-    return '/src/assets/img/carBody.svg'
+    if (index === 0) return '/img/carHeader.svg'
+    if (index === 5) return '/img/carEnd.svg'
+    return '/img/carBody.svg'
 }
 
 const handleSelect = (carriageId) => {

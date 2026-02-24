@@ -1,7 +1,7 @@
 <template>
     <!-- <el-dropdown trigger="click" @command="handleCommand">
         <div class="drop-title">
-            <img src="@/assets/img/snow.png" width="30" height="30" />
+            <img src="/img/snow.png" width="30" height="30" />
             {{ train }}
             <el-icon>
                 <arrow-down />

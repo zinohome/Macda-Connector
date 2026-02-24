@@ -9,7 +9,7 @@
             <el-table-column prop="name" :label="props.nameLeft" min-width="50%"></el-table-column>
             <el-table-column prop="value" :label="props.title" align="right" min-width="50%"></el-table-column>
             <template #empty>
-                <img src="/src/assets/img/no-data.svg" width="40" height="50" />
+                <img src="/img/no-data.svg" width="40" height="50" />
                 <p style="font-size:12px">当前暂无数据</p>
             </template>
         </el-table>

@@ -187,7 +187,7 @@ const leftIcon = (state) => {
     default:
       str = "left1";
   }
-  return new URL(`/src/assets/img/${str}.svg`, import.meta.url).href;
+  return new URL(`/img/${str}.svg`, import.meta.url).href;
 };
 
 const rightIcon = (state) => {
@@ -205,7 +205,7 @@ const rightIcon = (state) => {
     default:
       str = "right1";
   }
-  return new URL(`/src/assets/img/${str}.svg`, import.meta.url).href;
+  return new URL(`/img/${str}.svg`, import.meta.url).href;
 };
 
 const getIcon = (obj, index, direction) => {
@@ -421,7 +421,7 @@ onMounted(() => {
     .img-item {
       width: 100%;
       height: 55px;
-      background-image: url("@/assets/img/center.png");
+      background-image: url("/img/center.png");
       background-size: 100% 100%;
       display: flex;
       justify-content: space-between;
@@ -434,12 +434,12 @@ onMounted(() => {
       }
     }
     .header-bg {
-      background-image: url("@/assets/img/header.png");
+      background-image: url("/img/header.png");
       padding: 0 12px 0 28px;
     }
     .footer-bg {
       padding: 0 28px 0 20px;
-      background-image: url("@/assets/img/footer.png");
+      background-image: url("/img/footer.png");
     }
   }
 

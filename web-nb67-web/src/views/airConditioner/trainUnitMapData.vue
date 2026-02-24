@@ -224,8 +224,8 @@ const props = defineProps({
 
 const mapBg = computed(() => {
     return Object.keys(props.crewDetails).length > 0 
-        ? '/src/assets/img/TrainUnitMapBg_anim.svg' 
-        : '/src/assets/img/TrainUnitMapBg.svg'
+        ? '/img/TrainUnitMapBg_anim.svg' 
+        : '/img/TrainUnitMapBg.svg'
 })
 
 
