@@ -14,7 +14,7 @@ services:
 
   # ── 前端服务：Vue3 SPA + Nginx ───────────────────────────────
   nb67-web:
-    image: harbor.naivehero.top:8443/macda2/nb67-web:v1.0.0
+    image: harbor.naivehero.top:8443/macda2/nb67-web:v2.1.2
     container_name: nb67-web
     hostname: nb67-web
     restart: unless-stopped
@@ -34,7 +34,7 @@ services:
 
   # ── BFF 服务：Node.js + Fastify ──────────────────────────────
   nb67-bff:
-    image: harbor.naivehero.top:8443/macda2/nb67-bff:v1.0.0
+    image: harbor.naivehero.top:8443/macda2/nb67-bff:v2.1.2
     container_name: nb67-bff
     hostname: nb67-bff
     restart: unless-stopped
