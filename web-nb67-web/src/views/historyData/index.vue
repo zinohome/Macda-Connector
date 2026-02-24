@@ -121,7 +121,8 @@
                 <el-table-column prop="dwexufan_op_tm" label="废排风机运行时间" width="140" show-overflow-tooltip />
                 <el-table-column prop="dwfad_op_cnt"  label="新风阀开度"       width="110" show-overflow-tooltip />
                 <el-table-column prop="dwrad_op_cnt"  label="回风阀开度"       width="110" show-overflow-tooltip />
-                <!-- 最后 1 列固定右侧 -->
+                <!-- 最后 2 列固定右侧 -->
+                <el-table-column prop="event_time"    label="设备上报时间"     width="185" fixed="right" show-overflow-tooltip />
                 <el-table-column prop="ingest_time"   label="数据采集时间"     width="185" fixed="right" show-overflow-tooltip />
             </el-table>
 
