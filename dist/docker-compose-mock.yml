@@ -110,8 +110,6 @@ services:
         condition: service_completed_successfully
     volumes:
       - "/data/MACDA2/mock/connect/data:/data"
-      # 挂载 mock 测试数据文件（whole_frame 随发布包一起提供，无需手动上传）
-      - "./mock-data:/data/input:ro"
     entrypoint: /bin/sh
     command: -c "echo \"$$CONNECT_CONFIG\" > /tmp/connect.yaml && /redpanda-connect -c /tmp/connect.yaml"
     environment:
