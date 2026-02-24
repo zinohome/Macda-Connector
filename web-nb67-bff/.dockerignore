@@ -4,11 +4,10 @@
 # 依赖目录（镜像内会重新 npm ci）
 node_modules/
 
-# 开发调试文件
+# 开发调试 JSON 文件（精确排除，避免误伤 tsconfig.json）
 *.log
-*.json
-!package.json
-!package-lock.json
+debug_*.json
+test_data.json
 
 # 开发工具配置
 .vscode/
