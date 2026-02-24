@@ -64,30 +64,27 @@ dist/
 | 服务器内存 | ≥ 8 GB |
 | 服务器磁盘 | ≥ 50 GB |
 
-### 1. 准备数据目录
+### 1. 运行安装脚本（首次部署）
 
 ```bash
-# 在服务器上创建持久化数据目录
-mkdir -p /data/MACDA2/redpanda/redpanda{1,2,3}
-mkdir -p /data/MACDA2/timescaledb/data
-mkdir -p /data/MACDA2/timescaledb/init-db
-mkdir -p /data/MACDA2/pgadmin
-mkdir -p /data/MACDA2/connect/config
-mkdir -p /data/MACDA2/mock/redpanda/data
-mkdir -p /data/MACDA2/mock/connect/data
+# 赋予执行权限
+chmod +x install.sh start.sh
+
+# 以 root 运行安装脚本（需要创建系统目录并设置权限）
+sudo ./install.sh
+
+# 如需更新配置文件（不影响已有数据）
+sudo ./install.sh --update
 ```
 
-### 2. 复制配置文件
+安装脚本会自动完成：
+- 创建 `/data/MACDA2/` 下所有必要的挂载目录
+- 设置 Redpanda (101:101)、TimescaleDB (1000:1000)、PgAdmin (5050:5050) 目录权限
+- 复制 `config/*.yaml` → `/data/MACDA2/connect/config/`
+- 复制 `init-db/01-init.sql` → `/data/MACDA2/timescaledb/init-db/`
+- 复制 `mock-data/*` → `/data/MACDA2/mock/connect/data/input/`
 
-```bash
-# 将 config/ 下的所有 yaml 复制到服务器
-cp config/*.yaml /data/MACDA2/connect/config/
-
-# 首次部署：复制数据库初始化脚本（已存在数据时跳过）
-cp init-db/01-init.sql /data/MACDA2/timescaledb/init-db/
-```
-
-### 3. 登录私有镜像仓库
+### 2. 登录私有镜像仓库
 
 ```bash
 docker login harbor.naivehero.top:8443
