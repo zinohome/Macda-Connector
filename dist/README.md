@@ -92,18 +92,17 @@ sudo ./install.sh --update
 
 ### 2. 准备镜像
 
-**方式 A：在线部署**（服务器能访问私有 Harbor）
+**方式 A：在线部署**（服务器能访问 Harbor 镜像仓库）
 
 ```bash
-docker login harbor.naivehero.top:8443
-# 启动时 docker compose 会自动拉取镜像
+# Harbor 对外开放，无需登录，启动时 docker compose 会自动拉取镜像
+./start.sh
 ```
 
 **方式 B：离线部署**（服务器无外网，需提前准备镜像包）
 
 ```bash
-# ① 在有网络的机器上打包镜像（需登录 Harbor）
-docker login harbor.naivehero.top:8443
+# ① 在有网络的机器上打包镜像
 chmod +x image-save.sh
 ./image-save.sh                # 拉取并打包到 images/*.tar
 
@@ -118,9 +117,7 @@ chmod +x image-load.sh
 ./image-load.sh                # 加载所有镜像到 Docker
 ```
 
-### 3. 登录私有镜像仓库
-
-### 4. 一键启动
+### 3. 一键启动
 
 ```bash
 # 启动全部服务（基础设施 + 应用层）
