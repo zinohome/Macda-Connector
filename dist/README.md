@@ -150,7 +150,68 @@ http://<服务器IP>:28080
 
 ---
 
+## 📈 水平扩展（Scale）
+
+### 扩展原则
+
+系统所有 Kafka Topic 均为 **3 分区**，这决定了 Connect 处理服务的有效扩展上限：
+
+> **黄金法则：单个消费者服务的实例数 ≤ Topic 分区数（3）**
+>
+> 超过分区数的实例会空转，浪费资源但不会报错。
+
+### 可扩展的服务
+
+以下 5 个 Connect 服务支持水平扩展（故意未设置 `container_name`）：
+
+| 服务名 | 消费 Topic | 生产 Topic | 建议实例数 |
+|--------|-----------|-----------|-----------|
+| `connect-parser` | `signal-in` | `signal-parsed` | 1 ~ 3 |
+| `connect-storage-writer` | `signal-in` | `signal-storage` | 1 ~ 3 |
+| `connect-event-builder` | `signal-parsed` | `signal-alarm`, `signal-life` | 1 ~ 3 |
+| `connect-pg-writer` | `signal-alarm`, `signal-life` | — (写 TimescaleDB) | 1 ~ 3 |
+| `connect-event-writer` | `signal-alarm` | — (写 TimescaleDB) | 1 ~ 3 |
+
+> ⚠️ `connect-topic-in`、`timescaledb`、`redpanda-*` 等服务**不支持**通过 `--scale` 扩展。
+
+### 操作命令
+
+```bash
+# 查看当前各服务实例数
+docker compose -f docker-compose-Data.yml ps
+
+# 将 connect-parser 扩展到 3 个实例（生产高流量推荐）
+docker compose -f docker-compose-Data.yml up -d --scale connect-parser=3
+
+# 同时扩展多个服务（一条命令）
+docker compose -f docker-compose-Data.yml up -d \
+  --scale connect-parser=3 \
+  --scale connect-storage-writer=3 \
+  --scale connect-event-builder=2 \
+  --scale connect-pg-writer=2 \
+  --scale connect-event-writer=2
+
+# 缩减回 1 个实例
+docker compose -f docker-compose-Data.yml up -d --scale connect-parser=1
+```
+
+### 扩展策略参考
+
+```
+信号接入量        推荐配置
+──────────────────────────────────────────────────
+低负载 (< 1K/s)   所有服务保持 1 实例（默认）
+中负载 (1K~5K/s)  connect-parser=2, 其余 1
+高负载 (> 5K/s)   connect-parser=3, connect-storage-writer=3,
+                  connect-event-builder=2, 其余 2
+```
+
+> 💡 **扩展时无需重启其他服务**，新实例启动后 Kafka 会自动触发 Rebalance，将分区分配给新实例。
+
+---
+
 ## ⚙️ 关键配置说明
+
 
 ### 修改数据库连接（BFF）
 
