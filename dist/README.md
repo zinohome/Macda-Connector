@@ -9,7 +9,10 @@
 
 ```
 dist/
-├── start.sh                    ← 一键启动/停止脚本
+├── image-save.sh               ← 【有网络机器】拉取并打包所有镜像为 .tar
+├── image-load.sh               ← 【离线服务器】加载镜像 + MD5 完整性校验
+├── install.sh                  ← 初始化目录权限 + 复制配置文件
+├── start.sh                    ← 一键启动/停止/重启/状态
 ├── docker-compose-Data.yml     ← 基础设施层（Redpanda + TimescaleDB + Connect 流水线）
 ├── docker-compose-Web.yml      ← 应用层（BFF + 前端 Nginx）
 ├── docker-compose-mock.yml     ← Mock 数据源（调试/演示用）
@@ -22,6 +25,9 @@ dist/
 │   └── nb67-pg-writer.yaml
 ├── init-db/
 │   └── 01-init.sql             ← TimescaleDB 初始化 SQL（首次部署执行）
+├── mock-data/
+│   └── whole_frame-260203      ← NB67 测试帧数据（Mock 模式使用）
+├── images/                     ← image-save.sh 生成的 .tar 镜像文件目录
 └── README.md                   ← 本文档
 ```
 
@@ -84,22 +90,43 @@ sudo ./install.sh --update
 - 复制 `init-db/01-init.sql` → `/data/MACDA2/timescaledb/init-db/`
 - 复制 `mock-data/*` → `/data/MACDA2/mock/connect/data/input/`
 
-### 2. 登录私有镜像仓库
+### 2. 准备镜像
+
+**方式 A：在线部署**（服务器能访问私有 Harbor）
 
 ```bash
 docker login harbor.naivehero.top:8443
+# 启动时 docker compose 会自动拉取镜像
 ```
+
+**方式 B：离线部署**（服务器无外网，需提前准备镜像包）
+
+```bash
+# ① 在有网络的机器上打包镜像（需登录 Harbor）
+docker login harbor.naivehero.top:8443
+chmod +x image-save.sh
+./image-save.sh                # 拉取并打包到 images/*.tar
+
+# ② 将整个 dist/ 目录传输到离线服务器
+scp -r dist/ user@server:/opt/macda/
+# 或者打包后通过 U 盘/内网传输
+tar czf macda-dist.tar.gz dist/
+
+# ③ 在离线服务器上加载镜像
+chmod +x image-load.sh
+./image-load.sh --verify       # 先验证文件完整性（MD5 校验）
+./image-load.sh                # 加载所有镜像到 Docker
+```
+
+### 3. 登录私有镜像仓库
 
 ### 4. 一键启动
 
 ```bash
-# 赋予执行权限（首次）
-chmod +x start.sh
-
 # 启动全部服务（基础设施 + 应用层）
 ./start.sh
 
-# 如需同时启动 mock 数据源（演示/调试模式）
+# 如需同时启动 mock 数据源（演示/调试模式，会自动读取 mock-data/ 下的测试帧）
 ./start.sh mock
 ```
 
