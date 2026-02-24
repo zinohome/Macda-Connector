@@ -80,7 +80,8 @@ kafka-logs/
 
 # Node (if using any JS tools)
 node_modules/
-package-lock.json
+# 注意：package-lock.json 已移出忽略列表，需要提交到 git
+# Docker 构建环境需要此文件执行 npm ci（精确复现依赖版本）
 yarn.lock
 
 # Documentation Build Artifacts
