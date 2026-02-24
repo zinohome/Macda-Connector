@@ -1,0 +1,64 @@
+input:
+  kafka:
+    addresses:
+      - redpanda-1:9092
+      - redpanda-2:9092
+      - redpanda-3:9092
+    topics:
+      - signal-alarm
+      - signal-predict
+      - signal-life
+    consumer_group: macda-event-persister
+    start_from_oldest: true
+
+pipeline:
+  processors:
+    # 1. 提取元数据并注入到数组元素，防止展开后丢失
+    - mapping: |
+        let event_type = meta("kafka_topic").split("-").index(1) | "unknown"
+        let meta_info = this.event_meta | {}
+        root = match {
+          this.hits.type() == "array" && this.hits.length() > 0 => this.hits.map_each(hit -> hit.merge({
+            "event_type": $event_type,
+            "event_meta": $meta_info
+          })),
+          _ => deleted()
+        }
+    
+    # 2. 将数组展开为独立消息
+    - unarchive:
+        format: json_array
+
+    # 3. 字段平铺与标准化，防范字符串型数字的 panic 错误
+    - mapping: |
+        root.event_time = this.event_meta.event_time_text | "1970-01-01T00:00:00Z"
+        root.ingest_time = this.event_meta.ingest_time | now().format("2006-01-02T15:04:05Z")
+        root.line_id = this.event_meta.line_id.number() | 0
+        root.train_id = this.event_meta.train_id.number() | 0
+        root.carriage_id = this.event_meta.carriage_id.number() | 0
+        root.device_id = this.event_meta.device_id | "unknown"
+        root.event_type = this.event_type | "unknown"
+        root.fault_code = this.code | "unknown"
+        root.fault_name = this.name | ""
+        root.severity = this.level | this.severity | 0
+        root.payload_json = this.string()
+
+output:
+  sql_raw:
+    driver: postgres
+    dsn: postgres://postgres:passw0rd@timescaledb:5432/postgres?sslmode=disable
+    query: |
+      INSERT INTO hvac.fact_event (
+        event_time, ingest_time, line_id, train_id, carriage_id, device_id,
+        event_type, fault_code, fault_name, severity, payload_json
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ON CONFLICT (event_time, device_id, fault_code) DO UPDATE 
+      SET ingest_time = EXCLUDED.ingest_time;
+    args_mapping: |
+      root = [
+        this.event_time, this.ingest_time, this.line_id, this.train_id, this.carriage_id, this.device_id,
+        this.event_type, this.fault_code, this.fault_name, this.severity, this.payload_json
+      ]
+    batching:
+      count: 100
+      period: 500ms

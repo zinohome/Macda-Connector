@@ -1,0 +1,101 @@
+# nb67-event-builder.yaml
+# NB67 空调事件构建 Pipeline
+#
+# 职责：
+#   读取 signal-parsed topic 的解析后信号，
+#   由 nb67_event_builder（Go 原生处理器）构建三类事件，
+#   再通过 fan_out 分发到三个下游 topic。
+#
+# 处理器逻辑详见：connect/cmd/connect-nb67/nb67_event_processor.go
+
+input:
+  kafka:
+    addresses:
+      - redpanda-1:9092
+      - redpanda-2:9092
+      - redpanda-3:9092
+    topics:
+      - signal-parsed
+    consumer_group: macda-event
+    start_from_oldest: false
+    commit_period: 1s
+
+pipeline:
+  threads: 2
+  processors:
+    # nb67_event_builder 是 Go 原生处理器，构建三类子事件：
+    #   predict_event - HVAC 算法预警（26 种预警码）
+    #   alarm_event   - 原生故障位告警
+    #   life_event    - 部件寿命预警
+    - nb67_event_builder: {}
+
+output:
+  broker:
+    # fan_out: 每条消息复制到所有 output，各 output 的 processors 负责裁剪字段
+    pattern: fan_out
+    outputs:
+      # signal-predict: predict_event（故障预警命中列表）
+      - processors:
+          - mapping: |
+              root = if this.exists("predict_event") && this.predict_event.hits.length() > 0 {
+                this.predict_event
+              } else {
+                deleted()
+              }
+        kafka:
+          addresses:
+            - redpanda-1:9092
+            - redpanda-2:9092
+            - redpanda-3:9092
+          topic: signal-predict
+          key: ${! this.event_meta.device_id }
+          partitioner: round_robin
+          max_in_flight: 64
+          compression: snappy
+
+      # signal-alarm: alarm_event（原生故障位命中列表）
+      - processors:
+          - mapping: |
+              root = if this.exists("alarm_event") && this.alarm_event.hits.length() > 0 {
+                this.alarm_event
+              } else {
+                deleted()
+              }
+        kafka:
+          addresses:
+            - redpanda-1:9092
+            - redpanda-2:9092
+            - redpanda-3:9092
+          topic: signal-alarm
+          key: ${! this.event_meta.device_id }
+          partitioner: round_robin
+          max_in_flight: 64
+          compression: snappy
+
+      # signal-life: life_event（部件寿命命中列表）
+      - processors:
+          - mapping: |
+              root = if this.exists("life_event") && this.life_event.hits.length() > 0 {
+                this.life_event
+              } else {
+                deleted()
+              }
+        kafka:
+          addresses:
+            - redpanda-1:9092
+            - redpanda-2:9092
+            - redpanda-3:9092
+          topic: signal-life
+          key: ${! this.event_meta.device_id }
+          partitioner: round_robin
+          max_in_flight: 64
+          compression: snappy
+
+logger:
+  level: INFO
+  format: json
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true

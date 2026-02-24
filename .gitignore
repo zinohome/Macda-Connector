@@ -9,7 +9,9 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
+# 注意：顶层 dist/ 是部署发布包，不忽略（各子项目的 dist 通过子目录 .gitignore 管理）
+web-nb67-web/dist/
+web-nb67-bff/dist/
 downloads/
 eggs/
 .eggs/

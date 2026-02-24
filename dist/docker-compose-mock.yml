@@ -1,0 +1,153 @@
+services:
+  mock-init:
+    image: harbor.naivehero.top:8443/macda2/alpine:3.20
+    container_name: mock-init
+    user: "0:0"
+    command: >
+      /bin/sh -c " mkdir -p /host-redpanda-data /host-connect-data; chown -R 101:101 /host-redpanda-data; chmod -R ug+rwX /host-redpanda-data; chmod -R a+rwX /host-connect-data; "
+    volumes:
+      - "/data/MACDA2/mock/redpanda/data:/host-redpanda-data"
+      - "/data/MACDA2/mock/connect/data:/host-connect-data"
+    networks:
+      - macdanet
+
+  mock-redpanda:
+    # NOTE: Please use the latest version here!
+    image: harbor.naivehero.top:8443/macda2/redpanda:v25.3.7
+    container_name: mock-redpanda
+    hostname: mock-redpanda
+    restart: unless-stopped
+    depends_on:
+      mock-init:
+        condition: service_completed_successfully
+    command:
+      - redpanda
+      - start
+      - --smp 1
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:49092
+      - --advertise-kafka-addr internal://mock-redpanda:9092,external://192.168.32.17:49092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:48082
+      - --advertise-pandaproxy-addr internal://mock-redpanda:8082,external://192.168.32.17:48082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:48081
+      - --rpc-addr mock-redpanda:33145
+      - --advertise-rpc-addr mock-redpanda:33145
+      - --mode dev-container
+      - --default-log-level=info
+      - --set redpanda.cloud_storage_enabled=false
+      - --set redpanda.cloud_storage_enable_remote_read=false
+      - --set redpanda.audit_enabled=false
+      - --set redpanda.partition_autobalancing_mode=node_add
+      - --set redpanda.core_balancing_continuous=false
+      - --set redpanda.enable_schema_id_validation=false
+    volumes:
+      - "/data/MACDA2/mock/redpanda/data:/var/lib/redpanda/data"
+    ports:
+      - 48081:8081
+      - 48082:8082
+      - 49092:9092
+      - 49644:9644
+    healthcheck:
+      test: [ "CMD", "rpk", "cluster", "info", "-X", "brokers=mock-redpanda:9092" ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks:
+      - macdanet
+  mock-redpanda-console:
+    image: harbor.naivehero.top:8443/macda2/redpanda-console:v3.5.2
+    container_name: mock-redpanda-console
+    hostname: mock-redpanda-console
+    restart: on-failure
+    entrypoint: /bin/sh
+    command: -c "echo \"$$CONSOLE_CONFIG_FILE\" > /tmp/config.yml; /app/console"
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["mock-redpanda:9092"]
+        schemaRegistry:
+          enabled: true
+          urls: ["http://mock-redpanda:8081"]
+        redpanda:
+          adminApi:
+            enabled: true
+            urls: ["http://mock-redpanda:9644"]
+    ports:
+      - 48080:8080
+    depends_on:
+      mock-redpanda:
+        condition: service_healthy
+    #healthcheck:
+    #    test: ["CMD", "netstat", "-anp", "|", "grep 38080", "||", "exit 1"]
+    #    interval: 30s
+    #    timeout: 5s
+    #    retries: 5
+    networks:
+      - macdanet
+  mock-create-topic:
+    image: harbor.naivehero.top:8443/macda2/redpanda:v25.3.7
+    container_name: mock-create-topic
+    entrypoint: /bin/sh
+    command: >-
+      -c "rpk topic create signal-in --if-not-exists --partitions 3 --replicas 1 -X brokers=mock-redpanda:9092 && rpk topic alter-config signal-in --set retention.ms=86400000 -X brokers=mock-redpanda:9092"
+    networks:
+      - macdanet
+    depends_on:
+      mock-redpanda:
+        condition: service_healthy
+
+  mock-connect:
+    image: harbor.naivehero.top:8443/macda2/connect:latest
+    #hostname: mock-connect
+    #container_name: mock-connect
+    restart: on-failure
+    depends_on:
+      mock-redpanda:
+        condition: service_healthy
+      mock-init:
+        condition: service_completed_successfully
+      mock-create-topic:
+        condition: service_completed_successfully
+    volumes:
+      - "/data/MACDA2/mock/connect/data:/data"
+    entrypoint: /bin/sh
+    command: -c "echo \"$$CONNECT_CONFIG\" > /tmp/connect.yaml && /redpanda-connect -c /tmp/connect.yaml"
+    environment:
+      CONNECT_CONFIG: |
+        input:
+          generate:
+            interval: 33ms
+            mapping: 'root = file("/data/input/whole_frame-260203")'
+
+        output:
+          kafka:
+            addresses:
+              - mock-redpanda:9092
+            topic: signal-in
+            max_in_flight: 64
+            compression: snappy
+            batching:
+              count: 100
+              period: 100ms
+
+        http:
+          address: 0.0.0.0:4195
+          enabled: true
+          root_path: /
+          
+        logger:
+          level: INFO
+          format: json
+    #ports:
+    #  - 44195:4195
+    #healthcheck:
+    #    test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:4195/ping"]
+    #    interval: 30s
+    #    timeout: 5s
+    #    retries: 5
+    networks:
+      - macdanet
+networks:
+  macdanet:
+    name: macdanet
+    driver: bridge

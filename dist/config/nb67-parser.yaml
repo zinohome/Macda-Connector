@@ -1,0 +1,69 @@
+input:
+  kafka:
+    addresses:
+      - redpanda-1:9092
+      - redpanda-2:9092
+      - redpanda-3:9092
+    topics:
+      - signal-in
+    consumer_group: macda-parser
+    start_from_oldest: false
+    commit_period: 1s
+
+pipeline:
+  threads: 8
+  processors:
+    - nb67_parser:
+        log_sample_every: 100
+
+    - mapping: |
+        root = this
+
+        root.schema_version = "nb67.parsed"
+        root.ingest_time = now()
+        root.process_time = now()
+
+        root.line_id = this.line_no
+        root.train_id = this.train_no
+        root.carriage_id = this.carriage_no
+        root.device_id = "HVAC-%v-%v-%v".format(this.line_no, this.train_no, this.carriage_no)
+
+        root.event_time_text = "20%v-%v-%v %v:%v:%v".format(
+          this.src_year,
+          this.src_month,
+          this.src_day,
+          this.src_hour,
+          this.src_minute,
+          this.src_second,
+        )
+
+        root.event_time_valid = if this.src_month >= 1 && this.src_month <= 12 && this.src_day >= 1 && this.src_day <= 31 {
+          true
+        } else {
+          false
+        }
+
+        root.quality_code = if this.quality_status == "OK" { 0 } else { 1 }
+
+output:
+  kafka:
+    addresses:
+      - redpanda-1:9092
+      - redpanda-2:9092
+      - redpanda-3:9092
+    topic: signal-parsed
+    key: ${! this.device_id }
+    max_in_flight: 64
+    compression: snappy
+    batching:
+      count: 200
+      period: 100ms
+
+logger:
+  level: INFO
+  format: json
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true

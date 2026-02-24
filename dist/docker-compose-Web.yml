@@ -1,0 +1,78 @@
+version: '3.8'
+
+# =============================================================
+# MACDA Connector 生产环境编排文件
+# 包含服务：
+#   - nb67-web  : Vue3 前端（Nginx 托管，对外暴露 :8080）
+#   - nb67-bff  : Node.js BFF（Fastify，仅内网访问）
+# 注意：
+#   - 基础设施服务（Redpanda、TimescaleDB 等）在 docker-compose-Dev.yml 中定义
+#   - 本文件假设基础设施已就绪，通过 external network macdanet 互联
+# =============================================================
+
+services:
+
+  # ── 前端服务：Vue3 SPA + Nginx ───────────────────────────────
+  nb67-web:
+    image: harbor.naivehero.top:8443/macda2/nb67-web:v2.1.2
+    container_name: nb67-web
+    hostname: nb67-web
+    restart: unless-stopped
+    ports:
+      # 对外暴露端口：浏览器访问 http://<服务器IP>:8080
+      - "8080:8080"
+    depends_on:
+      nb67-bff:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://127.0.0.1:8080/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - macdanet
+
+  # ── BFF 服务：Node.js + Fastify ──────────────────────────────
+  nb67-bff:
+    image: harbor.naivehero.top:8443/macda2/nb67-bff:v2.1.2
+    container_name: nb67-bff
+    hostname: nb67-bff
+    restart: unless-stopped
+    # 注意：BFF 不对外暴露端口，仅在 macdanet 内网可访问
+    # 如需本地调试，可临时取消注释下方 ports
+    # ports:
+    #   - "3000:3000"
+    environment:
+      # ── 运行模式 ──────────────────────────────────────────────
+      # DEV: 使用 ingest_time（数据入库时间），适合设备时钟不可信的场景
+      # PRD: 使用 event_time（设备上报事件时间），适合设备时钟已校准的场景
+      - RUNTIME=DEV
+
+      # ── 数据库连接 ────────────────────────────────────────────
+      # 根据实际部署环境修改此地址
+      - DATABASE_URL=postgres://postgres:passw0rd@timescaledb:5432/postgres?sslmode=disable
+
+      # ── Kafka (Redpanda) 连接 ─────────────────────────────────
+      # 生产环境：使用 Docker 内部服务名（macdanet 内网）
+      - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
+
+      # ── 日志配置 ──────────────────────────────────────────────
+      - LOG_LEVEL=info
+      - PORT=3000
+      - HOST=0.0.0.0
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/test" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - macdanet
+
+# ── 使用已存在的外部网络 ──────────────────────────────────────
+# 该网络由 docker-compose-Dev.yml 创建，两个 compose 文件共享此网络
+networks:
+  macdanet:
+    external: true
+    name: macdanet
+    driver: bridge

@@ -1,0 +1,449 @@
+version: '3.8'
+services:
+  dev-init:
+    image: harbor.naivehero.top:8443/macda2/alpine:3.20
+    container_name: dev-init
+    user: "0:0"
+    command: >
+      /bin/sh -c " mkdir -p /host-redpanda-1 /host-redpanda-2 /host-redpanda-3 /host-timescaledb /host-pgadmin; chown -R 101:101 /host-redpanda-1 /host-redpanda-2 /host-redpanda-3; chown -R 1000:1000 /host-timescaledb; chown -R 5050:5050  /host-pgadmin; chmod -R ug+rwX /host-redpanda-1 /host-redpanda-2 /host-redpanda-3 /host-timescaledb /host-pgadmin; "
+    volumes:
+      - "/data/MACDA2/redpanda/redpanda1:/host-redpanda-1"
+      - "/data/MACDA2/redpanda/redpanda2:/host-redpanda-2"
+      - "/data/MACDA2/redpanda/redpanda3:/host-redpanda-3"
+      - "/data/MACDA2/timescaledb/data:/host-timescaledb"
+      - "/data/MACDA2/pgadmin:/host-pgadmin"
+    networks:
+      - macdanet
+
+  redpanda-1:
+    # NOTE: Please use the latest version here!
+    image: harbor.naivehero.top:8443/macda2/redpanda:v25.3.7
+    container_name: redpanda-1
+    hostname: redpanda-1
+    restart: unless-stopped
+    depends_on:
+      dev-init:
+        condition: service_completed_successfully
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda-1:9092,external://192.168.32.17:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda-1:8082,external://192.168.32.17:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr redpanda-1:33145
+      - --advertise-rpc-addr redpanda-1:33145
+      - --mode dev-container
+      - --smp 1
+      - --default-log-level=info
+      - --set redpanda.cloud_storage_enabled=false
+      - --set redpanda.cloud_storage_enable_remote_read=false
+      - --set redpanda.audit_enabled=false
+      - --set redpanda.partition_autobalancing_mode=node_add
+      - --set redpanda.core_balancing_continuous=false
+      - --set redpanda.enable_schema_id_validation=false
+      - --set redpanda.auto_create_topics_enabled=false
+    volumes:
+      - "/data/MACDA2/redpanda/redpanda1:/var/lib/redpanda/data"
+    ports:
+      - 18081:18081
+      - 18082:18082
+      - 19092:19092
+      - 19644:9644
+    healthcheck:
+      test: [ "CMD", "rpk", "cluster", "info", "-X", "brokers=localhost:9092" ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks:
+      - macdanet
+
+  redpanda-2:
+    image: harbor.naivehero.top:8443/macda2/redpanda:v25.3.7
+    container_name: redpanda-2
+    hostname: redpanda-2
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:29092
+      - --advertise-kafka-addr internal://redpanda-2:9092,external://192.168.32.17:29092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:28082
+      - --advertise-pandaproxy-addr internal://redpanda-2:8082,external://192.168.32.17:28082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:28081
+      - --rpc-addr redpanda-2:33145
+      - --advertise-rpc-addr redpanda-2:33145
+      - --mode dev-container
+      - --smp 1
+      - --default-log-level=info
+      - --seeds redpanda-1:33145
+      - --set redpanda.cloud_storage_enabled=false
+      - --set redpanda.cloud_storage_enable_remote_read=false
+      - --set redpanda.audit_enabled=false
+      - --set redpanda.partition_autobalancing_mode=node_add
+      - --set redpanda.core_balancing_continuous=false
+      - --set redpanda.enable_schema_id_validation=false
+      - --set redpanda.auto_create_topics_enabled=false
+    volumes:
+      - "/data/MACDA2/redpanda/redpanda2:/var/lib/redpanda/data"
+    ports:
+      - 28081:28081
+      - 28082:28082
+      - 29092:29092
+      - 29644:9644
+    depends_on:
+      dev-init:
+        condition: service_completed_successfully
+      redpanda-1:
+        condition: service_healthy
+    networks:
+      - macdanet
+
+  redpanda-3:
+    image: harbor.naivehero.top:8443/macda2/redpanda:v25.3.7
+    container_name: redpanda-3
+    hostname: redpanda-3
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:39092
+      - --advertise-kafka-addr internal://redpanda-3:9092,external://192.168.32.17:39092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:38082
+      - --advertise-pandaproxy-addr internal://redpanda-3:8082,external://192.168.32.17:38082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:38081
+      - --rpc-addr redpanda-3:33145
+      - --advertise-rpc-addr redpanda-3:33145
+      - --mode dev-container
+      - --smp 1
+      - --default-log-level=info
+      - --seeds redpanda-1:33145
+      - --set redpanda.cloud_storage_enabled=false
+      - --set redpanda.cloud_storage_enable_remote_read=false
+      - --set redpanda.audit_enabled=false
+      - --set redpanda.partition_autobalancing_mode=node_add
+      - --set redpanda.core_balancing_continuous=false
+      - --set redpanda.enable_schema_id_validation=false
+      - --set redpanda.auto_create_topics_enabled=false
+    volumes:
+      - "/data/MACDA2/redpanda/redpanda3:/var/lib/redpanda/data"
+    ports:
+      - 38081:38081
+      - 38082:38082
+      - 39092:39092
+      - 39644:9644
+    depends_on:
+      dev-init:
+        condition: service_completed_successfully
+      redpanda-1:
+        condition: service_healthy
+    networks:
+      - macdanet
+
+  dev-create-topic:
+    image: harbor.naivehero.top:8443/macda2/redpanda:v25.3.7
+    container_name: dev-create-topic
+    entrypoint: /bin/sh
+    command: >-
+      -c " rpk topic create signal-in --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 && rpk topic create signal-parsed --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 && rpk topic create signal-predict --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 && rpk topic create signal-alarm --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 && rpk topic create signal-life --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 && rpk topic create signal-storage --if-not-exists --partitions 3 --replicas 1 -X brokers=redpanda-1:9092 && rpk topic alter-config signal-in --set retention.ms=604800000 -X brokers=redpanda-1:9092 && rpk topic alter-config signal-parsed --set retention.ms=604800000 -X brokers=redpanda-1:9092 && rpk topic alter-config signal-predict --set retention.ms=604800000 -X brokers=redpanda-1:9092 && rpk topic alter-config signal-alarm --set retention.ms=604800000 -X brokers=redpanda-1:9092 && rpk topic alter-config signal-life --set retention.ms=604800000 -X brokers=redpanda-1:9092 && rpk topic alter-config signal-storage --set retention.ms=604800000 -X brokers=redpanda-1:9092 "
+    depends_on:
+      redpanda-1:
+        condition: service_healthy
+    networks:
+      - macdanet
+
+  redpanda-console:
+    image: harbor.naivehero.top:8443/macda2/redpanda-console:v3.5.2
+    container_name: redpanda-console
+    hostname: redpanda-console
+    restart: unless-stopped
+    entrypoint: /bin/sh
+    command: -c "echo \"$$CONSOLE_CONFIG_FILE\" > /tmp/config.yml; /app/console"
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda-1:9092", "redpanda-2:9092", "redpanda-3:9092"]
+        schemaRegistry:
+          enabled: true
+          urls: ["http://redpanda-1:8081"]
+        redpanda:
+          adminApi:
+            enabled: true
+            urls: ["http://redpanda-1:9644", "http://redpanda-2:9644", "http://redpanda-3:9644"]
+    ports:
+      - 28080:8080
+    depends_on:
+      redpanda-1:
+        condition: service_healthy
+    networks:
+      - macdanet
+
+  connect-topic-in:
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full
+    restart: unless-stopped
+    entrypoint: /bin/sh
+    command: -c "echo \"$$CONNECT_CONFIG\" > /tmp/connect.yaml && /app/connect-nb67 -c /tmp/connect.yaml"
+    environment:
+      CONNECT_CONFIG: |
+        input:
+          kafka:
+            addresses:
+              - mock-redpanda:9092
+            topics:
+              - signal-in
+            consumer_group: topic-in-sync
+            start_from_oldest: false
+
+        output:
+          kafka:
+            addresses:
+              - redpanda-1:9092
+              - redpanda-2:9092
+              - redpanda-3:9092
+            topic: signal-in
+            max_in_flight: 64
+            compression: snappy
+            batching:
+              count: 100
+              period: 100ms
+
+        http:
+          address: 0.0.0.0:4195
+          enabled: true
+          root_path: /
+          
+        logger:
+          level: INFO
+          format: json
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      dev-create-topic:
+        condition: service_completed_successfully
+    networks:
+      - macdanet
+
+  # ── NB67 三段流水线 ──────────────────────────────────────────
+  # Pipeline Stage 1: 解析NB67二进制 → signal-parsed
+  connect-parser:
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full
+    restart: unless-stopped
+    command: [ "-c", "/etc/connect/nb67-parser.yaml" ]
+    volumes:
+      - "/data/MACDA2/connect/config/nb67-parser.yaml:/etc/connect/nb67-parser.yaml:ro"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      dev-create-topic:
+        condition: service_completed_successfully
+    networks:
+      - macdanet
+
+  # Pipeline Stage 2: 写入存储 (signal-parsed → TimescaleDB)
+  connect-storage-writer:
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full
+    restart: unless-stopped
+    command: [ "-c", "/etc/connect/nb67-storage-writer.yaml" ]
+    volumes:
+      - "/data/MACDA2/connect/config/nb67-storage-writer.yaml:/etc/connect/nb67-storage-writer.yaml:ro"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      connect-parser:
+        condition: service_healthy
+      dev-create-topic:
+        condition: service_completed_successfully
+    networks:
+      - macdanet
+
+  # Pipeline Stage 3: 事件检测 (signal-parsed → signal-predict/signal-alarm/signal-life)
+  connect-event-builder:
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full
+    restart: unless-stopped
+    command: [ "-c", "/etc/connect/nb67-event-builder.yaml" ]
+    environment:
+      - RUNTIME=DEV
+    volumes:
+      - "/data/MACDA2/connect/config/nb67-event-builder.yaml:/etc/connect/nb67-event-builder.yaml:ro"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      connect-parser:
+        condition: service_healthy
+      dev-create-topic:
+        condition: service_completed_successfully
+    networks:
+      - macdanet
+
+  # Pipeline Stage 4: 数据落盘持久化 (signal-storage → TimescaleDB)
+  # Pipeline Stage 4 (Plan A): 使用 Redpanda Connect SQL 插件直接落盘 (主流方案)
+  connect-pg-writer:
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full
+    restart: unless-stopped
+    command: [ "-c", "/etc/connect/nb67-pg-writer.yaml" ]
+    volumes:
+      - "/data/MACDA2/connect/config/nb67-pg-writer.yaml:/etc/connect/nb67-pg-writer.yaml:ro"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    #profiles: [ "plan_a" ]
+    depends_on:
+      connect-storage-writer:
+        condition: service_healthy
+      timescaledb:
+        condition: service_started
+    networks:
+      - macdanet
+
+  # Pipeline Stage 5: 事件历史持久化 (signal-alarm/predict/life → TimescaleDB)
+  connect-event-writer:
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full
+    restart: unless-stopped
+    command: [ "-c", "/etc/connect/nb67-event-writer.yaml" ]
+    volumes:
+      - "/data/MACDA2/connect/config/nb67-event-writer.yaml:/etc/connect/nb67-event-writer.yaml:ro"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:4195/ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      connect-event-builder:
+        condition: service_healthy
+      timescaledb:
+        condition: service_started
+    networks:
+      - macdanet
+
+  # Pipeline Stage 4 (Plan B): 使用 Go 语言原生的极致性能写入 (备用方案)
+  storage-adapter:
+    # 鉴于需要在别处构建镜像，此处注释掉 build，改用外部构建好的 image:
+    # 手动在此镜像目录下执行: docker build -t harbor.naivehero.top:8443/macda2/storage-adapter:v2.1.2 .
+    image: harbor.naivehero.top:8443/macda2/storage-adapter:v2.1.2
+    restart: unless-stopped
+    environment:
+      - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
+      - KAFKA_TOPICS=signal-storage,signal-alarm,signal-predict,signal-life
+      - PG_DSN=postgres://postgres:passw0rd@timescaledb:5432/postgres?sslmode=disable
+      - LOG_LEVEL=INFO
+    # 暂时将此高配版留存，当 Plan A 的 Connect 方案跑满瓶颈时切换使用。不启用时可通过 docker stop 暂停
+    profiles: [ "plan_b" ]
+    depends_on:
+      connect-storage-writer:
+        condition: service_healthy
+      timescaledb:
+        condition: service_started
+    networks:
+      - macdanet
+
+  timescaledb:
+    image: harbor.naivehero.top:8443/macda2/timescaledb-ha:pg14-ts2.19-all
+    container_name: timescaledb
+    hostname: timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: "passw0rd"
+      TZ: Asia/Shanghai
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C.UTF-8"
+    #ports:
+    #  - 5432:5432
+    volumes:
+      - "/data/MACDA2/timescaledb/data:/home/postgres/pgdata"
+      - "/data/MACDA2/timescaledb/init-db:/docker-entrypoint-initdb.d:ro"
+    #healthcheck:
+    #    test: ["CMD", "netstat", "-anp", "|", "grep 5432", "||", "exit 1"]
+    #    interval: 30s
+    #    timeout: 5s
+    #    retries: 5
+    networks:
+      - macdanet
+
+  pgadmin:
+    image: harbor.naivehero.top:8443/macda2/pgadmin4:9.12
+    container_name: pgadmin
+    hostname: pgadmin
+    restart: unless-stopped
+    depends_on:
+      - timescaledb
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "admin@macda.com"
+      PGADMIN_DEFAULT_PASSWORD: "passw0rd"
+    #ports:
+    #  - 8280:80
+    volumes:
+      - "/data/MACDA2/pgadmin:/var/lib/pgadmin"
+    #healthcheck:
+    #    test: ["CMD", "netstat", "-anp", "|", "grep 8280", "||", "exit 1"]
+    #    interval: 30s
+    #    timeout: 5s
+    #    retries: 5
+    networks:
+      - macdanet
+
+  nb67-web:
+    image: harbor.naivehero.top:8443/macda2/nb67-web:v2.1.2
+    container_name: nb67-web
+    hostname: nb67-web
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      nb67-bff:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://127.0.0.1:8080/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - macdanet
+
+  nb67-bff:
+    image: harbor.naivehero.top:8443/macda2/nb67-bff:v2.1.2
+    container_name: nb67-bff
+    hostname: nb67-bff
+    restart: unless-stopped
+    # 注意：BFF 不对外暴露端口，仅在 macdanet 内网可访问
+    # 如需本地调试，可临时取消注释下方 ports
+    # ports:
+    #   - "3000:3000"
+    environment:
+      # ── 运行模式 ──────────────────────────────────────────────
+      # DEV: 使用 ingest_time（数据入库时间）
+      # PRD: 使用 event_time（设备上报事件时间）
+      - RUNTIME=DEV
+      - DATABASE_URL=postgres://postgres:passw0rd@timescaledb:5432/postgres?sslmode=disable
+      - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
+      - LOG_LEVEL=info
+      - PORT=3000
+      - HOST=0.0.0.0
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/test" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - macdanet
+
+networks:
+  macdanet:
+    name: macdanet
+    driver: bridge
+    external: true
