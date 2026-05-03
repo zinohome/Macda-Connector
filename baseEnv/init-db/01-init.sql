@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS hvac.fact_event (
     fault_name TEXT,                              -- 故障/预警名称
     severity SMALLINT,                            -- 严重等级 (0, 1, 2...)
     status VARCHAR(16) DEFAULT 'open',            -- 事件状态: open, resolved
+    recovery_time TIMESTAMPTZ,                    -- 预警/报警消除时间（NULL 表示活动状态）
     payload_json JSONB,                           -- 事件发生时的上下文详情
     PRIMARY KEY (event_time, device_id, fault_code)
 );
