@@ -8,7 +8,7 @@ import { db } from './config/db.js';
 import { checkDbConnection } from './config/db.js';
 import { sql } from 'kysely';
 import { KafkaManager } from './config/kafka.js';
-import { HistoryRepository } from './repository/history.repository.js';
+import { HistoryRepository, TREND_PARAM_DEFS } from './repository/history.repository.js';
 import { StatusRepository } from './repository/status.repository.js';
 import { formatTime } from './utils/time.js';
 
@@ -238,34 +238,47 @@ async function bootstrap() {
             return await StatusRepository.getTrainRunningState(parseInt(request.params.trainId));
         });
 
-        // 历史报警接口 (适配原有前端)
+        // B1: 历史报警接口（支持多车厢/机组筛选，返回真实 recovery_time）
         fastify.post('/api/rest/train/AlarmInformation', async (request: any) => {
-            const { state, startTime, endTime, page, limit } = request.body;
-            fastify.log.info(`[BFF] AlarmInformation Request Body: ${JSON.stringify(request.body)}`);
+            const { state, trainNo, carriageNos, unitNames, startTime, endTime, page, limit } = request.body;
 
-            const trainId = state ? parseInt(state.slice(0, 4)) : undefined;
-            const carriageId = state ? parseInt(state.slice(4, 6)) : undefined;
+            // 兼容旧版单车厢 state 格式（700203）和新版多选格式
+            let trainId: number | undefined;
+            let carriageIds: number[] | undefined;
+            if (state) {
+                trainId = parseInt(String(state).slice(0, 4));
+                const cid = parseInt(String(state).slice(4, 6));
+                if (!isNaN(cid)) carriageIds = [cid];
+            }
+            if (trainNo) trainId = parseInt(String(trainNo));
+            if (carriageNos && Array.isArray(carriageNos) && carriageNos.length > 0) {
+                carriageIds = carriageNos.map((n: any) => parseInt(String(n))).filter((n: number) => !isNaN(n));
+            }
 
-            // 直接使用前端传递的时间戳，严禁在后端动态生成时间（防止翻页漂移）
             const safeStartTime = startTime || '';
             const safeEndTime = endTime || '';
-
-            // 强制类型转换，杜绝 NaN 或字符串导致的计算错误
             const safePage = Math.max(1, parseInt(page as string) || 1);
             const safeLimit = Math.max(1, parseInt(limit as string) || 10);
-
-            fastify.log.info(`[BFF] AlarmInformation Parsed: trainId=${trainId}, carriageId=${carriageId}, range=[${safeStartTime} - ${safeEndTime}], page=${safePage}, limit=${safeLimit}`);
 
             try {
                 const result = await StatusRepository.getHistoricalEvents({
                     trainId,
-                    carriageId,
+                    carriageIds,
+                    unitNames: unitNames || [],
                     startTime: safeStartTime,
                     endTime: safeEndTime,
                     eventType: 'alarm',
                     page: safePage,
                     limit: safeLimit
                 });
+
+                const formatUnit = (faultCode: string) => {
+                    if (!faultCode) return '-';
+                    const c = faultCode.toLowerCase();
+                    if (c.includes('u1')) return '机组一';
+                    if (c.includes('u2')) return '机组二';
+                    return '-';
+                };
 
                 const list = (result.list || []).map((row: any) => {
                     let level = '一般';
@@ -276,12 +289,13 @@ async function bootstrap() {
                     return {
                         train_id: row.train_id,
                         carriage_no: row.carriage_id,
+                        unit_name: formatUnit(row.fault_code || ''),
                         fault_code: row.fault_code,
                         fault_desc: row.fault_name,
                         fault_level: level,
                         occurrence_time: formatTime(row[config.runtime === 'DEV' ? 'ingest_time' : 'event_time']),
-                        recovery_time: null,
-                        status: '活动'
+                        recovery_time: row.recovery_time ? formatTime(row.recovery_time) : null,
+                        status: row.recovery_time ? '已恢复' : '活动'
                     };
                 });
 
@@ -472,16 +486,194 @@ async function bootstrap() {
             return await StatusRepository.getCarriageHealthAssessment(request.params.carriageId);
         });
 
+        // B6: 多参数趋势分析（params[] 为参数 key 数组，空则默认温度三线）
         fastify.post('/api/rest/carriage/TemperatureTrend', async (request: any) => {
-            const { carriageNo, type = 'hour' } = request.body; // 假设传入 "700203" 和 "day"
+            const { carriageNo, type = 'hour', params } = request.body;
             const trainId = parseInt(String(carriageNo).slice(0, 4));
             const carriageId = parseInt(String(carriageNo).slice(-2));
-
-            // 根据传入的维度（时、天、周、月）调用聚合查询
-            const data = await HistoryRepository.getTemperatureTrend(trainId, carriageId, type as string);
-
-            // 返回格式适配前端： { [type]: data }
+            const paramList = Array.isArray(params) && params.length > 0
+                ? params
+                : ['ras_u1', 'fas_u1', 'tic'];
+            const data = await HistoryRepository.getParamTrend(trainId, carriageId, type as string, paramList);
             return { [type]: data };
+        });
+
+        // B6: 获取可选参数列表（供前端多选下拉使用）
+        fastify.get('/api/rest/carriage/TrendParams', async () => {
+            return {
+                code: 200,
+                data: Object.entries(TREND_PARAM_DEFS).map(([key, def]) => ({
+                    key,
+                    label: def.label,
+                    unit: def.unit,
+                }))
+            };
+        });
+
+        // B2: 历史报警导出 CSV
+        fastify.get('/api/export/alarm', async (request: any, reply: any) => {
+            const { trainNo, carriageNos, unitNames, startTime, endTime } = request.query;
+            const trainId = trainNo ? parseInt(String(trainNo)) : undefined;
+            const cids = carriageNos ? String(carriageNos).split(',').map(Number).filter(n => !isNaN(n)) : undefined;
+            const units = unitNames ? String(unitNames).split(',') : [];
+
+            const result = await StatusRepository.getHistoricalEvents({
+                trainId, carriageIds: cids, unitNames: units,
+                startTime: startTime || '', endTime: endTime || '',
+                eventType: 'alarm', page: 1, limit: 10000
+            });
+
+            const formatUnit = (code: string) => code?.toLowerCase().includes('u2') ? '机组二' : code?.toLowerCase().includes('u1') ? '机组一' : '-';
+            const CARRIAGE_MAP: Record<string, string> = { '1':'TC1','2':'MP1','3':'M1','4':'M2','5':'MP2','6':'TC2' };
+
+            const headers = ['列车号','车厢','机组','严重级别','故障详情','开始时间','结束时间','状态'];
+            const rows = result.list.map((r: any) => {
+                const level = r.severity === 3 ? '严重' : r.severity === 2 ? '一般' : '轻微';
+                return [
+                    `0${r.train_id}`,
+                    CARRIAGE_MAP[String(r.carriage_id)] || r.carriage_id,
+                    formatUnit(r.fault_code),
+                    level,
+                    r.fault_name || '',
+                    formatTime(r[config.runtime === 'DEV' ? 'ingest_time' : 'event_time']),
+                    r.recovery_time ? formatTime(r.recovery_time) : '',
+                    r.recovery_time ? '已恢复' : '活动'
+                ].map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(',');
+            });
+
+            const bom = '﻿';
+            const csv = bom + headers.join(',') + '\n' + rows.join('\n');
+            reply.header('Content-Type', 'text/csv; charset=utf-8');
+            reply.header('Content-Disposition', `attachment; filename="alarm_export_${Date.now()}.csv"`);
+            return reply.send(csv);
+        });
+
+        // B3: 历史预警查询
+        fastify.post('/api/rest/train/HistoryWarning', async (request: any) => {
+            const { trainNo, carriageNos, unitNames, startTime, endTime, page, limit } = request.body;
+            const trainId = trainNo ? parseInt(String(trainNo)) : undefined;
+            const cids = carriageNos && Array.isArray(carriageNos) && carriageNos.length > 0
+                ? carriageNos.map((n: any) => parseInt(n)).filter((n: number) => !isNaN(n))
+                : undefined;
+
+            try {
+                const result = await StatusRepository.getHistoricalWarnings({
+                    trainId, carriageIds: cids, unitNames: unitNames || [],
+                    startTime: startTime || '', endTime: endTime || '',
+                    page: Math.max(1, parseInt(page) || 1),
+                    limit: Math.max(1, parseInt(limit) || 10)
+                });
+
+                const CARRIAGE_MAP: Record<string, string> = { '1':'TC1','2':'MP1','3':'M1','4':'M2','5':'MP2','6':'TC2' };
+                const formatUnit = (code: string) => code?.toLowerCase().includes('u2') ? '机组二' : code?.toLowerCase().includes('u1') ? '机组一' : '-';
+
+                const list = result.list.map((row: any) => ({
+                    train_id: row.train_id,
+                    carriage_no: CARRIAGE_MAP[String(row.carriage_id)] || row.carriage_id,
+                    unit_name: formatUnit(row.fault_code || ''),
+                    severity: row.severity === 3 ? '严重' : row.severity === 2 ? '一般' : '轻微',
+                    warn_name: row.fault_name,
+                    fault_code: row.fault_code,
+                    trigger_condition: row.trigger_condition || '',
+                    start_time: formatTime(row[config.runtime === 'DEV' ? 'ingest_time' : 'event_time']),
+                    end_time: row.recovery_time ? formatTime(row.recovery_time) : null,
+                }));
+
+                return { code: 200, data: { list, total: result.total } };
+            } catch (err: any) {
+                fastify.log.error(err);
+                return { code: 500, message: err.message, data: { list: [], total: 0 } };
+            }
+        });
+
+        // B4: 历史预警导出 CSV
+        fastify.get('/api/export/warning', async (request: any, reply: any) => {
+            const { trainNo, carriageNos, unitNames, startTime, endTime } = request.query;
+            const trainId = trainNo ? parseInt(String(trainNo)) : undefined;
+            const cids = carriageNos ? String(carriageNos).split(',').map(Number).filter(n => !isNaN(n)) : undefined;
+            const units = unitNames ? String(unitNames).split(',') : [];
+
+            const result = await StatusRepository.getHistoricalWarnings({
+                trainId, carriageIds: cids, unitNames: units,
+                startTime: startTime || '', endTime: endTime || '',
+                page: 1, limit: 10000
+            });
+
+            const CARRIAGE_MAP: Record<string, string> = { '1':'TC1','2':'MP1','3':'M1','4':'M2','5':'MP2','6':'TC2' };
+            const formatUnit = (code: string) => code?.toLowerCase().includes('u2') ? '机组二' : code?.toLowerCase().includes('u1') ? '机组一' : '-';
+            const headers = ['列车号','车厢','机组','严重级别','预警名称','触发条件','开始时间','结束时间'];
+            const rows = result.list.map((r: any) => {
+                const level = r.severity === 3 ? '严重' : r.severity === 2 ? '一般' : '轻微';
+                return [
+                    `0${r.train_id}`,
+                    CARRIAGE_MAP[String(r.carriage_id)] || r.carriage_id,
+                    formatUnit(r.fault_code),
+                    level,
+                    r.fault_name || '',
+                    r.trigger_condition || '',
+                    formatTime(r[config.runtime === 'DEV' ? 'ingest_time' : 'event_time']),
+                    r.recovery_time ? formatTime(r.recovery_time) : ''
+                ].map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(',');
+            });
+
+            const csv = '﻿' + headers.join(',') + '\n' + rows.join('\n');
+            reply.header('Content-Type', 'text/csv; charset=utf-8');
+            reply.header('Content-Disposition', `attachment; filename="warning_export_${Date.now()}.csv"`);
+            return reply.send(csv);
+        });
+
+        // B5: 预警详情——触发前30分钟参数曲线
+        fastify.get('/api/rest/predict/detail', async (request: any) => {
+            const { trainId, carriageId, triggerTime, warnCode } = request.query;
+            if (!trainId || !carriageId || !triggerTime) {
+                return { code: 400, message: 'trainId/carriageId/triggerTime 必填' };
+            }
+            try {
+                const data = await HistoryRepository.getPredictDetailCurve(
+                    parseInt(trainId),
+                    parseInt(carriageId),
+                    new Date(triggerTime),
+                    String(warnCode || '')
+                );
+                return { code: 200, data };
+            } catch (err: any) {
+                return { code: 500, message: err.message };
+            }
+        });
+
+        // B7: 预警条件配置 CRUD
+        fastify.get('/api/rest/warning/config', async () => {
+            const list = await StatusRepository.getWarningConfigs();
+            return { code: 200, data: list };
+        });
+
+        fastify.get('/api/rest/warning/config/:id', async (request: any) => {
+            const item = await StatusRepository.getWarningConfig(parseInt(request.params.id));
+            return item ? { code: 200, data: item } : { code: 404, message: '未找到' };
+        });
+
+        fastify.put('/api/rest/warning/config/:id', async (request: any) => {
+            try {
+                await StatusRepository.updateWarningConfig(parseInt(request.params.id), request.body);
+                return { code: 200, message: '更新成功' };
+            } catch (err: any) {
+                return { code: 500, message: err.message };
+            }
+        });
+
+        // B8: 最新数据时间戳（前端离线检测用）
+        fastify.get('/api/rest/train/LatestDataTime', async (request: any) => {
+            const { trainId, carriageId } = request.query;
+            if (!trainId || !carriageId) return { code: 400, message: 'trainId/carriageId 必填' };
+            try {
+                const latest = await StatusRepository.getLatestDataTime(
+                    parseInt(String(trainId)),
+                    parseInt(String(carriageId))
+                );
+                return { code: 200, data: { latest_time: latest ? formatTime(latest) : null } };
+            } catch (err: any) {
+                return { code: 500, message: err.message };
+            }
         });
 
         // 5. 启动 Kafka 消费者并广播

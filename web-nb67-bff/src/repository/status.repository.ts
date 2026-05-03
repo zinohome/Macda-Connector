@@ -357,10 +357,13 @@ export class StatusRepository {
         };
     }
 
+    // B1: 支持机组筛选（unitNames: ['机组一','机组二'] 或空=全部）
     static async getHistoricalEvents(params: {
         trainId?: number | undefined;
         carriageId?: number | undefined;
+        carriageIds?: number[] | undefined;
         eventType?: string | undefined;
+        unitNames?: string[] | undefined;
         startTime: string;
         endTime: string;
         page?: number;
@@ -398,8 +401,19 @@ export class StatusRepository {
             if (params.carriageId) {
                 q = q.where('carriage_id', '=', params.carriageId);
             }
+            if (params.carriageIds && params.carriageIds.length > 0) {
+                q = q.where('carriage_id', 'in', params.carriageIds as any);
+            }
             if (params.eventType) {
                 q = q.where('event_type', '=', params.eventType);
+            }
+            // 机组筛选：通过 fault_code 包含 U1/U2 判断机组
+            if (params.unitNames && params.unitNames.length > 0 && params.unitNames.length < 2) {
+                if (params.unitNames.includes('机组一')) {
+                    q = q.where(sql`lower(fault_code) like '%u1%'` as any);
+                } else if (params.unitNames.includes('机组二')) {
+                    q = q.where(sql`lower(fault_code) like '%u2%'` as any);
+                }
             }
             return q;
         };
@@ -485,5 +499,106 @@ export class StatusRepository {
                 [r.fault_code as string]: 1
             }))
         };
+    }
+
+    // B3: 历史预警查询 — LEFT JOIN warning_config 带出触发条件(strategy)
+    static async getHistoricalWarnings(params: {
+        trainId?: number;
+        carriageIds?: number[];
+        unitNames?: string[];
+        startTime: string;
+        endTime: string;
+        page: number;
+        limit: number;
+    }) {
+        const page = Math.max(1, params.page);
+        const limit = Math.min(500, Math.max(1, params.limit));
+        const offset = (page - 1) * limit;
+
+        const buildBase = () => {
+            let q = db
+                .selectFrom('hvac.fact_event as e')
+                .leftJoin('hvac.warning_config as wc', 'wc.warn_code', 'e.fault_code' as any)
+                .where('e.event_type' as any, '=', 'predict');
+
+            if (params.startTime) {
+                const start = new Date(params.startTime);
+                if (!isNaN(start.getTime())) q = q.where(`e.${this.timeCol}` as any, '>=', start);
+            }
+            if (params.endTime) {
+                const end = new Date(params.endTime);
+                if (!isNaN(end.getTime())) q = q.where(`e.${this.timeCol}` as any, '<=', end);
+            }
+            if (params.trainId) q = q.where('e.train_id' as any, '=', params.trainId);
+            if (params.carriageIds && params.carriageIds.length > 0) {
+                q = q.where('e.carriage_id' as any, 'in', params.carriageIds as any);
+            }
+            if (params.unitNames && params.unitNames.length > 0 && params.unitNames.length < 2) {
+                if (params.unitNames.includes('机组一')) {
+                    q = q.where(sql`lower(e.fault_code) like '%u1%'` as any);
+                } else if (params.unitNames.includes('机组二')) {
+                    q = q.where(sql`lower(e.fault_code) like '%u2%'` as any);
+                }
+            }
+            return q;
+        };
+
+        const totalResult = await buildBase()
+            .select(sql<number>`count(*)`.as('count'))
+            .executeTakeFirst();
+        const total = Number((totalResult as any)?.count || 0);
+
+        const list = await buildBase()
+            .select([
+                'e.event_time', 'e.ingest_time', 'e.train_id', 'e.carriage_id',
+                'e.fault_code', 'e.fault_name', 'e.severity', 'e.status',
+                'e.recovery_time' as any,
+                'wc.strategy as trigger_condition' as any,
+            ])
+            .orderBy(`e.${this.timeCol}` as any, 'desc')
+            .limit(limit)
+            .offset(offset)
+            .execute();
+
+        return { list, total };
+    }
+
+    // B7: 预警条件配置 CRUD
+    static async getWarningConfigs() {
+        return await db.selectFrom('hvac.warning_config').selectAll().orderBy('id', 'asc').execute();
+    }
+
+    static async getWarningConfig(id: number) {
+        return await db.selectFrom('hvac.warning_config').selectAll().where('id', '=', id).executeTakeFirst();
+    }
+
+    static async updateWarningConfig(id: number, data: {
+        threshold_good?: string;
+        threshold_normal?: string;
+        threshold_bad?: string;
+        trigger_operator?: string;
+        trigger_value?: number;
+        clear_value?: number;
+        duration_seconds?: number;
+        unit?: string;
+        strategy?: string;
+        enabled?: boolean;
+    }) {
+        return await db
+            .updateTable('hvac.warning_config' as any)
+            .set(data as any)
+            .where('id', '=', id)
+            .execute();
+    }
+
+    // B8: 获取指定车厢最新数据时间（供前端离线检测）
+    static async getLatestDataTime(trainId: number, carriageId: number): Promise<Date | null> {
+        const result = await db
+            .selectFrom('hvac.fact_raw')
+            .select(sql<Date>`MAX(${sql.raw(this.timeCol)})`.as('latest'))
+            .where('train_id', '=', trainId)
+            .where('carriage_id', '=', carriageId)
+            .executeTakeFirst();
+        return (result as any)?.latest || null;
     }
 }
