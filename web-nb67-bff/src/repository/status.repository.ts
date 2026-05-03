@@ -329,14 +329,14 @@ export class StatusRepository {
                 ratio = actualActions / c.ratedActions;
             }
 
-            // 判定逻辑：>90% 非健康，>75% 亚健康，否则健康
+            // 判定逻辑：≥85% 非健康，≥70% 亚健康，否则健康 — PHM 2.2节
             let healthStatus = '健康';
             let suggestion = '设备运行良好，继续保持';
 
-            if (ratio >= 0.9) {
+            if (ratio >= 0.85) {
                 healthStatus = '非健康';
                 suggestion = '设备寿命已耗尽，请立即安排更换';
-            } else if (ratio >= 0.75) {
+            } else if (ratio >= 0.70) {
                 healthStatus = '亚健康';
                 suggestion = '部件进入磨损后期，请加强关注';
             }

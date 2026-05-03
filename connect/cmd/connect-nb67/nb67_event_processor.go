@@ -416,15 +416,18 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
 		}
 	}
-	checkFanI("CfbkEfU11", "IEfU11", 20, 12, "机组1通风机1电流预警")
-	checkFanI("CfbkEfU11", "IEfU12", 20, 13, "机组1通风机2电流预警")
-	checkFanI("CfbkEfU21", "IEfU21", 20, 14, "机组2通风机1电流预警")
-	checkFanI("CfbkEfU21", "IEfU22", 20, 15, "机组2通风机2电流预警")
-	checkFanI("CfbkCfU11", "ICfU11", 29, 16, "机组1冷凝风机1电流预警")
-	checkFanI("CfbkCfU11", "ICfU12", 29, 17, "机组1冷凝风机2电流预警")
-	checkFanI("CfbkCfU21", "ICfU21", 29, 18, "机组2冷凝风机1电流预警")
-	checkFanI("CfbkCfU21", "ICfU22", 29, 19, "机组2冷凝风机2电流预警")
-	checkFanI("CfbkExufan", "IExufan", 40, 20, "废排风机电流预警")
+	// 通风机额定1.6A，保护整定1.8A，阈值18(=1.8A×10，原始数据单位0.1A) — PHM 3.6
+	checkFanI("CfbkEfU11", "IEfU11", 18, 12, "机组1通风机1电流预警")
+	checkFanI("CfbkEfU11", "IEfU12", 18, 13, "机组1通风机2电流预警")
+	checkFanI("CfbkEfU21", "IEfU21", 18, 14, "机组2通风机1电流预警")
+	checkFanI("CfbkEfU21", "IEfU22", 18, 15, "机组2通风机2电流预警")
+	// 冷凝风机额定2.0A，保护整定2.3A，阈值23 — PHM 3.7
+	checkFanI("CfbkCfU11", "ICfU11", 23, 16, "机组1冷凝风机1电流预警")
+	checkFanI("CfbkCfU11", "ICfU12", 23, 17, "机组1冷凝风机2电流预警")
+	checkFanI("CfbkCfU21", "ICfU21", 23, 18, "机组2冷凝风机1电流预警")
+	checkFanI("CfbkCfU21", "ICfU22", 23, 19, "机组2冷凝风机2电流预警")
+	// 废排风机额定2.0A，保护整定2.3A，阈值23 — PHM 3.8
+	checkFanI("CfbkExufan", "IExufan", 23, 20, "废排风机电流预警")
 
 	// ================================================================
 	// 5. 压缩机电流预警 (HVAC_21 ~ HVAC_24) -> 新风 < 35℃ 且 I > 18A -> 持续 10 分钟
@@ -449,12 +452,17 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 		fanRunning := rawBool(raw, fmt.Sprintf("CfbkEfU%d1", uIdx))
 		hasBeenRunning := p.checkRule(fanRunning, 20*time.Minute, deviceID, code+"_fanrun", currentTime)
 
-		aqErr := hasBeenRunning && (rawInt(raw, fmt.Sprintf("AqCo2U%d", uIdx)) > 1200 ||
-			rawInt(raw, fmt.Sprintf("AqPm25U%d", uIdx)) > 75 ||
+		// CO₂阈值4500ppm，持续15min — PHM 3.10 v02（v01为1200，v02修订为4500）
+		co2Err := hasBeenRunning && rawInt(raw, fmt.Sprintf("AqCo2U%d", uIdx)) > 4500
+		co2Hit := p.checkRule(co2Err, 15*time.Minute, deviceID, code+"_co2", currentTime)
+
+		// PM2.5/PM10/TVOC 持续20min — PHM 3.10
+		pmTvocErr := hasBeenRunning && (rawInt(raw, fmt.Sprintf("AqPm25U%d", uIdx)) > 75 ||
 			rawInt(raw, fmt.Sprintf("AqPm10U%d", uIdx)) > 150 ||
 			rawInt(raw, fmt.Sprintf("AqTvocU%d", uIdx)) > 600)
+		pmTvocHit := p.checkRule(pmTvocErr, 20*time.Minute, deviceID, code+"_pmtvoc", currentTime)
 
-		if p.checkRule(aqErr, 20*time.Minute, deviceID, code+"_pollute", currentTime) {
+		if co2Hit || pmTvocHit {
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
 		}
 	}
