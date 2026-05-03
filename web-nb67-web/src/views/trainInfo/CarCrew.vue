@@ -1,6 +1,12 @@
 <template>
     <div class="train-overview-card">
         <div class="section-title">
+            <div class="car-legend">
+                <span class="legend-item normal"><el-icon><SuccessFilled /></el-icon>正常</span>
+                <span class="legend-item warning"><el-icon><WarnTriangleFilled /></el-icon>预警</span>
+                <span class="legend-item alarm"><el-icon><CircleCloseFilled /></el-icon>报警</span>
+                <span class="legend-item offline"><el-icon><RemoveFilled /></el-icon>无数据</span>
+            </div>
         </div>
         <div class="train-visual-container">
             <div 
@@ -89,7 +95,25 @@ onMounted(fetchData)
 }
 
 .section-title {
-    display: none;
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 4px 6px;
+    .car-legend {
+        display: flex;
+        gap: 12px;
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.6);
+            .el-icon { font-size: 12px; }
+            &.normal  .el-icon { color: #42ad5d; }
+            &.warning .el-icon { color: #ffa55c; }
+            &.alarm   .el-icon { color: #e65355; }
+            &.offline .el-icon { color: #676e82; }
+        }
+    }
 }
 
 .train-visual-container {

@@ -3,6 +3,10 @@
         <div class="section-header">
             <span class="title-icon"></span>
             <span class="title-text">运行状态信息</span>
+            <div class="legend">
+                <span class="legend-item run"><i></i>运行</span>
+                <span class="legend-item stop"><i></i>停机</span>
+            </div>
         </div>
         <div class="table-container">
             <div class="custom-table">
@@ -11,11 +15,10 @@
                     <div class="cell label-cell"></div>
                     <div v-for="n in 6" :key="n" class="cell car-cell">
                         <div class="unit-titles">
-                            <span v-if="n <= 3">1号机组</span>
-                            <span v-else>2号机组</span>
-                            
-                            <span v-if="n <= 3">2号机组</span>
-                            <span v-else>1号机组</span>
+                            <span v-if="n <= 3">机组一</span>
+                            <span v-else>机组二</span>
+                            <span v-if="n <= 3">机组二</span>
+                            <span v-else>机组一</span>
                         </div>
                     </div>
                 </div>
@@ -175,6 +178,28 @@ onUnmounted(() => {
         color: #ffffff;
         font-size: 15px;
         font-weight: bold;
+        flex: 1;
+    }
+
+    .legend {
+        display: flex;
+        gap: 12px;
+        margin-right: 8px;
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.7);
+            i {
+                display: inline-block;
+                width: 12px;
+                height: 12px;
+                border-radius: 2px;
+            }
+            &.run i  { background: #42ad5d; }
+            &.stop i { background: #e65355; }
+        }
     }
 }
 

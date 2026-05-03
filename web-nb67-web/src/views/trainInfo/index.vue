@@ -11,7 +11,7 @@
                 <el-form :inline="true" :model="filterForm" class="filter-form">
                     <el-form-item label="车号">
                         <el-select v-model="filterForm.trainNo" placeholder="请选择车号" @change="handleTrainChange">
-                            <el-option v-for="item in trainList" :key="item.train_id" :label="item.train_id" :value="item.train_id" />
+                            <el-option v-for="item in trainList" :key="item.train_id" :label="item.label" :value="item.train_id" />
                         </el-select>
                     </el-form-item>
                     <el-form-item label="车厢号">
@@ -115,7 +115,8 @@ const fullCarriageId = computed(() => {
 
 // 生成车号列表 (7001 - 7040)
 const trainList = ref(Array.from({ length: 40 }, (_, i) => ({
-    train_id: (7001 + i).toString()
+    train_id: (7001 + i).toString(),
+    label: `0${7001 + i}`
 })))
 
 // 生成车厢号列表 (1 - 6车厢)

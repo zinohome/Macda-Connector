@@ -8,7 +8,7 @@
                 <el-form :inline="true" :model="filterForm" class="filter-form">
                     <el-form-item label="车号">
                         <el-select v-model="filterForm.trainNo" placeholder="请选择车号" class="train-select">
-                            <el-option v-for="item in trainList" :key="item.train_id" :label="item.train_id" :value="item.train_id" />
+                            <el-option v-for="item in trainList" :key="item.train_id" :label="item.label" :value="item.train_id" />
                         </el-select>
                     </el-form-item>
                     <el-form-item label="车厢号">
@@ -43,7 +43,9 @@
                     <span class="title-text">历史报警</span>
                 </div>
                 <el-table :data="tableData" border stripe style="width: 100%" v-loading="loading">
-                    <el-table-column prop="train_id" label="列车号" align="center" width="100" />
+                    <el-table-column prop="train_id" label="列车号" align="center" width="100">
+                        <template #default="scope">{{ scope.row.train_id ? `0${scope.row.train_id}` : '-' }}</template>
+                    </el-table-column>
                     <el-table-column prop="carriage_no" label="车厢" align="center" width="100">
                         <template #default="scope">{{ getCarriageName(scope.row.carriage_no) }}</template>
                     </el-table-column>
@@ -160,7 +162,7 @@ const getCarriageName = (no) => {
     return map[String(no)] || `${no}车厢`
 }
 
-const trainList    = ref(Array.from({ length: 40 }, (_, i) => ({ train_id: (7001 + i).toString() })))
+const trainList    = ref(Array.from({ length: 40 }, (_, i) => ({ train_id: (7001 + i).toString(), label: `0${7001 + i}` })))
 const carriageList = ref(Array.from({ length: 6  }, (_, i) => ({ carriage_no: (i + 1).toString(), label: (i + 1) + '车厢' })))
 
 const loading     = ref(false)

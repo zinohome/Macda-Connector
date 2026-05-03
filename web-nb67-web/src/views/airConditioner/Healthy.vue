@@ -3,8 +3,13 @@
         <div class="section-header">
             <span class="title-icon"></span>
             <span class="title-text">健康评估信息</span>
+            <div class="health-legend">
+                <span class="legend-item healthy"><i></i>健康</span>
+                <span class="legend-item sub-healthy"><i></i>亚健康</span>
+                <span class="legend-item unhealthy"><i></i>非健康</span>
+            </div>
         </div>
-        <div class="content" @mouseenter="pauseScroll" @mouseleave="resumeScroll">
+        <div class="content">
             <el-table 
                 ref="tableRef"
                 :data="assessmentData" 
@@ -85,7 +90,6 @@ const props = defineProps({
 
 const assessmentData = ref([])
 const tableRef = ref(null)
-let scrollTimer = null
 
 const getStatusType = (status) => {
     if (status === '健康') return 'success'
@@ -116,42 +120,10 @@ const getSuggestion = (status) => {
     return '暂无建议'
 }
 
-const startScroll = () => {
-  nextTick(() => {
-    setTimeout(() => {
-      const tableDiv = tableRef.value?.$el.querySelector('.el-scrollbar__wrap')
-      if (tableDiv) {
-        if(scrollTimer) clearInterval(scrollTimer)
-        // 只有当有数据且内容高度 > 容器高度时，才开启自动滚动
-        if (assessmentData.value.length > 0 && tableDiv.scrollHeight > tableDiv.clientHeight) {
-          const scrollFn = () => {
-            tableDiv.scrollTop += 1
-            if (Math.ceil(tableDiv.scrollTop) >= tableDiv.scrollHeight - tableDiv.clientHeight) {
-              tableDiv.scrollTop = 0
-            }
-          }
-          scrollTimer = setInterval(scrollFn, 50)
-        }
-      }
-    }, 500)
-  })
-}
-
-const pauseScroll = () => {
-  if (scrollTimer) clearInterval(scrollTimer)
-}
-
-const resumeScroll = () => {
-  startScroll()
-}
-
 const fetchData = () => {
-    // assessmentData.value = [] 
     if (!props.carriageId) return
     getHealthAssessment(props.carriageId).then(res => {
         assessmentData.value = res.data || res.vw_health_assessment || []
-        console.log('[Healthy] Data Updated')
-        resumeScroll()
     })
 }
 
@@ -230,6 +202,28 @@ onUnmounted(() => {
         color: #ffffff;
         font-size: 16px;
         font-weight: bold;
+        flex: 1;
+    }
+
+    .health-legend {
+        display: flex;
+        gap: 12px;
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.7);
+            i {
+                display: inline-block;
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+            }
+            &.healthy    i { background: #42ad5d; }
+            &.sub-healthy i { background: #ffa55c; }
+            &.unhealthy  i { background: #e65355; }
+        }
     }
 }
 

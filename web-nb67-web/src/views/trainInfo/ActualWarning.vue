@@ -1,28 +1,27 @@
 <template>
-    <div class="warp" @mouseenter="pauseScroll" @mouseleave="resumeScroll">
-        <!-- 实时报警 -->
+    <div class="warp">
         <div class="section-header">
             <span class="title-icon"></span>
             <span class="title-text">实时报警</span>
         </div>
-        <el-table ref="tableRef" :data="props.ActualWarningData" stripe height="245px" style="width: 100%;">
-            <el-table-column prop="carriage_no" label="车厢号" min-width="15%"></el-table-column>
-            <el-table-column prop="name" label="报警名称" min-width="45%" show-overflow-tooltip></el-table-column>
-            <el-table-column prop="alarm_time" label="报警时间" min-width="25%" show-overflow-tooltip></el-table-column>
-            <el-table-column label="操作" min-width="15%">
+        <el-table :data="props.ActualWarningData" stripe height="245px" style="width: 100%;">
+            <el-table-column prop="train_no" label="车号" min-width="14%" show-overflow-tooltip>
+                <template #default="scope">{{ formatTrainNo(scope.row.train_no) }}</template>
+            </el-table-column>
+            <el-table-column prop="carriage_no" label="车厢" min-width="12%">
+                <template #default="scope">{{ getCarriageName(scope.row.carriage_no) }}</template>
+            </el-table-column>
+            <el-table-column label="机组" min-width="12%">
+                <template #default="scope">{{ formatUnit(scope.row.name) }}</template>
+            </el-table-column>
+            <el-table-column prop="name" label="报警名称" min-width="35%" show-overflow-tooltip></el-table-column>
+            <el-table-column prop="alarm_time" label="时间" min-width="20%" show-overflow-tooltip></el-table-column>
+            <el-table-column label="建议" min-width="10%">
                 <template #default="scope">
-                    <el-popover
-                        class="item" 
-                        popper-class="advice-popover"
-                        placement="bottom"
-                        title="指导建议"
-                        width="240"
-                        trigger="hover"
-                        :content="scope.row.precautions">
+                    <el-popover popper-class="advice-popover" placement="left" title="指导建议"
+                        width="240" trigger="hover" :content="scope.row.precautions || '请联系专业维修人员处理'">
                         <template #reference>
-                         <el-link type="primary" underline="never" :class="['btn_text']">
-                            指导建议
-                        </el-link>
+                            <el-link type="primary" underline="never" class="btn_text">建议</el-link>
                         </template>
                     </el-popover>
                 </template>
@@ -36,55 +35,22 @@
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref } from 'vue'
 
 const props = defineProps({
-  ActualWarningData: {
-    type: Array,
-    default: []
-  }
+  ActualWarningData: { type: Array, default: () => [] }
 })
-const router = useRouter();
-const tableRef = ref(null)
-let scrollTimer = null
 
-const startScroll = () => {
-  nextTick(() => {
-    setTimeout(() => {
-      const tableDiv = tableRef.value?.$el.querySelector('.el-scrollbar__wrap')
-      if (tableDiv) {
-        if(scrollTimer) clearInterval(scrollTimer)
-        // 只有当有数据且内容高度 > 容器高度时，才开启自动滚动
-        if (props.ActualWarningData.length > 0 && tableDiv.scrollHeight > tableDiv.clientHeight) {
-          const scrollFn = () => {
-            tableDiv.scrollTop += 1
-            if (Math.ceil(tableDiv.scrollTop) >= tableDiv.scrollHeight - tableDiv.clientHeight) {
-              tableDiv.scrollTop = 0
-            }
-          }
-          scrollTimer = setInterval(scrollFn, 50)
-        }
-      }
-    }, 500)
-  })
+const CARRIAGE_MAP = { '1':'TC1','2':'MP1','3':'M1','4':'M2','5':'MP2','6':'TC2' }
+const getCarriageName = (no) => CARRIAGE_MAP[String(no)] || `${no}车`
+const formatTrainNo = (no) => no ? `0${no}` : '-'
+const formatUnit = (name) => {
+  if (!name) return '-'
+  const n = name.toLowerCase()
+  if (n.includes('u2') || n.includes('机组2')) return '机组二'
+  if (n.includes('u1') || n.includes('机组1')) return '机组一'
+  return '-'
 }
-
-const pauseScroll = () => {
-  if (scrollTimer) clearInterval(scrollTimer)
-}
-
-const resumeScroll = () => {
-  startScroll()
-}
-
-watch(() => props.ActualWarningData, () => {
-  resumeScroll()
-}, { deep: true, immediate: true })
-
-onUnmounted(() => {
-  if(scrollTimer) clearInterval(scrollTimer)
-})
 </script>
 
 <style scoped>
