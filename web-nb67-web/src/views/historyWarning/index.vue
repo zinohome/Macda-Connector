@@ -106,7 +106,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getHistoryWarning, getPredictDetail, getWarningExportUrl } from '@/api/api'
 import * as echarts from 'echarts'
@@ -238,6 +238,15 @@ const showDetail = async (row) => {
         detailLoading.value = false
     }
 }
+
+// dialog关闭时释放ECharts实例，防止内存泄漏
+watch(detailVisible, (v) => {
+    if (!v && detailChart) { detailChart.dispose(); detailChart = null }
+})
+
+onUnmounted(() => {
+    if (detailChart) { detailChart.dispose(); detailChart = null }
+})
 
 const goBack = () => router.push({ name:'trainInfo', query:{ trainNo: filterForm.trainNo } })
 onMounted(() => fetchData())

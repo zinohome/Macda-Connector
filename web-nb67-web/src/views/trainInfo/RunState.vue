@@ -111,7 +111,7 @@ const getVal = (carIdx, pos, row) => {
         // 空气质量类：每列只取机组1的值（每车厢一个传感器，U1/U2取平均或取U1）
         // key 格式：aq_co2 → AqCo2U1 / AqCo2U2
         const suffix = `U${unitIdx}`
-        const keyMap: Record<string, string> = {
+        const keyMap = {
             'aq_co2': `AqCo2${suffix}`, 'aq_tvoc': `AqTvoc${suffix}`,
             'aq_pm25': `AqPm25${suffix}`, 'aq_pm10': `AqPm10${suffix}`,
             'aq_t': `AqT${suffix}`, 'aq_h': `AqH${suffix}`

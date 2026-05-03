@@ -53,6 +53,7 @@ const props = defineProps({
 const chartRef = ref(null)
 let myChart = null
 const currentTab = ref('hour')
+const handleResize = () => myChart?.resize()
 const hasData = ref(true)
 let refreshTimer = null
 
@@ -202,12 +203,12 @@ onMounted(async () => {
     await loadParamOptions()
     fetchData()
     refreshTimer = setInterval(fetchData, MONITOR_CONFIG.refreshInterval)
-    window.addEventListener('resize', () => myChart?.resize())
+    window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
     if (refreshTimer) clearInterval(refreshTimer)
-    window.removeEventListener('resize', () => myChart?.resize())
+    window.removeEventListener('resize', handleResize)
     if (myChart) { myChart.dispose(); myChart = null }
 })
 </script>

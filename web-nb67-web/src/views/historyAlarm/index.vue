@@ -148,7 +148,7 @@ watch(
         if (!oldVals) return
         if (newVals[0] !== oldVals[0] || newVals[1] !== oldVals[1]) {
             if (newVals[0]) filterForm.trainNo    = String(newVals[0])
-            if (newVals[1]) filterForm.carriageNo = String(newVals[1])
+            if (newVals[1]) filterForm.carriageNos = [String(newVals[1])]
             handleQuery()
         }
     }
@@ -198,8 +198,6 @@ const fetchData = async (p, l) => {
     // 直接读取 DatePicker 当前值，不做任何修改
     const startTime = filterForm.timeRange?.[0] || ''
     const endTime   = filterForm.timeRange?.[1] || ''
-    // 将车厢号转为两位字符串（如 "3" -> "03", "03" -> "03"），生成 6位 state (如 700203)
-    const carriageStr = String(filterForm.carriageNo).replace(/^0+/, '').padStart(2, '0')
     // 多选车厢：排除 'all'
     const carriageNos = (filterForm.carriageNos || []).filter(v => v !== 'all')
 
@@ -226,7 +224,7 @@ const fetchData = async (p, l) => {
             
             // 重要：在这里强制打印一次，确认 total 是否为 0
             if (remoteTotal === 0) {
-                console.warn(`[HistoryAlarm] req#${reqId} WARNING: total is 0. params were:`, { state, startTime, endTime, page, limit })
+                console.warn(`[HistoryAlarm] req#${reqId} WARNING: total is 0. params were:`, { trainNo: filterForm.trainNo, carriageNos, startTime, endTime, page, limit })
             } else {
                 console.log(`[HistoryAlarm] req#${reqId} success: total=${remoteTotal}, list=${remoteList.length}`)
             }

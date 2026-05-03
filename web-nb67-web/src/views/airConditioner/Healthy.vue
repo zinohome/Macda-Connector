@@ -81,7 +81,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { getHealthAssessment } from '@/api/api'
 
 const props = defineProps({
@@ -132,9 +132,6 @@ watch(() => props.carriageId, () => {
     fetchData()
 })
 
-watch(() => assessmentData.value, () => {
-  resumeScroll()
-}, { deep: true })
 
 import { MONITOR_CONFIG } from '@/config/monitorConfig.js'
 
@@ -146,7 +143,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if(scrollTimer) clearInterval(scrollTimer)
   if(dataTimer) clearInterval(dataTimer)
 })
 </script>
