@@ -69,6 +69,16 @@ export const router = createRouter({
             component: () => import("@/views/historyAlarm/index.vue")
         },
         {
+            path: "/KT/historyWarning",
+            name: "historyWarning",
+            component: () => import("@/views/historyWarning/index.vue")
+        },
+        {
+            path: "/KT/warningConfig",
+            name: "warningConfig",
+            component: () => import("@/views/warningConfig/index.vue")
+        },
+        {
             path: "/KT/carrigeinfo",
 
             name: "carrigeinfo",
