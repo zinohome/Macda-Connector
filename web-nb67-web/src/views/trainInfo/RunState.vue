@@ -56,10 +56,17 @@ let refreshTimer = null
 const rows = [
     { label: '压缩机1', key: 'comp_u1', isStatus: true },
     { label: '压缩机2', key: 'comp_u2', isStatus: true },
-    { label: '通风机', key: 'ef', isStatus: true },
-    { label: '冷凝风机', key: 'cf', isStatus: true },
-    { label: '新风阀', key: 'fadpos', suffix: '%' },
-    { label: '回风阀', key: 'radpos', suffix: '%' }
+    { label: '通风机',  key: 'ef',      isStatus: true },
+    { label: '冷凝风机', key: 'cf',     isStatus: true },
+    { label: '新风阀',  key: 'fadpos',  suffix: '%' },
+    { label: '回风阀',  key: 'radpos',  suffix: '%' },
+    // 空气质量6行（来自示意图右上角，需求2迁移至此）
+    { label: 'CO₂',    key: 'aq_co2',   suffix: 'ppm', isAQ: true },
+    { label: 'TVOC',   key: 'aq_tvoc',  suffix: 'ppb', isAQ: true },
+    { label: 'PM2.5',  key: 'aq_pm25',  suffix: 'µg/m³', isAQ: true },
+    { label: 'PM10',   key: 'aq_pm10',  suffix: 'µg/m³', isAQ: true },
+    { label: '空气温度', key: 'aq_t',   suffix: '℃', isAQ: true },
+    { label: '空气湿度', key: 'aq_h',   suffix: 'RH%', isAQ: true },
 ]
 
 // 对称逻辑：1-3车(1,2), 4-6车(2,1)
@@ -100,15 +107,28 @@ const getVal = (carIdx, pos, row) => {
         return Object.keys(carData).find(k => k.toLowerCase().replace(/_/g, '').includes(flatBase));
     };
 
-    if (row.isStatus) {
+    if (row.isAQ) {
+        // 空气质量类：每列只取机组1的值（每车厢一个传感器，U1/U2取平均或取U1）
+        // key 格式：aq_co2 → AqCo2U1 / AqCo2U2
+        const suffix = `U${unitIdx}`
+        const keyMap: Record<string, string> = {
+            'aq_co2': `AqCo2${suffix}`, 'aq_tvoc': `AqTvoc${suffix}`,
+            'aq_pm25': `AqPm25${suffix}`, 'aq_pm10': `AqPm10${suffix}`,
+            'aq_t': `AqT${suffix}`, 'aq_h': `AqH${suffix}`
+        }
+        const rawKey = keyMap[row.key]
+        const val = rawKey ? carData[rawKey] : undefined
+        if (val === undefined || val === null || val === '' || val == 0) return '-'
+        return `${val}${row.suffix}`
+    } else if (row.isStatus) {
         // 状态类：构造基础 Key
-        let baseKey = row.key.startsWith('comp_u') 
-            ? `comp_u${unitIdx}${row.key.slice(-1)}` 
+        let baseKey = row.key.startsWith('comp_u')
+            ? `comp_u${unitIdx}${row.key.slice(-1)}`
             : `${row.key}_u${unitIdx}`;
-        
+
         const key = findKeyInObj(baseKey);
         const val = carData[key];
-        
+
         if (val === undefined || val === null) return '-'
         // 允许数字 1, 布尔值 true, 字符串 "true" (忽略大小写)
         const isRun = val == 1 || val === true || String(val).toLowerCase() === 'true';

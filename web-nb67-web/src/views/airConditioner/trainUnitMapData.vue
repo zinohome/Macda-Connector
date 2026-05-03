@@ -131,47 +131,7 @@
             <div class="popup cardAlign">系统1膨胀阀开度</div>
         </div>
 
-        <!-- 空气监测网络 -->
-        <div class="airMonitoring orientation">
-            <div class="airMonitoringCard">
-                <div class="cardItem">
-                    <div class="unitFont airMonitoringCardT">
-                        <span class="dataFont">{{ props.UnitNo =='1号机组' ? formatVal(props.crewDetails.aq_t_u1, '℃'): formatVal(props.crewDetails.aq_t_u2, '℃') }}</span>℃
-                        <div class="popup cardAlign">空气监测终端温度</div>
-                    </div>
-                </div>
-                <div class="cardItem">
-                    <div class="unitFont airMonitoringCardRH">
-                        <span class="dataFont">{{ props.UnitNo =='1号机组' ? formatVal(props.crewDetails.aq_h_u1, 'RH') : formatVal(props.crewDetails.aq_h_u2, 'RH') }}</span>RH
-                        <div class="popup cardAlign">空气监测终端湿度</div>
-                    </div>
-                </div>
-                <div class="cardItem">
-                    <div class="unitFont airMonitoringCardppm">
-                        <span class="dataFont">{{ props.UnitNo =='1号机组' ? formatVal(props.crewDetails.aq_co2_u1, 'ppm') : formatVal(props.crewDetails.aq_co2_u2, 'ppm') }}</span>ppm
-                        <div class="popup cardAlign">空气监测终端CO2</div>
-                    </div>
-                </div>
-                <div class="cardItem">
-                    <div class="unitFont airMonitoringCardppb">
-                        <span class="dataFont">{{ props.UnitNo =='1号机组' ? formatVal(props.crewDetails.aq_tvoc_u1, 'ppb') : formatVal(props.crewDetails.aq_tvoc_u2, 'ppb') }}</span>ppb
-                        <div class="popup cardAlign">空气监测终端TVOC</div>
-                    </div>
-                </div>
-                <div class="cardItem">
-                    <div class="unitFont airMonitoringCardPM2">
-                        <span class="dataFont">{{ props.UnitNo =='1号机组' ? formatVal(props.crewDetails.aq_pm2_5_u1, 'μg/m³') : formatVal(props.crewDetails.aq_pm2_5_u2, 'μg/m³') }}</span>μg/m³
-                        <div class="popup cardAlign">空气监测终端PM2.5</div>
-                    </div>
-                </div>
-                <div class="cardItem">
-                    <div class="unitFont airMonitoringCardPM10">
-                        <span class="dataFont">{{ props.UnitNo =='1号机组' ? formatVal(props.crewDetails.aq_pm10_u1, 'μg/m³') : formatVal(props.crewDetails.aq_pm10_u2, 'μg/m³') }}</span>μg/m³
-                        <div class="popup cardAlign">空气监测终端PM10</div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- 空气监测数据已移至运行状态信息表格（需求2），此处删除浮动显示 -->
 
         <!-- 阀门与滤网 -->
         <div class="newTrendTemperature orientation">

@@ -75,3 +75,29 @@ export const getTrainDataDatesApi = (params) => request('/api/getTrainDataDates'
 
 //根据id获取数据
 export const getEaOrPaById = (params) => request('/api/getEaOrPaById', 'get', params)
+
+// B3: 历史预警查询
+export const getHistoryWarning = (params) => request('/api/rest/train/HistoryWarning', 'post', params)
+
+// B2/B4: 报警/预警导出（直接拼URL跳转下载）
+export const getAlarmExportUrl = (params) => {
+    const qs = new URLSearchParams(params).toString()
+    return `/api/export/alarm?${qs}`
+}
+export const getWarningExportUrl = (params) => {
+    const qs = new URLSearchParams(params).toString()
+    return `/api/export/warning?${qs}`
+}
+
+// B5: 预警详情曲线
+export const getPredictDetail = (params) => request('/api/rest/predict/detail', 'get', params)
+
+// B6: 参数列表
+export const getTrendParamsApi = () => request('/api/rest/carriage/TrendParams', 'get')
+
+// B7: 预警条件配置 CRUD
+export const getWarningConfigs = () => request('/api/rest/warning/config', 'get')
+export const updateWarningConfig = (id, data) => request(`/api/rest/warning/config/${id}`, 'put', data)
+
+// B8: 最新数据时间（离线检测）
+export const getLatestDataTime = (params) => request('/api/rest/train/LatestDataTime', 'get', params)

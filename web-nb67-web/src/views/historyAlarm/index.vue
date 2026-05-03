@@ -11,9 +11,16 @@
                             <el-option v-for="item in trainList" :key="item.train_id" :label="item.label" :value="item.train_id" />
                         </el-select>
                     </el-form-item>
-                    <el-form-item label="车厢号">
-                        <el-select v-model="filterForm.carriageNo" placeholder="请选择车厢号" class="carriage-select">
+                    <el-form-item label="车厢">
+                        <el-select v-model="filterForm.carriageNos" multiple collapse-tags placeholder="全选" class="carriage-select" style="width:140px">
+                            <el-option label="全选" value="all" />
                             <el-option v-for="item in carriageList" :key="item.carriage_no" :label="item.label" :value="item.carriage_no" />
+                        </el-select>
+                    </el-form-item>
+                    <el-form-item label="机组">
+                        <el-select v-model="filterForm.unitNames" multiple collapse-tags placeholder="全选" style="width:120px">
+                            <el-option label="机组一" value="机组一" />
+                            <el-option label="机组二" value="机组二" />
                         </el-select>
                     </el-form-item>
                     <el-form-item label="时间范围">
@@ -31,6 +38,7 @@
                     </el-form-item>
                     <el-form-item>
                         <el-button type="primary" class="nav-btn" icon="Search" @click="handleQuery">查询</el-button>
+                        <el-button type="primary" class="nav-btn" icon="Download" @click="handleExport">导出</el-button>
                     </el-form-item>
                 </el-form>
             </div>
@@ -46,24 +54,23 @@
                     <el-table-column prop="train_id" label="列车号" align="center" width="100">
                         <template #default="scope">{{ scope.row.train_id ? `0${scope.row.train_id}` : '-' }}</template>
                     </el-table-column>
-                    <el-table-column prop="carriage_no" label="车厢" align="center" width="100">
+                    <el-table-column prop="carriage_no" label="车厢" align="center" width="90">
                         <template #default="scope">{{ getCarriageName(scope.row.carriage_no) }}</template>
                     </el-table-column>
-                    <el-table-column label="机组" align="center" width="100">
-                        <template #default="scope">{{ formatUnit(scope.row.fault_code) }}</template>
-                    </el-table-column>
+                    <el-table-column prop="unit_name" label="机组" align="center" width="90" />
                     <el-table-column prop="fault_level" label="严重级别" align="center" width="100">
                         <template #default="scope">
-                            <el-tag :type="scope.row.fault_level === '严重' ? 'danger' : (scope.row.fault_level === '轻微' ? 'info' : 'warning')">
+                            <span :class="['severity-text', scope.row.fault_level === '严重' ? 'danger' : scope.row.fault_level === '轻微' ? 'info' : 'warning']">
                                 {{ scope.row.fault_level }}
-                            </el-tag>
+                            </span>
                         </template>
                     </el-table-column>
-                    <el-table-column prop="fault_desc" label="故障详情" header-align="center" min-width="250" show-overflow-tooltip />
-                    <el-table-column label="故障时间" align="center" width="180">
-                        <template #default="scope">
-                            {{ formatTime(scope.row.occurrence_time) }}
-                        </template>
+                    <el-table-column prop="fault_desc" label="故障详情" header-align="center" min-width="200" show-overflow-tooltip />
+                    <el-table-column label="开始时间" align="center" width="175" show-overflow-tooltip>
+                        <template #default="scope">{{ scope.row.occurrence_time }}</template>
+                    </el-table-column>
+                    <el-table-column label="结束时间" align="center" width="175" show-overflow-tooltip>
+                        <template #default="scope">{{ scope.row.recovery_time || '-' }}</template>
                     </el-table-column>
                 </el-table>
 
@@ -86,7 +93,7 @@
 <script setup>
 import { ref, reactive, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getAlarmInformation } from '@/api/api'
+import { getAlarmInformation, getAlarmExportUrl } from '@/api/api'
 import { formatTime, dayjs } from '@/utils/time'
 
 const router = useRouter()
@@ -113,8 +120,9 @@ const getInitialFilter = () => {
     const qCoach = route.query.trainCoach
 
     return {
-        trainNo:    String(qTrain || cached?.trainNo || '7001'),
-        carriageNo: String(qCoach || cached?.carriageNo || '1'),
+        trainNo:     String(qTrain || cached?.trainNo || '7001'),
+        carriageNos: [],
+        unitNames:   [],
         timeRange: [
             dayjs().subtract(7, 'day').startOf('day').format('YYYY-MM-DD HH:mm:ss'),
             dayjs().endOf('day').format('YYYY-MM-DD HH:mm:ss')
@@ -162,8 +170,9 @@ const getCarriageName = (no) => {
     return map[String(no)] || `${no}车厢`
 }
 
+const CARRIAGE_MAP = { '1':'TC1','2':'MP1','3':'M1','4':'M2','5':'MP2','6':'TC2' }
 const trainList    = ref(Array.from({ length: 40 }, (_, i) => ({ train_id: (7001 + i).toString(), label: `0${7001 + i}` })))
-const carriageList = ref(Array.from({ length: 6  }, (_, i) => ({ carriage_no: (i + 1).toString(), label: (i + 1) + '车厢' })))
+const carriageList = ref(Array.from({ length: 6  }, (_, i) => ({ carriage_no: (i + 1).toString(), label: CARRIAGE_MAP[String(i+1)] })))
 
 const loading     = ref(false)
 const tableData   = ref([])
@@ -187,12 +196,18 @@ const fetchData = async (p, l) => {
     const endTime   = filterForm.timeRange?.[1] || ''
     // 将车厢号转为两位字符串（如 "3" -> "03", "03" -> "03"），生成 6位 state (如 700203)
     const carriageStr = String(filterForm.carriageNo).replace(/^0+/, '').padStart(2, '0')
-    const state     = `${filterForm.trainNo}${carriageStr}`
+    // 多选车厢：排除 'all'
+    const carriageNos = (filterForm.carriageNos || []).filter(v => v !== 'all')
 
-    console.log(`[HistoryAlarm] req#${reqId} start`, { state, startTime, endTime, page, limit })
+    console.log(`[HistoryAlarm] req#${reqId} start`, { trainNo: filterForm.trainNo, carriageNos, startTime, endTime, page, limit })
 
     try {
-        const res = await getAlarmInformation({ state, startTime, endTime, page, limit })
+        const res = await getAlarmInformation({
+            trainNo: filterForm.trainNo,
+            carriageNos: carriageNos.length > 0 ? carriageNos : undefined,
+            unitNames: filterForm.unitNames || [],
+            startTime, endTime, page, limit
+        })
         console.log(`[HistoryAlarm] req#${reqId} API Raw Response:`, res)
 
         // 竞态处理：如果已有更新的请求，丢弃本次响应
@@ -254,12 +269,21 @@ const handleCurrentChange = (val) => {
     fetchData(val, pageSize.value)
 }
 
+const handleExport = () => {
+    const params = {
+        trainNo: filterForm.trainNo,
+        carriageNos: (filterForm.carriageNos || []).filter(v => v !== 'all').join(','),
+        unitNames: (filterForm.unitNames || []).join(','),
+        startTime: filterForm.timeRange?.[0] || '',
+        endTime:   filterForm.timeRange?.[1] || '',
+    }
+    const url = getAlarmExportUrl(params)
+    window.open(url, '_blank')
+}
+
 const goBack = () => router.push({
     name: 'trainInfo',
-    query: {
-        trainNo:    filterForm.trainNo,
-        trainCoach: filterForm.carriageNo
-    }
+    query: { trainNo: filterForm.trainNo, trainCoach: filterForm.carriageNos?.[0] || '1' }
 })
 
 onMounted(() => handleQuery())
@@ -318,6 +342,14 @@ onMounted(() => handleQuery())
 }
 .pagination-container { margin-top: 20px; display: flex; justify-content: flex-end; }
 .train-select, .carriage-select { width: 110px !important; }
+
+.severity-text {
+    font-weight: bold;
+    color: #ffffff;
+    &.danger  { color: #e65355; }
+    &.warning { color: #ffa55c; }
+    &.info    { color: rgba(255,255,255,0.7); }
+}
 </style>
 
 <style lang="scss">
