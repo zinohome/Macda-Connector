@@ -32,20 +32,14 @@
                 <CarCrew :trainId="currentTrainNo" :activeCarriage="currentCarriageNo" @select="handleCarSelect" />
             </div>
 
-            <!-- 离线提示（不清空数据，仅提示状态） -->
-            <div v-if="isOffline" class="offline-banner">
-                <el-icon><WarnTriangleFilled /></el-icon>
-                当前车厢超过5分钟未收到数据，显示最后已知状态
-            </div>
-
             <!-- 3. 运行参数 (全车6节) -->
             <div class="section-box">
-                <RunState :trainId="activeTrainNo" />
+                <RunState :trainId="currentTrainNo" />
             </div>
 
             <!-- 4. 机组原理图 -->
             <div class="section-box">
-                <TrainUnitMap :carriageId="activeCarriageId" />
+                <TrainUnitMap :carriageId="fullCarriageId" />
             </div>
 
             <!-- 5. 健康评估信息 -->
@@ -99,8 +93,7 @@ import {
     getRealtimeAlarm,
     getActiveCarApi,
     getAirSystemApi,
-    getTrainSelection,
-    getLatestDataTime
+    getTrainSelection
 } from '@/api/api'
 let route = useRoute()
 let router = useRouter()
@@ -120,32 +113,6 @@ const fullCarriageId = computed(() => {
     return `${currentTrainNo.value}0${currentCarriageNo.value}`
 })
 
-// F12: 离线检测 — 5分钟内无新数据则视为离线
-const OFFLINE_THRESHOLD_MS = 5 * 60 * 1000
-const isOffline = ref(false)
-
-const checkOffline = async () => {
-    if (!currentTrainNo.value || !currentCarriageNo.value) return
-    try {
-        const res = await getLatestDataTime({
-            trainId: currentTrainNo.value,
-            carriageId: currentCarriageNo.value
-        })
-        if (res?.code === 200) {
-            const latestTime = res.data?.latest_time
-            if (!latestTime) { isOffline.value = true; return }
-            const diff = Date.now() - new Date(latestTime).getTime()
-            isOffline.value = diff > OFFLINE_THRESHOLD_MS
-        }
-    } catch (e) {
-        isOffline.value = false
-    }
-}
-
-// 离线时保持展示最后已知数据（工业监控惯例），仅顶部显示离线横幅
-// 不清空 carriageId/trainNo，避免示意图出现空单位无数值的破碎显示
-const activeCarriageId = computed(() => fullCarriageId.value)
-const activeTrainNo = computed(() => currentTrainNo.value)
 
 // 生成车号列表 (7001 - 7040)
 const trainList = ref(Array.from({ length: 40 }, (_, i) => ({
@@ -1617,12 +1584,10 @@ onMounted(() => {
         currentCarriageNo.value = '1'
     }
     getTrainApi()
-    checkOffline()
 })
 
 let timer = setInterval(() => {
     getTrainApi()
-    checkOffline()
 }, MONITOR_CONFIG.refreshInterval)
 
 onUnmounted(() => {
@@ -1638,19 +1603,6 @@ onUnmounted(() => {
     color: #fff;
 }
 
-.offline-banner {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(230, 83, 85, 0.15);
-    border: 1px solid #e65355;
-    border-radius: 6px;
-    color: #e65355;
-    padding: 8px 16px;
-    font-size: 13px;
-    margin: 0 0 10px;
-    .el-icon { font-size: 16px; }
-}
 
 .header-monitor {
     height: 50px;
