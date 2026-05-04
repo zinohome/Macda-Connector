@@ -59,9 +59,10 @@ export class HistoryRepository {
         ];
         for (const key of validParams) {
             const def = TREND_PARAM_DEFS[key];
+            // ROUND(x, n) 要求 x 为 numeric，不接受 double precision
             const colExpr = def.col.includes("->")
-                ? `CAST(${def.col} AS FLOAT)`
-                : `CAST(${def.col} AS FLOAT)`;
+                ? `(${def.col})::numeric`
+                : `${def.col}::numeric`;
             selects.push(
                 sql.raw(`ROUND(AVG(${colExpr}) / ${def.scale}, 1)`).as(key)
             );
@@ -113,8 +114,8 @@ export class HistoryRepository {
         for (const key of validParams) {
             const def = TREND_PARAM_DEFS[key];
             const colExpr = def.col.includes("->")
-                ? `CAST(${def.col} AS FLOAT)`
-                : `CAST(${def.col} AS FLOAT)`;
+                ? `(${def.col})::numeric`
+                : `${def.col}::numeric`;
             selects.push(sql.raw(`ROUND(${colExpr} / ${def.scale}, 1)`).as(key));
         }
 
