@@ -2,6 +2,46 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Superpowers 开发方法论
+
+本项目使用 **superpowers plugin**（`claude-plugins-official/superpowers`）作为主要开发方法。处理任何需求时必须按以下流程执行，禁止跳步直接写代码。
+
+### 标准需求开发流程
+
+```
+1. brainstorming    → 理解需求意图、设计方案、确认边界
+2. writing-plans    → 将方案转化为具体实施计划（文件/任务/顺序）
+3. executing-plans  → 按计划逐步实施，保持 checkpoint
+4. verification-before-completion → 运行验证命令，有证据才能宣布完成
+5. requesting-code-review → 大功能完成后触发代码 review
+```
+
+### 各技能触发时机
+
+| 技能 | 何时使用 |
+|------|---------|
+| `brainstorming` | **任何新功能/改动开始前** — 探索需求意图和设计方案，禁止跳过直接写代码 |
+| `writing-plans` | 有了 spec/需求之后，写代码之前 — 多步骤任务必须先有书面计划 |
+| `executing-plans` | 持有书面计划时执行，含 review checkpoint |
+| `subagent-driven-development` | 计划中存在多个独立任务时，用子 agent 并行执行 |
+| `dispatching-parallel-agents` | 面对2个以上相互独立的任务时 |
+| `verification-before-completion` | 宣布完成/提交/PR 之前 — 必须运行验证命令并贴出输出 |
+| `requesting-code-review` | 完成重要功能或合并前 — 触发独立 reviewer 审查 |
+| `receiving-code-review` | 收到 review 反馈时 — 不能盲目照单全收，需技术判断 |
+| `systematic-debugging` | 遇到任何 bug/测试失败/异常行为 — 先定位根因再修复 |
+| `test-driven-development` | 实现任何功能或 bugfix 之前 — 先写测试 |
+| `finishing-a-development-branch` | 实现完成、测试通过时 — 引导合并/PR/清理决策 |
+| `using-git-worktrees` | 需要隔离工作区的功能开发 — 创建独立 git worktree |
+| `using-superpowers` | 每次会话开始时 — 建立如何查找和使用技能的规则 |
+| `writing-skills` | 创建/编辑/验证技能时 |
+
+### 本项目具体约定
+
+- **前端需求**：`brainstorming` → 对照需求文档图片+网页截图确认理解 → `writing-plans` → 实施 → `verification-before-completion`（本地构建 + 浏览器截图验证）
+- **后端/流水线**：同上，验证步骤包括 DB migration 幂等执行 + API curl 测试
+- **PHM 预警规则**：对照 PHM 文档阈值 review `nb67_event_processor.go`，任何数值改动必须写明来源文档章节
+- **镜像构建前**：必须先本地 `npm run build`（前端）或 `go build`（Go），通过后再 docker buildx
+
 ## Project Overview
 
 MACDA-Connector 是一个地铁列车 HVAC 系统遥测数据处理平台，核心目标是将现有的 Python/Faust 系统迁移到 Redpanda Connect（Go）。项目处于迁移和开发阶段。
