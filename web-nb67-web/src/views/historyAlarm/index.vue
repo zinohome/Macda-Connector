@@ -348,9 +348,6 @@ onMounted(() => handleQuery())
 .severity-text {
     font-weight: bold;
     color: #ffffff;
-    &.danger  { color: #e65355; }
-    &.warning { color: #ffa55c; }
-    &.info    { color: rgba(255,255,255,0.7); }
 }
 </style>
 

@@ -279,11 +279,7 @@ onMounted(() => fetchData())
     font-size:13px!important; height:32px!important; padding:0 12px!important; border-radius:4px!important;
     &:hover { background:rgba(33,134,207,0.2)!important; }
 }
-.severity-text { font-weight:bold; color:#fff;
-    &.danger  { color:#e65355; }
-    &.warning { color:#ffa55c; }
-    &.info    { color:rgba(255,255,255,0.7); }
-}
+.severity-text { font-weight:bold; color:#ffffff; }
 .dialog-header { display:flex; flex-direction:column; gap:4px;
     .dialog-title { font-size:15px; font-weight:bold; color:#fff; }
     .dialog-sub   { font-size:12px; color:#676e82; }
