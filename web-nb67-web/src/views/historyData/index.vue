@@ -10,7 +10,7 @@
                 <el-form :inline="true" :model="filterForm" class="filter-form">
                     <el-form-item label="车号">
                         <el-select v-model="filterForm.trainNo" placeholder="请选择车号" class="train-select">
-                            <el-option v-for="item in trainList" :key="item.train_id" :label="item.train_id" :value="item.train_id" />
+                            <el-option v-for="item in trainList" :key="item.train_id" :label="item.label" :value="item.train_id" />
                         </el-select>
                     </el-form-item>
                     <el-form-item label="车厢号">

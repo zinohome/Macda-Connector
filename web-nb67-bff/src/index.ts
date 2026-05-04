@@ -565,7 +565,57 @@ async function bootstrap() {
                 });
 
                 const CARRIAGE_MAP: Record<string, string> = { '1':'TC1','2':'MP1','3':'M1','4':'M2','5':'MP2','6':'TC2' };
-                const formatUnit = (code: string) => code?.toLowerCase().includes('u2') ? '机组二' : code?.toLowerCase().includes('u1') ? '机组一' : '-';
+                const formatUnit = (code: string) => {
+                    if (!code) return '-';
+                    const c = code.toLowerCase();
+                    // 数字后缀型（HVAC编码）：奇数seq对应机组1，偶数对应机组2
+                    if (c.startsWith('hvac')) {
+                        const seq = parseInt(code.replace(/[^0-9]/g, '')) % 100;
+                        if ([1,3,5,7,10,12,13,16,17,21,22,25].includes(seq)) return '机组一';
+                        if ([2,4,6,8,11,14,15,18,19,23,24,26].includes(seq)) return '机组二';
+                    }
+                    if (c.includes('u2')) return '机组二';
+                    if (c.includes('u1')) return '机组一';
+                    return '-';
+                };
+                // HVAC seq → 触发条件描述（当warning_config无匹配时回填）
+                const HVAC_SEQ_STRATEGY: Record<string, string> = {
+                    '1':'制冷模式吸气压力<2.0bar持续5分钟，或通风模式高压<5bar持续15分钟',
+                    '2':'制冷模式吸气压力<2.0bar持续5分钟，或通风模式高压<5bar持续15分钟',
+                    '3':'制冷模式吸气压力<2.0bar持续5分钟，或通风模式高压<5bar持续15分钟',
+                    '4':'制冷模式吸气压力<2.0bar持续5分钟，或通风模式高压<5bar持续15分钟',
+                    '5':'同机组压缩机电流差>2A持续3分钟，或过热度>20℃/<-8℃持续10分钟',
+                    '6':'同机组压缩机电流差>2A持续3分钟，或过热度>20℃/<-8℃持续10分钟',
+                    '7':'两机组新风温度差值>8℃持续5分钟',
+                    '8':'两机组回风温度差值>8℃持续5分钟',
+                    '9':'制冷运行>20分钟且无故障，回风温度>目标温度+4℃持续2分钟',
+                    '10':'通风机运行中滤网压差>300pa持续30分钟',
+                    '11':'通风机运行中滤网压差>300pa持续30分钟',
+                    '12':'通风机运行中电流>1.8A持续10分钟',
+                    '13':'通风机运行中电流>1.8A持续10分钟',
+                    '14':'通风机运行中电流>1.8A持续10分钟',
+                    '15':'通风机运行中电流>1.8A持续10分钟',
+                    '16':'冷凝风机运行中电流>2.3A持续10分钟',
+                    '17':'冷凝风机运行中电流>2.3A持续10分钟',
+                    '18':'冷凝风机运行中电流>2.3A持续10分钟',
+                    '19':'冷凝风机运行中电流>2.3A持续10分钟',
+                    '20':'废排风机运行中电流>2.3A持续10分钟',
+                    '21':'新风温度<35℃且压缩机电流>18A持续10分钟',
+                    '22':'新风温度<35℃且压缩机电流>18A持续10分钟',
+                    '23':'新风温度<35℃且压缩机电流>18A持续10分钟',
+                    '24':'新风温度<35℃且压缩机电流>18A持续10分钟',
+                    '25':'通风机运行>20分钟，CO₂>4500ppm持续15分钟或PM/TVOC超标持续20分钟',
+                    '26':'通风机运行>20分钟，CO₂>4500ppm持续15分钟或PM/TVOC超标持续20分钟',
+                };
+                const getTriggerCondition = (row: any): string => {
+                    if (row.trigger_condition) return row.trigger_condition;
+                    const code = String(row.fault_code || '');
+                    if (code.toUpperCase().startsWith('HVAC')) {
+                        const seq = String(parseInt(code.replace(/[^0-9]/g, '')) % 100);
+                        return HVAC_SEQ_STRATEGY[seq] || row.fault_name || '';
+                    }
+                    return row.fault_name || '';
+                };
 
                 const list = result.list.map((row: any) => ({
                     train_id: row.train_id,
@@ -574,7 +624,7 @@ async function bootstrap() {
                     severity: row.severity === 3 ? '严重' : row.severity === 2 ? '一般' : '轻微',
                     warn_name: row.fault_name,
                     fault_code: row.fault_code,
-                    trigger_condition: row.trigger_condition || '',
+                    trigger_condition: getTriggerCondition(row),
                     start_time: formatTime(row[config.runtime === 'DEV' ? 'ingest_time' : 'event_time']),
                     end_time: row.recovery_time ? formatTime(row.recovery_time) : null,
                 }));
