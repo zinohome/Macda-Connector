@@ -99,3 +99,7 @@ temp/
 # OS
 Thumbs.db
 .DS_Store
+# 临时截图和测试文件
+*.png
+*.bak
+.playwright-mcp/
