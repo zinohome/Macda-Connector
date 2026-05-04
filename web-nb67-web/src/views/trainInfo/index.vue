@@ -32,10 +32,10 @@
                 <CarCrew :trainId="currentTrainNo" :activeCarriage="currentCarriageNo" @select="handleCarSelect" />
             </div>
 
-            <!-- 离线提示 -->
+            <!-- 离线提示（不清空数据，仅提示状态） -->
             <div v-if="isOffline" class="offline-banner">
                 <el-icon><WarnTriangleFilled /></el-icon>
-                当前车厢超过5分钟未收到数据，已切换为离线状态
+                当前车厢超过5分钟未收到数据，显示最后已知状态
             </div>
 
             <!-- 3. 运行参数 (全车6节) -->
@@ -142,10 +142,10 @@ const checkOffline = async () => {
     }
 }
 
-// provide isOffline to child components via prop drilling or provide/inject
-// 简单做法：通过 key 强制刷新子组件（offline时传空ID）
-const activeCarriageId = computed(() => isOffline.value ? '' : fullCarriageId.value)
-const activeTrainNo = computed(() => isOffline.value ? '' : currentTrainNo.value)
+// 离线时保持展示最后已知数据（工业监控惯例），仅顶部显示离线横幅
+// 不清空 carriageId/trainNo，避免示意图出现空单位无数值的破碎显示
+const activeCarriageId = computed(() => fullCarriageId.value)
+const activeTrainNo = computed(() => currentTrainNo.value)
 
 // 生成车号列表 (7001 - 7040)
 const trainList = ref(Array.from({ length: 40 }, (_, i) => ({
