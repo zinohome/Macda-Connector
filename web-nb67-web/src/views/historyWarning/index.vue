@@ -3,6 +3,7 @@
         <div class="header-monitor">
             <div class="header-left">
                 <el-button type="primary" class="nav-btn" icon="ArrowLeft" @click="goBack">返回</el-button>
+                <el-button type="primary" class="nav-btn" icon="Setting" @click="gotoWarningConfig">预警条件设置</el-button>
             </div>
             <div class="header-right">
                 <el-form :inline="true" :model="filterForm" class="filter-form">
@@ -246,6 +247,11 @@ onUnmounted(() => {
 })
 
 const goBack = () => router.push({ name:'trainInfo', query:{ trainNo: filterForm.trainNo, trainCoach: filterForm.carriageNo || '1' } })
+
+const gotoWarningConfig = () => router.push({
+    name: 'warningConfig',
+    query: { trainNo: filterForm.trainNo, trainCoach: filterForm.carriageNo || '1' }
+})
 onMounted(() => fetchData())
 </script>
 

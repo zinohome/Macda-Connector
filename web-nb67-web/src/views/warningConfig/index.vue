@@ -81,11 +81,12 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { getWarningConfigs, updateWarningConfig } from '@/api/api'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()
+const route = useRoute()
 
 const loading   = ref(false)
 const tableData = ref([])
@@ -161,7 +162,10 @@ const saveEdit = async () => {
     }
 }
 
-const goBack = () => router.push({ name: 'trainInfo' })
+const goBack = () => router.push({
+    name: 'historyWarning',
+    query: { trainNo: route.query.trainNo, trainCoach: route.query.trainCoach }
+})
 onMounted(() => fetchData())
 </script>
 
