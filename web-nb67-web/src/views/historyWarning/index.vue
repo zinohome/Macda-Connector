@@ -12,12 +12,12 @@
                         </el-select>
                     </el-form-item>
                     <el-form-item label="车厢">
-                        <el-select v-model="filterForm.carriageNos" multiple collapse-tags placeholder="全选" style="width:140px">
+                        <el-select v-model="filterForm.carriageNo" placeholder="全部" clearable style="width:120px">
                             <el-option v-for="item in carriageList" :key="item.carriage_no" :label="item.label" :value="item.carriage_no" />
                         </el-select>
                     </el-form-item>
                     <el-form-item label="机组">
-                        <el-select v-model="filterForm.unitNames" multiple collapse-tags placeholder="全选" style="width:120px">
+                        <el-select v-model="filterForm.unitName" placeholder="全部" clearable style="width:110px">
                             <el-option label="机组一" value="机组一" />
                             <el-option label="机组二" value="机组二" />
                         </el-select>
@@ -120,9 +120,9 @@ const shortcuts = [
 ]
 
 const filterForm = reactive({
-    trainNo: String(route.query.trainNo || '7001'),
-    carriageNos: [],
-    unitNames: [],
+    trainNo:    String(route.query.trainNo || '7001'),
+    carriageNo: '',
+    unitName:   '',
     timeRange: [
         dayjs().subtract(7,'day').startOf('day').format('YYYY-MM-DD HH:mm:ss'),
         dayjs().endOf('day').format('YYYY-MM-DD HH:mm:ss')
@@ -145,8 +145,8 @@ const fetchData = async () => {
     try {
         const res = await getHistoryWarning({
             trainNo: filterForm.trainNo,
-            carriageNos: filterForm.carriageNos.length > 0 ? filterForm.carriageNos : undefined,
-            unitNames: filterForm.unitNames,
+            carriageNos: filterForm.carriageNo ? [filterForm.carriageNo] : undefined,
+            unitNames: filterForm.unitName ? [filterForm.unitName] : [],
             startTime: filterForm.timeRange?.[0] || '',
             endTime:   filterForm.timeRange?.[1] || '',
             page: currentPage.value,
@@ -168,8 +168,8 @@ const fetchData = async () => {
 const handleExport = () => {
     const url = getWarningExportUrl({
         trainNo: filterForm.trainNo,
-        carriageNos: filterForm.carriageNos.join(','),
-        unitNames: filterForm.unitNames.join(','),
+        carriageNos: filterForm.carriageNo || '',
+        unitNames: filterForm.unitName || '',
         startTime: filterForm.timeRange?.[0] || '',
         endTime:   filterForm.timeRange?.[1] || '',
     })
@@ -244,7 +244,7 @@ onUnmounted(() => {
     if (detailChart) { detailChart.dispose(); detailChart = null }
 })
 
-const goBack = () => router.push({ name:'trainInfo', query:{ trainNo: filterForm.trainNo, trainCoach: filterForm.carriageNos?.[0] || '1' } })
+const goBack = () => router.push({ name:'trainInfo', query:{ trainNo: filterForm.trainNo, trainCoach: filterForm.carriageNo || '1' } })
 onMounted(() => fetchData())
 </script>
 
@@ -287,7 +287,7 @@ onMounted(() => fetchData())
     th.el-table__cell { background:#1a2234!important; color:#2186cf; font-weight:bold; }
 }
 .train-select { width:110px!important; }
-.el-select__tags .el-tag {
+.el-select__selection .el-tag {
     background-color: rgba(33,134,207,0.2) !important;
     border-color: #2186cf !important;
     color: #ffffff !important;

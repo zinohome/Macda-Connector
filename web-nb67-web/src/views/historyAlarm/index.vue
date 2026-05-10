@@ -12,13 +12,12 @@
                         </el-select>
                     </el-form-item>
                     <el-form-item label="车厢">
-                        <el-select v-model="filterForm.carriageNos" multiple collapse-tags placeholder="全选" class="carriage-select" style="width:140px">
-                            <el-option label="全选" value="all" />
+                        <el-select v-model="filterForm.carriageNo" placeholder="全部" clearable class="carriage-select" style="width:120px">
                             <el-option v-for="item in carriageList" :key="item.carriage_no" :label="item.label" :value="item.carriage_no" />
                         </el-select>
                     </el-form-item>
                     <el-form-item label="机组">
-                        <el-select v-model="filterForm.unitNames" multiple collapse-tags placeholder="全选" style="width:120px">
+                        <el-select v-model="filterForm.unitName" placeholder="全部" clearable style="width:110px">
                             <el-option label="机组一" value="机组一" />
                             <el-option label="机组二" value="机组二" />
                         </el-select>
@@ -120,9 +119,9 @@ const getInitialFilter = () => {
     const qCoach = route.query.trainCoach
 
     return {
-        trainNo:     String(qTrain || cached?.trainNo || '7001'),
-        carriageNos: [],
-        unitNames:   [],
+        trainNo:    String(qTrain || cached?.trainNo || '7001'),
+        carriageNo: '',
+        unitName:   '',
         timeRange: [
             dayjs().subtract(7, 'day').startOf('day').format('YYYY-MM-DD HH:mm:ss'),
             dayjs().endOf('day').format('YYYY-MM-DD HH:mm:ss')
@@ -144,7 +143,7 @@ watch(
         if (!oldVals) return
         if (newVals[0] !== oldVals[0] || newVals[1] !== oldVals[1]) {
             if (newVals[0]) filterForm.trainNo    = String(newVals[0])
-            if (newVals[1]) filterForm.carriageNos = [String(newVals[1])]
+            if (newVals[1]) filterForm.carriageNo = String(newVals[1])
             handleQuery()
         }
     }
@@ -195,15 +194,13 @@ const fetchData = async (p, l) => {
     const startTime = filterForm.timeRange?.[0] || ''
     const endTime   = filterForm.timeRange?.[1] || ''
     // 多选车厢：排除 'all'
-    const carriageNos = (filterForm.carriageNos || []).filter(v => v !== 'all')
-
-    console.log(`[HistoryAlarm] req#${reqId} start`, { trainNo: filterForm.trainNo, carriageNos, startTime, endTime, page, limit })
+    console.log(`[HistoryAlarm] req#${reqId} start`, { trainNo: filterForm.trainNo, carriageNo: filterForm.carriageNo, startTime, endTime, page, limit })
 
     try {
         const res = await getAlarmInformation({
             trainNo: filterForm.trainNo,
-            carriageNos: carriageNos.length > 0 ? carriageNos : undefined,
-            unitNames: filterForm.unitNames || [],
+            carriageNos: filterForm.carriageNo ? [filterForm.carriageNo] : undefined,
+            unitNames: filterForm.unitName ? [filterForm.unitName] : [],
             startTime, endTime, page, limit
         })
         console.log(`[HistoryAlarm] req#${reqId} API Raw Response:`, res)
@@ -220,7 +217,7 @@ const fetchData = async (p, l) => {
             
             // 重要：在这里强制打印一次，确认 total 是否为 0
             if (remoteTotal === 0) {
-                console.warn(`[HistoryAlarm] req#${reqId} WARNING: total is 0. params were:`, { trainNo: filterForm.trainNo, carriageNos, startTime, endTime, page, limit })
+                console.warn(`[HistoryAlarm] req#${reqId} WARNING: total is 0. params were:`, { trainNo: filterForm.trainNo, carriageNo: filterForm.carriageNo, startTime, endTime, page, limit })
             } else {
                 console.log(`[HistoryAlarm] req#${reqId} success: total=${remoteTotal}, list=${remoteList.length}`)
             }
@@ -270,8 +267,8 @@ const handleCurrentChange = (val) => {
 const handleExport = () => {
     const params = {
         trainNo: filterForm.trainNo,
-        carriageNos: (filterForm.carriageNos || []).filter(v => v !== 'all').join(','),
-        unitNames: (filterForm.unitNames || []).join(','),
+        carriageNos: filterForm.carriageNo || '',
+        unitNames: filterForm.unitName || '',
         startTime: filterForm.timeRange?.[0] || '',
         endTime:   filterForm.timeRange?.[1] || '',
     }
@@ -281,7 +278,7 @@ const handleExport = () => {
 
 const goBack = () => router.push({
     name: 'trainInfo',
-    query: { trainNo: filterForm.trainNo, trainCoach: filterForm.carriageNos?.[0] || '1' }
+    query: { trainNo: filterForm.trainNo, trainCoach: filterForm.carriageNo || '1' }
 })
 
 onMounted(() => handleQuery())
@@ -409,7 +406,7 @@ onMounted(() => handleQuery())
     .el-pager li { background: transparent !important; color: #d1d9e7 !important; &.is-active { color: #2186cf !important; font-weight: bold; } }
 }
 /* 多选下拉 tag 统一暗色风格 */
-.el-select__tags .el-tag {
+.el-select__selection .el-tag {
     background-color: rgba(33,134,207,0.2) !important;
     border-color: #2186cf !important;
     color: #ffffff !important;
