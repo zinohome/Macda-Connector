@@ -1460,16 +1460,11 @@ const handleCarSelect = (carriageId) => {
     handleQuery()
 }
 
-const gotoPath = (type) => {
-    const query = {
-        trainNo: currentTrainNo.value,
-        trainCoach: currentCarriageNo.value
-    }
-    if (type === 'historyData') {
-        router.push({ name: 'historyData', query })
-    } else if (type === 'historyAlarm') {
-        router.push({ name: 'historyAlarm', query })
-    }
+const gotoPath = (name) => {
+    router.push({
+        name,
+        query: { trainNo: currentTrainNo.value, trainCoach: currentCarriageNo.value }
+    })
 }
 
 async function getTrainApi() {

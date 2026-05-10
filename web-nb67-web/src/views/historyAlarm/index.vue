@@ -3,10 +3,6 @@
         <div class="header-monitor">
             <div class="header-left">
                 <el-button type="primary" class="nav-btn" icon="ArrowLeft" @click="goBack">返回</el-button>
-                <el-button :type="$route.name==='historyData'?'primary':'default'" class="nav-btn" icon="Calendar" @click="$router.push({name:'historyData'})">历史数据</el-button>
-                <el-button :type="$route.name==='historyAlarm'?'primary':'default'" class="nav-btn" icon="Bell" @click="$router.push({name:'historyAlarm'})">历史报警</el-button>
-                <el-button :type="$route.name==='historyWarning'?'primary':'default'" class="nav-btn" icon="Warning" @click="$router.push({name:'historyWarning'})">历史预警</el-button>
-                <el-button :type="$route.name==='warningConfig'?'primary':'default'" class="nav-btn" icon="Setting" @click="$router.push({name:'warningConfig'})">预警条件设置</el-button>
             </div>
             <div class="header-right">
                 <el-form :inline="true" :model="filterForm" class="filter-form">
