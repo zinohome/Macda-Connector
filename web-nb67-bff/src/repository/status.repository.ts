@@ -535,9 +535,22 @@ export class StatusRepository {
             }
             if (params.unitNames && params.unitNames.length > 0 && params.unitNames.length < 2) {
                 if (params.unitNames.includes('机组一')) {
-                    q = q.where(sql`lower(e.fault_code) like '%u1%'` as any);
+                    // u1/u2 风格编码（alarm）+ HVAC seq 风格编码（predict）
+                    // 机组1 对应 seq: 1,3,5,7,9,10,12,13,16,17,20,21,22,25
+                    q = q.where(sql`(
+                        lower(e.fault_code) like '%u1%'
+                        OR (e.fault_code ~* '^HVAC\d+$'
+                            AND MOD(REGEXP_REPLACE(e.fault_code,'[^0-9]','','g')::int, 100)
+                                IN (1,3,5,7,9,10,12,13,16,17,20,21,22,25))
+                    )` as any);
                 } else if (params.unitNames.includes('机组二')) {
-                    q = q.where(sql`lower(e.fault_code) like '%u2%'` as any);
+                    // 机组2 对应 seq: 2,4,6,8,11,14,15,18,19,23,24,26
+                    q = q.where(sql`(
+                        lower(e.fault_code) like '%u2%'
+                        OR (e.fault_code ~* '^HVAC\d+$'
+                            AND MOD(REGEXP_REPLACE(e.fault_code,'[^0-9]','','g')::int, 100)
+                                IN (2,4,6,8,11,14,15,18,19,23,24,26))
+                    )` as any);
                 }
             }
             return q;
