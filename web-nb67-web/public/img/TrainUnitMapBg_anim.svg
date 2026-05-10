@@ -4,7 +4,6 @@
     <style>
       .cls-1 {
         stroke: #f19503;
-              display: none;
       }
 
       .cls-1, .cls-2, .cls-3 {
@@ -30,12 +29,10 @@
 
       .cls-3 {
         stroke: #33869e;
-              display: none;
       }
 
       .cls-4 {
         stroke: #32a1ff;
-              display: none;
       }
 
       @keyframes spin {
