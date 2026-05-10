@@ -121,7 +121,7 @@ const getInitialFilter = () => {
 
     return {
         trainNo:    String(qTrain || cached?.trainNo || '7001'),
-        carriageNo: '',
+        carriageNo: String(qCoach || cached?.carriageNo || ''),
         unitName:   '',
         timeRange: [
             dayjs().subtract(7, 'day').startOf('day').format('YYYY-MM-DD HH:mm:ss'),

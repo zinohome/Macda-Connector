@@ -122,7 +122,7 @@ const shortcuts = [
 
 const filterForm = reactive({
     trainNo:    String(route.query.trainNo || '7001'),
-    carriageNo: '',
+    carriageNo: String(route.query.trainCoach || ''),
     unitName:   '',
     timeRange: [
         dayjs().subtract(7,'day').startOf('day').format('YYYY-MM-DD HH:mm:ss'),
