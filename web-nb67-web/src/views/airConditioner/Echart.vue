@@ -274,4 +274,18 @@ onUnmounted(() => {
     --el-border-color: #394153;
     --el-text-color-regular: #d1d9e7;
 }
+
+/* 多选 tag：与车号单选框字体颜色一致（白色） */
+:deep(.el-select__tags .el-tag) {
+    background-color: rgba(33,134,207,0.2) !important;
+    border-color: #2186cf !important;
+    color: #ffffff !important;
+    .el-tag__close { color: #ffffff !important; &:hover { background-color: #2186cf !important; } }
+}
+/* collapse-tags 折叠数字 tag 同样处理 */
+:deep(.el-select__tags .el-tag.el-tag--info) {
+    background-color: rgba(33,134,207,0.2) !important;
+    border-color: #2186cf !important;
+    color: #ffffff !important;
+}
 </style>
