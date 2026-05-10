@@ -295,3 +295,65 @@ onMounted(() => fetchData())
     .el-tag__close { color: #ffffff !important; }
 }
 </style>
+
+<style lang="scss">
+/* 全局暗色输入框样式，与 historyAlarm 保持一致，避免硬刷新时变白 */
+.filter-form {
+    --el-fill-color-blank: #0a0f1d !important; --el-border-color: #2186cf !important;
+    --el-text-color-regular: #ffffff !important; --el-border-color-hover: #409eff !important;
+    .el-input__wrapper {
+        background-color: #0a0f1d !important; box-shadow: 0 0 0 1px #2186cf inset !important;
+        border-radius: 4px !important; height: 32px !important;
+        &:hover { box-shadow: 0 0 0 1px #409eff inset, 0 0 10px rgba(33,134,207,0.4) !important; }
+        &.is-focus { box-shadow: 0 0 0 1px #409eff inset, 0 0 15px rgba(33,134,207,0.6) !important; }
+        .el-input__inner { color: #ffffff !important; font-size: 13px !important; }
+    }
+    .el-range-editor.el-input__wrapper { width: 350px !important; }
+    .el-range-input { color: #fff !important; }
+    .el-range-separator { color: #2186cf !important; }
+}
+.el-select__popper.el-popper, .el-picker__popper.el-popper {
+    background-color: #141a2e !important; border: 1px solid #2186cf !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important; color: #fff !important;
+    .el-select-dropdown__item {
+        color: #d1d9e7 !important;
+        &:hover, &.hover { background-color: rgba(33,134,207,0.2) !important; color: #ffffff !important; }
+        &.selected { color: #2186cf !important; font-weight: bold; background-color: rgba(33,134,207,0.1) !important; }
+    }
+    .el-picker-panel { background-color: #141a2e !important; color: #fff !important; border: none !important; }
+    .el-date-range-picker__time-header, .el-date-range-picker__header {
+        border-bottom: 1px solid #262e45 !important;
+        .el-input__wrapper { background-color: #0a0f1d !important; box-shadow: 0 0 0 1px #2186cf inset !important; .el-input__inner { color: #fff !important; } }
+    }
+    .el-date-range-picker__content.is-left { border-right: 1px solid #262e45 !important; }
+    .el-date-table th { color: #2186cf !important; border-bottom: 1px solid #262e45 !important; }
+    .el-date-table td.next-month, .el-date-table td.prev-month { color: #4e5969 !important; }
+    .el-date-table td.available:hover { color: #2186cf !important; }
+    .el-date-table td.in-range .el-date-table-cell { background-color: rgba(33,134,207,0.1) !important; }
+    .el-time-panel { background-color: #141a2e !important; border: 1px solid #2186cf !important; }
+    .el-time-spinner__item { color: #d1d9e7 !important; &:hover { background: rgba(33,134,207,0.2) !important; } &.is-active { color: #2186cf !important; font-weight: bold; } }
+    .el-picker-panel__footer {
+        background-color: #141a2e !important; border-top: 1px solid #262e45 !important; padding: 10px !important;
+        .el-button {
+            background: #0a0f1d !important; border: 1px solid #2186cf !important; color: #ffffff !important;
+            height: 28px !important; padding: 0 12px !important; font-size: 12px !important;
+            &--primary { background: #2186cf !important; border-color: #2186cf !important; }
+            &:hover { background: rgba(33,134,207,0.2) !important; border-color: #409eff !important; color: #ffffff !important; }
+        }
+    }
+}
+.el-pagination {
+    --el-pagination-bg-color: transparent !important; --el-pagination-button-bg-color: transparent !important;
+    --el-pagination-button-color: #ffffff !important; --el-pagination-button-disabled-bg-color: transparent !important;
+    .el-select, .el-input {
+        --el-fill-color-blank: #0a0f1d !important; --el-border-color: #2186cf !important; --el-text-color-regular: #ffffff !important;
+        .el-input__wrapper {
+            background-color: #0a0f1d !important; box-shadow: 0 0 0 1px #2186cf inset !important; border: none !important;
+            &:hover, &.is-focus { box-shadow: 0 0 0 1px #409eff inset !important; }
+        }
+        .el-input__inner { color: #ffffff !important; background-color: transparent !important; border: none !important; box-shadow: none !important; text-align: center; }
+    }
+    .el-pagination__total, .el-pagination__jump { color: #d1d9e7 !important; }
+    .el-pager li { background: transparent !important; color: #d1d9e7 !important; &.is-active { color: #2186cf !important; font-weight: bold; } }
+}
+</style>
