@@ -533,26 +533,7 @@ export class StatusRepository {
             if (params.carriageIds && params.carriageIds.length > 0) {
                 q = q.where('e.carriage_id' as any, 'in', params.carriageIds as any);
             }
-            if (params.unitNames && params.unitNames.length > 0 && params.unitNames.length < 2) {
-                if (params.unitNames.includes('机组一')) {
-                    // u1/u2 风格编码（alarm）+ HVAC seq 风格编码（predict）
-                    // 机组1 对应 seq: 1,3,5,7,9,10,12,13,16,17,20,21,22,25
-                    q = q.where(sql`(
-                        lower(e.fault_code) like '%u1%'
-                        OR (e.fault_code ~* '^HVAC\d+$'
-                            AND MOD(REGEXP_REPLACE(e.fault_code,'[^0-9]','','g')::int, 100)
-                                IN (1,3,5,7,9,10,12,13,16,17,20,21,22,25))
-                    )` as any);
-                } else if (params.unitNames.includes('机组二')) {
-                    // 机组2 对应 seq: 2,4,6,8,11,14,15,18,19,23,24,26
-                    q = q.where(sql`(
-                        lower(e.fault_code) like '%u2%'
-                        OR (e.fault_code ~* '^HVAC\d+$'
-                            AND MOD(REGEXP_REPLACE(e.fault_code,'[^0-9]','','g')::int, 100)
-                                IN (2,4,6,8,11,14,15,18,19,23,24,26))
-                    )` as any);
-                }
-            }
+            // 注意：unit 过滤在 JS 层处理（sql raw 在此版本 Kysely 的 where 中不生效）
             return q;
         };
 
@@ -561,7 +542,7 @@ export class StatusRepository {
             .executeTakeFirst();
         const total = Number((totalResult as any)?.count || 0);
 
-        const list = await buildBase()
+        let list = await buildBase()
             .select([
                 'e.event_time', 'e.ingest_time', 'e.train_id', 'e.carriage_id',
                 'e.fault_code', 'e.fault_name', 'e.severity', 'e.status',
@@ -569,11 +550,29 @@ export class StatusRepository {
                 'wc.strategy as trigger_condition' as any,
             ])
             .orderBy(`e.${this.timeCol}` as any, 'desc')
-            .limit(limit)
-            .offset(offset)
+            .limit(1000)   // 宽松拉取，JS 过滤后再分页
             .execute();
 
-        return { list, total };
+        // JS 层机组过滤（sql raw 在此版本 Kysely where 中无法生效）
+        if (params.unitNames && params.unitNames.length === 1) {
+            const unit = params.unitNames[0];
+            const u1Seqs = new Set([1,3,5,7,9,10,12,13,16,17,20,21,22,25]);
+            const u2Seqs = new Set([2,4,6,8,11,14,15,18,19,23,24,26]);
+            list = list.filter((row: any) => {
+                const code: string = (row.fault_code || '').toLowerCase();
+                if (code.startsWith('hvac')) {
+                    const seq = parseInt(code.replace(/[^0-9]/g, '')) % 100;
+                    return unit === '机组一' ? u1Seqs.has(seq) : u2Seqs.has(seq);
+                }
+                // u1/u2 风格编码（alarm 类）
+                return unit === '机组一' ? code.includes('u1') : code.includes('u2');
+            });
+        }
+
+        const filteredTotal = list.length;
+        const paginated = list.slice(offset, offset + limit);
+
+        return { list: paginated, total: filteredTotal };
     }
 
     // B7: 预警条件配置 CRUD
