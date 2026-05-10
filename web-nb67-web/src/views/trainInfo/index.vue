@@ -6,6 +6,7 @@
                 <el-button type="primary" class="nav-btn" icon="Calendar" @click="gotoPath('historyData')">历史数据</el-button>
                 <el-button type="primary" class="nav-btn" icon="Bell" @click="gotoPath('historyAlarm')">历史报警</el-button>
                 <el-button type="primary" class="nav-btn" icon="Warning" @click="gotoPath('historyWarning')">历史预警</el-button>
+                <el-button type="primary" class="nav-btn" icon="Setting" @click="gotoPath('warningConfig')">预警条件设置</el-button>
             </div>
 
             <div class="header-right">

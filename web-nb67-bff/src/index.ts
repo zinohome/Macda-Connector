@@ -679,10 +679,13 @@ async function bootstrap() {
                 return { code: 400, message: 'trainId/carriageId/triggerTime 必填' };
             }
             try {
+                // triggerTime 由 formatTime 格式化为上海时区，需用 dayjs.tz 解析避免偏差8小时
+                const { dayjs: djs } = await import('./utils/time.js');
+                const triggerDate = djs.tz(triggerTime, 'Asia/Shanghai').toDate();
                 const data = await HistoryRepository.getPredictDetailCurve(
                     parseInt(trainId),
                     parseInt(carriageId),
-                    new Date(triggerTime),
+                    triggerDate,
                     String(warnCode || '')
                 );
                 return { code: 200, data };
