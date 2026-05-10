@@ -5,6 +5,7 @@
             <div class="header-left">
                 <el-button type="primary" class="nav-btn" icon="Calendar" @click="gotoPath('historyData')">历史数据</el-button>
                 <el-button type="primary" class="nav-btn" icon="Bell" @click="gotoPath('historyAlarm')">历史报警</el-button>
+                <el-button type="primary" class="nav-btn" icon="Warning" @click="gotoPath('historyWarning')">历史预警</el-button>
             </div>
 
             <div class="header-right">
@@ -120,10 +121,11 @@ const trainList = ref(Array.from({ length: 40 }, (_, i) => ({
     label: `0${7001 + i}`
 })))
 
-// 生成车厢号列表 (1 - 6车厢)
+// 生成车厢号列表 (TC1/MP1/M1/M2/MP2/TC2)
+const CARRIAGE_NAMES = { '1':'TC1','2':'MP1','3':'M1','4':'M2','5':'MP2','6':'TC2' }
 const carriageList = ref(Array.from({ length: 6 }, (_, i) => ({
     carriage_no: (i + 1).toString(),
-    label: (i + 1) + '车厢'
+    label: CARRIAGE_NAMES[String(i + 1)]
 })))
 
 let AlarmInfoData = ref([])  //报警信息

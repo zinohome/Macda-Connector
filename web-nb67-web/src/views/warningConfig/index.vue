@@ -203,12 +203,36 @@ onMounted(() => fetchData())
 }
 :deep(.el-dialog) {
     background:#141a2e!important; border:1px solid #262e45!important;
-    .el-dialog__title { color:#fff; }
-    .el-dialog__header { border-bottom:1px solid #262e45; }
+    .el-dialog__title { color:#fff; font-size:15px; font-weight:bold; }
+    .el-dialog__header { border-bottom:1px solid #262e45; padding:16px 20px; }
     .el-dialog__footer { border-top:1px solid #262e45; }
     .el-form-item__label { color:#d1d9e7; }
-    .el-input__wrapper { background:#0a0f1d!important; box-shadow:0 0 0 1px #394153 inset!important; }
-    .el-input__inner, .el-textarea__inner { color:#fff!important; background:#0a0f1d!important; }
-    .el-input-number .el-input__inner { color:#fff!important; }
+    /* 文本输入框 */
+    .el-input__wrapper {
+        background:#0a0f1d!important;
+        box-shadow:0 0 0 1px #394153 inset!important;
+        &:hover { box-shadow:0 0 0 1px #2186cf inset!important; }
+        &.is-focus { box-shadow:0 0 0 1px #2186cf inset!important; }
+    }
+    .el-input__inner { color:#fff!important; background:transparent!important; }
+    .el-textarea__inner {
+        color:#fff!important; background:#0a0f1d!important;
+        box-shadow:0 0 0 1px #394153 inset!important;
+        &:focus { box-shadow:0 0 0 1px #2186cf inset!important; }
+    }
+    /* 数字输入框 */
+    .el-input-number { background:#0a0f1d!important; }
+    .el-input-number__decrease, .el-input-number__increase {
+        background:#1a2234!important; border-color:#394153!important; color:#d1d9e7!important;
+        &:hover { color:#2186cf!important; }
+    }
+    /* 下拉选择 */
+    .el-select .el-input__wrapper { background:#0a0f1d!important; }
+    /* 按钮 */
+    .el-button--primary { background:#2186cf!important; border-color:#2186cf!important; color:#fff!important; }
+    .el-button:not(.el-button--primary) {
+        background:#1a2234!important; border-color:#394153!important; color:#d1d9e7!important;
+        &:hover { border-color:#2186cf!important; color:#2186cf!important; }
+    }
 }
 </style>

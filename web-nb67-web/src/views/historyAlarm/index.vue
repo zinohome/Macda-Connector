@@ -412,4 +412,11 @@ onMounted(() => handleQuery())
     .el-pagination__total, .el-pagination__jump { color: #d1d9e7 !important; }
     .el-pager li { background: transparent !important; color: #d1d9e7 !important; &.is-active { color: #2186cf !important; font-weight: bold; } }
 }
+/* 多选下拉 tag 统一暗色风格 */
+.el-select__tags .el-tag {
+    background-color: rgba(33,134,207,0.2) !important;
+    border-color: #2186cf !important;
+    color: #ffffff !important;
+    .el-tag__close { color: #ffffff !important; }
+}
 </style>

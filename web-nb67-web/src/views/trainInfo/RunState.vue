@@ -118,7 +118,7 @@ const getVal = (carIdx, pos, row) => {
         }
         const rawKey = keyMap[row.key]
         const val = rawKey ? carData[rawKey] : undefined
-        if (val === undefined || val === null || val === '' || val == 0) return '-'
+        if (val === undefined || val === null || val === '') return '-'
         return `${val}${row.suffix}`
     } else if (row.isStatus) {
         // 状态类：构造基础 Key

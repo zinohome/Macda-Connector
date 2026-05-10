@@ -291,4 +291,10 @@ onMounted(() => fetchData())
     th.el-table__cell { background:#1a2234!important; color:#2186cf; font-weight:bold; }
 }
 .train-select { width:110px!important; }
+.el-select__tags .el-tag {
+    background-color: rgba(33,134,207,0.2) !important;
+    border-color: #2186cf !important;
+    color: #ffffff !important;
+    .el-tag__close { color: #ffffff !important; }
+}
 </style>
