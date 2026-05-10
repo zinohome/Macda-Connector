@@ -17,7 +17,8 @@
                         </el-select>
                     </el-form-item>
                     <el-form-item label="机组">
-                        <el-select v-model="filterForm.unitName" placeholder="全部" clearable style="width:110px">
+                        <el-select v-model="filterForm.unitName" style="width:110px">
+                            <el-option label="全部机组" value="" />
                             <el-option label="机组一" value="机组一" />
                             <el-option label="机组二" value="机组二" />
                         </el-select>
