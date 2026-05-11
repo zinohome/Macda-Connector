@@ -362,4 +362,18 @@ onMounted(() => fetchData())
     .el-pagination__total, .el-pagination__jump { color: #d1d9e7 !important; }
     .el-pager li { background: transparent !important; color: #d1d9e7 !important; &.is-active { color: #2186cf !important; font-weight: bold; } }
 }
+
+/* 预警详情弹窗暗色（teleport 到 body，必须全局） */
+.dark-dialog.el-dialog {
+    background: #0e1628 !important;
+    border: 1px solid #2186cf !important;
+    border-radius: 8px;
+    .el-dialog__header {
+        padding: 12px 20px; border-bottom: 1px solid rgba(33,134,207,0.25);
+        background: #141b2e; border-radius: 8px 8px 0 0;
+        .el-dialog__title { color: #fff; font-size: 14px; font-weight: bold; }
+        .el-dialog__headerbtn .el-dialog__close { color: #2186cf; &:hover { color: #fff; } }
+    }
+    .el-dialog__body { padding: 20px; background: #0e1628; }
+}
 </style>

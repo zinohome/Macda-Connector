@@ -226,11 +226,12 @@ onMounted(() => fetchData())
     /* el-input 文本输入框 */
     .el-input__wrapper {
         background: #0a0f1d !important;
+        border: none !important;
         box-shadow: 0 0 0 1px #2186cf inset !important;
         &:hover { box-shadow: 0 0 0 1px #409eff inset !important; }
         &.is-focus { box-shadow: 0 0 0 1px #409eff inset, 0 0 8px rgba(33,134,207,0.4) !important; }
     }
-    .el-input__inner { color: #fff !important; background: transparent !important; font-size: 13px; }
+    .el-input__inner { color: #fff !important; background: transparent !important; font-size: 13px; border: none !important; outline: none !important; }
 
     /* el-textarea */
     .el-textarea__inner {
@@ -248,17 +249,23 @@ onMounted(() => fetchData())
     .el-select__selected-item, .el-select__placeholder { color: #fff !important; font-size: 13px; }
     .el-select__caret { color: #2186cf !important; }
 
-    /* el-input-number：去掉内部竖线，统一深色 */
+    /* el-input-number：去掉两端竖线 */
     .el-input-number {
+        background: #0a0f1d !important;
+        border: 1px solid #2186cf !important;
+        border-radius: 4px !important;
+        box-shadow: none !important;
+        overflow: hidden;
         .el-input__wrapper {
             background: #0a0f1d !important;
-            box-shadow: 0 0 0 1px #2186cf inset !important;
+            border: none !important;
+            box-shadow: none !important;
         }
         .el-input-number__decrease, .el-input-number__increase {
             background: #1a2234 !important;
-            border-color: #2186cf !important;
+            border: none !important;
             color: #d1d9e7 !important;
-            &:hover { color: #fff !important; background: rgba(33,134,207,0.2) !important; }
+            &:hover { color: #fff !important; background: rgba(33,134,207,0.3) !important; }
         }
     }
 
