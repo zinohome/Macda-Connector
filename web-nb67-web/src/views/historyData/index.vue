@@ -523,6 +523,21 @@ onMounted(() => {
     }
 }
 
+/* 全局翻页组件暗色（刷新后也生效） */
+.el-pagination {
+    --el-pagination-bg-color: transparent !important;
+    --el-pagination-button-bg-color: transparent !important;
+    --el-pagination-button-color: #ffffff !important;
+    --el-pagination-button-disabled-bg-color: transparent !important;
+    color: #d1d9e7;
+    .el-pager li { background: transparent !important; color: #d1d9e7 !important; &.is-active { color: #2186cf !important; font-weight: bold; } }
+    .el-select, .el-input {
+        --el-fill-color-blank: #0a0f1d !important; --el-border-color: #2186cf !important; --el-text-color-regular: #fff !important;
+        .el-input__wrapper { background-color: #0a0f1d !important; box-shadow: 0 0 0 1px #2186cf inset !important; border: none !important; .el-input__inner { color: #fff !important; background: transparent !important; } }
+    }
+    .el-pagination__total, .el-pagination__jump { color: #d1d9e7 !important; }
+}
+
 /* 全局筛选框暗色 */
 .filter-form {
     --el-fill-color-blank: #0a0f1d !important;

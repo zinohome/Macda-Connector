@@ -38,7 +38,7 @@
         </div>
 
         <!-- 编辑弹窗 -->
-        <el-dialog v-model="editVisible" title="编辑预警条件" width="500px" :append-to-body="true" class="dark-dialog">
+        <el-dialog v-model="editVisible" title="编辑预警条件" width="500px" :append-to-body="true" class="warning-config-dialog">
             <el-form :model="editForm" label-width="100px" size="default">
                 <el-form-item label="组件名称">
                     <span class="form-readonly">{{ editForm.component_name }}</span>
@@ -201,38 +201,65 @@ onMounted(() => fetchData())
     --el-table-tr-bg-color:transparent; --el-table-row-hover-bg-color:rgba(33,134,207,0.1);
     th.el-table__cell { background:#1a2234!important; color:#2186cf; font-weight:bold; }
 }
-:deep(.el-dialog) {
-    background:#141a2e!important; border:1px solid #262e45!important;
-    .el-dialog__title { color:#fff; font-size:15px; font-weight:bold; }
-    .el-dialog__header { border-bottom:1px solid #262e45; padding:16px 20px; }
-    .el-dialog__footer { border-top:1px solid #262e45; }
-    .el-form-item__label { color:#d1d9e7; }
-    /* 文本输入框 */
+</style>
+
+<style lang="scss">
+/* 编辑预警条件弹窗 — 全局非 scoped，覆盖 teleport 到 body 的 el-dialog */
+.warning-config-dialog.el-dialog {
+    background: #141a2e !important;
+    border: 1px solid #262e45 !important;
+    border-radius: 8px;
+
+    .el-dialog__header {
+        border-bottom: 1px solid #262e45;
+        padding: 12px 20px;
+        .el-dialog__title {
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .el-dialog__headerbtn .el-dialog__close { color: #676e82; &:hover { color: #fff; } }
+    }
+
+    .el-dialog__body { padding: 20px; background: #141a2e; }
+    .el-dialog__footer { border-top: 1px solid #262e45; padding: 12px 20px; background: #141a2e; }
+
+    /* 表单标签 */
+    .el-form-item__label { color: #d1d9e7 !important; font-size: 13px; }
+
+    /* 文本/数字输入框 */
     .el-input__wrapper {
-        background:#0a0f1d!important;
-        box-shadow:0 0 0 1px #394153 inset!important;
-        &:hover { box-shadow:0 0 0 1px #2186cf inset!important; }
-        &.is-focus { box-shadow:0 0 0 1px #2186cf inset!important; }
+        background: #0a0f1d !important;
+        box-shadow: 0 0 0 1px #394153 inset !important;
+        &:hover { box-shadow: 0 0 0 1px #2186cf inset !important; }
+        &.is-focus { box-shadow: 0 0 0 1px #2186cf inset !important; }
     }
-    .el-input__inner { color:#fff!important; background:transparent!important; }
+    .el-input__inner { color: #ffffff !important; background: transparent !important; font-size: 13px; }
+
+    /* textarea */
     .el-textarea__inner {
-        color:#fff!important; background:#0a0f1d!important;
-        box-shadow:0 0 0 1px #394153 inset!important;
-        &:focus { box-shadow:0 0 0 1px #2186cf inset!important; }
+        color: #ffffff !important; background: #0a0f1d !important; font-size: 13px;
+        box-shadow: 0 0 0 1px #394153 inset !important;
+        &:focus { box-shadow: 0 0 0 1px #2186cf inset !important; }
     }
-    /* 数字输入框 */
-    .el-input-number { background:#0a0f1d!important; }
+
+    /* 数字输入框加减按钮 */
     .el-input-number__decrease, .el-input-number__increase {
-        background:#1a2234!important; border-color:#394153!important; color:#d1d9e7!important;
-        &:hover { color:#2186cf!important; }
+        background: #1a2234 !important; border-color: #394153 !important; color: #d1d9e7 !important;
+        &:hover { color: #2186cf !important; }
     }
-    /* 下拉选择 */
-    .el-select .el-input__wrapper { background:#0a0f1d!important; }
+
+    /* 下拉选择器 */
+    .el-select .el-input__wrapper { background: #0a0f1d !important; }
+
+    /* 只读文本 */
+    .form-readonly { color: #d1d9e7; font-size: 13px; }
+
     /* 按钮 */
-    .el-button--primary { background:#2186cf!important; border-color:#2186cf!important; color:#fff!important; }
+    .el-button--primary { background: #2186cf !important; border-color: #2186cf !important; color: #fff !important; }
     .el-button:not(.el-button--primary) {
-        background:#1a2234!important; border-color:#394153!important; color:#d1d9e7!important;
-        &:hover { border-color:#2186cf!important; color:#2186cf!important; }
+        background: #1a2234 !important; border-color: #394153 !important; color: #d1d9e7 !important;
+        &:hover { border-color: #2186cf !important; color: #fff !important; }
     }
 }
 </style>
