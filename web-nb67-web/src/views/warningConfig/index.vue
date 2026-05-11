@@ -59,7 +59,7 @@
                 </el-form-item>
                 <el-form-item label="触发阈值">
                     <el-input-number v-model="editForm.trigger_value" :precision="3" :step="0.1" />
-                    <span style="margin-left:8px;color:#676e82">{{ editForm.unit }}</span>
+                    <span class="unit-label">{{ editForm.unit }}</span>
                 </el-form-item>
                 <el-form-item label="消除阈值">
                     <el-input-number v-model="editForm.clear_value" :precision="3" :step="0.1" />
@@ -204,62 +204,83 @@ onMounted(() => fetchData())
 </style>
 
 <style lang="scss">
-/* 编辑预警条件弹窗 — 全局非 scoped，覆盖 teleport 到 body 的 el-dialog */
+/* 编辑预警条件弹窗 — 全局非 scoped */
 .warning-config-dialog.el-dialog {
     background: #141a2e !important;
     border: 1px solid #262e45 !important;
     border-radius: 8px;
 
     .el-dialog__header {
-        border-bottom: 1px solid #262e45;
-        padding: 12px 20px;
-        .el-dialog__title {
-            color: #ffffff;
-            font-size: 14px;
-            font-weight: bold;
-        }
+        border-bottom: 1px solid #262e45; padding: 12px 20px;
+        background: #141a2e; border-radius: 8px 8px 0 0;
+        .el-dialog__title { color: #fff; font-size: 14px; font-weight: bold; }
         .el-dialog__headerbtn .el-dialog__close { color: #676e82; &:hover { color: #fff; } }
     }
-
     .el-dialog__body { padding: 20px; background: #141a2e; }
     .el-dialog__footer { border-top: 1px solid #262e45; padding: 12px 20px; background: #141a2e; }
 
     /* 表单标签 */
-    .el-form-item__label { color: #d1d9e7 !important; font-size: 13px; }
+    .el-form-item { margin-bottom: 16px; }
+    .el-form-item__label { color: #d1d9e7 !important; font-size: 13px; line-height: 32px; }
 
-    /* 文本/数字输入框 */
+    /* el-input 文本输入框 */
     .el-input__wrapper {
         background: #0a0f1d !important;
-        box-shadow: 0 0 0 1px #394153 inset !important;
-        &:hover { box-shadow: 0 0 0 1px #2186cf inset !important; }
-        &.is-focus { box-shadow: 0 0 0 1px #2186cf inset !important; }
+        box-shadow: 0 0 0 1px #2186cf inset !important;
+        &:hover { box-shadow: 0 0 0 1px #409eff inset !important; }
+        &.is-focus { box-shadow: 0 0 0 1px #409eff inset, 0 0 8px rgba(33,134,207,0.4) !important; }
     }
-    .el-input__inner { color: #ffffff !important; background: transparent !important; font-size: 13px; }
+    .el-input__inner { color: #fff !important; background: transparent !important; font-size: 13px; }
 
-    /* textarea */
+    /* el-textarea */
     .el-textarea__inner {
-        color: #ffffff !important; background: #0a0f1d !important; font-size: 13px;
-        box-shadow: 0 0 0 1px #394153 inset !important;
-        &:focus { box-shadow: 0 0 0 1px #2186cf inset !important; }
+        color: #fff !important; background: #0a0f1d !important; font-size: 13px;
+        box-shadow: 0 0 0 1px #2186cf inset !important;
+        &:focus { box-shadow: 0 0 0 1px #409eff inset !important; }
     }
 
-    /* 数字输入框加减按钮 */
-    .el-input-number__decrease, .el-input-number__increase {
-        background: #1a2234 !important; border-color: #394153 !important; color: #d1d9e7 !important;
-        &:hover { color: #2186cf !important; }
+    /* el-select 新版用 el-select__wrapper */
+    .el-select__wrapper {
+        background: #0a0f1d !important;
+        box-shadow: 0 0 0 1px #2186cf inset !important;
+        &:hover { box-shadow: 0 0 0 1px #409eff inset !important; }
+    }
+    .el-select__selected-item, .el-select__placeholder { color: #fff !important; font-size: 13px; }
+    .el-select__caret { color: #2186cf !important; }
+
+    /* el-input-number：去掉内部竖线，统一深色 */
+    .el-input-number {
+        .el-input__wrapper {
+            background: #0a0f1d !important;
+            box-shadow: 0 0 0 1px #2186cf inset !important;
+        }
+        .el-input-number__decrease, .el-input-number__increase {
+            background: #1a2234 !important;
+            border-color: #2186cf !important;
+            color: #d1d9e7 !important;
+            &:hover { color: #fff !important; background: rgba(33,134,207,0.2) !important; }
+        }
     }
 
-    /* 下拉选择器 */
-    .el-select .el-input__wrapper { background: #0a0f1d !important; }
-
-    /* 只读文本 */
-    .form-readonly { color: #d1d9e7; font-size: 13px; }
+    /* 只读组件名 */
+    .form-readonly { color: #d1d9e7; font-size: 13px; line-height: 32px; }
+    .unit-label { color: #676e82; font-size: 12px; margin-left: 8px; }
 
     /* 按钮 */
-    .el-button--primary { background: #2186cf !important; border-color: #2186cf !important; color: #fff !important; }
+    .el-button--primary { background: #2186cf !important; border-color: #2186cf !important; color: #fff !important;
+        &:hover { background: #409eff !important; } }
     .el-button:not(.el-button--primary) {
         background: #1a2234 !important; border-color: #394153 !important; color: #d1d9e7 !important;
         &:hover { border-color: #2186cf !important; color: #fff !important; }
+    }
+}
+
+/* 弹窗下拉选项列表（teleport 到 body） */
+.el-select__popper.el-popper {
+    background: #141a2e !important; border: 1px solid #2186cf !important;
+    .el-select-dropdown__item { color: #d1d9e7 !important; font-size: 13px;
+        &:hover, &.hover { background: rgba(33,134,207,0.15) !important; color: #fff !important; }
+        &.selected { color: #2186cf !important; font-weight: bold; }
     }
 }
 </style>
