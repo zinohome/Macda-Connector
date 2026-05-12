@@ -107,7 +107,7 @@ fi
 
 # 3c. init-db SQL 文件
 mkdir -p "${HOST_DATA}/timescaledb/init-db"
-for sql in 01-init.sql 02-migration-20260504.sql; do
+for sql in 01-init.sql 02-migration-20260504.sql 03-migration-20260512.sql; do
     src="${BASENV_DIR}/init-db/${sql}"
     if [[ -f "$src" ]]; then
         sudo cp "$src" "${HOST_DATA}/timescaledb/init-db/"
@@ -115,7 +115,7 @@ for sql in 01-init.sql 02-migration-20260504.sql; do
         log_error "找不到 SQL 文件: ${src}"
     fi
 done
-log_info "数据库初始化 SQL 就位 (2个文件)"
+log_info "数据库初始化 SQL 就位 (3个文件)"
 
 # ── Step 4: 按序启动三个栈 ───────────────────────────────────────────────
 log_step "Step 4: 启动容器栈"
@@ -161,6 +161,9 @@ ${DOCKER} exec -i timescaledb psql -U postgres postgres \
 log_info "执行 02-migration-20260504.sql（recovery_time + warning_config）..."
 ${DOCKER} exec -i timescaledb psql -U postgres postgres \
     < "${HOST_DATA}/timescaledb/init-db/02-migration-20260504.sql" &>/dev/null
+log_info "执行 03-migration-20260512.sql（warning_config raw_scale + duration_seconds）..."
+${DOCKER} exec -i timescaledb psql -U postgres postgres \
+    < "${HOST_DATA}/timescaledb/init-db/03-migration-20260512.sql" &>/dev/null
 
 # 验证表存在
 TABLE_COUNT=$(${DOCKER} exec timescaledb psql -U postgres postgres -tAc \
