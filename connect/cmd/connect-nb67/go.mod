@@ -5,6 +5,7 @@ go 1.23.0
 require (
 	github.com/benthosdev/benthos/v4 v4.14.0
 	github.com/kaitai-io/kaitai_struct_go_runtime v0.10.0
+	github.com/lib/pq v1.10.4
 )
 
 require (
@@ -102,7 +103,6 @@ require (
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
-	github.com/lib/pq v1.10.4 // indirect
 	github.com/linkedin/goavro/v2 v2.12.0 // indirect
 	github.com/matoous/go-nanoid/v2 v2.0.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect

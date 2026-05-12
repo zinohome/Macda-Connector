@@ -168,6 +168,7 @@ func init() {
 			if rt == "" {
 				rt = "PRD"
 			}
+			ensureConfigStore(mgr.Logger())
 			return &NB67EventProcessor{
 				logger:  mgr.Logger(),
 				runtime: rt,
@@ -380,62 +381,73 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 	// ================================================================
 	// 3. 传感器预警 (HVAC_07 ~ HVAC_11)
 	// ================================================================
-	// HVAC_07/08: 温差 > 8℃ -> 持续 5 分钟
-	fasCondition := rawInt(raw, "FasU1")-rawInt(raw, "FasU2") > 80 || rawInt(raw, "FasU1")-rawInt(raw, "FasU2") < -80
-	if p.checkRule(fasCondition, 5*time.Minute, deviceID, hvacCode(base, 7), currentTime) {
+	// HVAC_07/08: 温差 > 8℃ -> 持续 5 分钟 (WARN_TEMP_SENSOR)
+	tempThresh := csRawThreshold("WARN_TEMP_SENSOR", 80)
+	tempDur := csDuration("WARN_TEMP_SENSOR", 5*time.Minute)
+	fasCondition := rawInt(raw, "FasU1")-rawInt(raw, "FasU2") > tempThresh || rawInt(raw, "FasU1")-rawInt(raw, "FasU2") < -tempThresh
+	if p.checkRule(fasCondition, tempDur, deviceID, hvacCode(base, 7), currentTime) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 7), Name: "新风温度传感器预警", Severity: 3})
 	}
-	rasCondition := rawInt(raw, "RasU1")-rawInt(raw, "RasU2") > 80 || rawInt(raw, "RasU1")-rawInt(raw, "RasU2") < -80
-	if p.checkRule(rasCondition, 5*time.Minute, deviceID, hvacCode(base, 8), currentTime) {
+	rasCondition := rawInt(raw, "RasU1")-rawInt(raw, "RasU2") > tempThresh || rawInt(raw, "RasU1")-rawInt(raw, "RasU2") < -tempThresh
+	if p.checkRule(rasCondition, tempDur, deviceID, hvacCode(base, 8), currentTime) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 8), Name: "回风温度传感器预警", Severity: 3})
 	}
 
-	// HVAC_09: 车厢超温预警 -> 系统正常运行 > 20min，且车温 > 4℃ -> 持续 2 分钟
+	// HVAC_09: 车厢超温预警 -> 系统正常运行 > 20min，且车温超阈值 -> 持续 2 分钟 (WARN_CABIN_OVERHEAT)
+	overtempThresh := csRawThreshold("WARN_CABIN_OVERHEAT", 40)
+	overtempDur := csDuration("WARN_CABIN_OVERHEAT", 2*time.Minute)
 	coolingNormal := len(buildAlarmHits(raw)) == 0 && (wModeU1 == 2 || wModeU2 == 2)
 	sysRunningLong := p.checkRule(coolingNormal, 20*time.Minute, deviceID, "cooling_normal_20", currentTime)
-	isOvertemp := sysRunningLong && (rawInt(raw, "Tveh1") > 40 || rawInt(raw, "Tveh2") > 40)
-	if p.checkRule(isOvertemp, 2*time.Minute, deviceID, hvacCode(base, 9), currentTime) {
+	isOvertemp := sysRunningLong && (rawInt(raw, "Tveh1") > overtempThresh || rawInt(raw, "Tveh2") > overtempThresh)
+	if p.checkRule(isOvertemp, overtempDur, deviceID, hvacCode(base, 9), currentTime) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 9), Name: "车厢温度超温预警", Severity: 3})
 	}
 
-	// HVAC_10/11: 压差 > 300Pa -> 持续 30 分钟
-	if p.checkRule(rawBool(raw, "CfbkEfU11") && rawInt(raw, "PresdiffU1") > 3000 && rawInt(raw, "PresdiffU1") < 32767, 30*time.Minute, deviceID, hvacCode(base, 10), currentTime) {
+	// HVAC_10/11: 压差超阈值 -> 持续 30 分钟 (WARN_FILTER_CLOG)
+	filterThresh := csRawThreshold("WARN_FILTER_CLOG", 3000)
+	filterDur := csDuration("WARN_FILTER_CLOG", 30*time.Minute)
+	if p.checkRule(rawBool(raw, "CfbkEfU11") && rawInt(raw, "PresdiffU1") > filterThresh && rawInt(raw, "PresdiffU1") < 32767, filterDur, deviceID, hvacCode(base, 10), currentTime) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 10), Name: "机组1滤网脏堵预警", Severity: 2})
 	}
-	if p.checkRule(rawBool(raw, "CfbkEfU21") && rawInt(raw, "PresdiffU2") > 3000 && rawInt(raw, "PresdiffU2") < 32767, 30*time.Minute, deviceID, hvacCode(base, 11), currentTime) {
+	if p.checkRule(rawBool(raw, "CfbkEfU21") && rawInt(raw, "PresdiffU2") > filterThresh && rawInt(raw, "PresdiffU2") < 32767, filterDur, deviceID, hvacCode(base, 11), currentTime) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 11), Name: "机组2滤网脏堵预警", Severity: 2})
 	}
 
 	// ================================================================
-	// 4. 风机电流预警 (HVAC_12 ~ HVAC_20) -> 持续 10 分钟
+	// 4. 风机电流预警 (HVAC_12 ~ HVAC_20) -> 持续时间由 DB 配置
 	// ================================================================
+	efThresh := csRawThreshold("WARN_EF_CURRENT", 18)     // 通风机 PHM 3.6
+	cfThresh := csRawThreshold("WARN_CF_CURRENT", 23)     // 冷凝风机 PHM 3.7
+	exufThresh := csRawThreshold("WARN_EXUF_CURRENT", 23) // 废排风机 PHM 3.8
+	fanDur := csDuration("WARN_EF_CURRENT", 10*time.Minute)
+
 	checkFanI := func(cfbkField, iField string, threshold int64, seq int, name string) {
 		code := hvacCode(base, seq)
 		isOverI := rawBool(raw, cfbkField) && rawInt(raw, iField) > threshold
-		if p.checkRule(isOverI, 10*time.Minute, deviceID, code, currentTime) {
+		if p.checkRule(isOverI, fanDur, deviceID, code, currentTime) {
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
 		}
 	}
-	// 通风机额定1.6A，保护整定1.8A，阈值18(=1.8A×10，原始数据单位0.1A) — PHM 3.6
-	checkFanI("CfbkEfU11", "IEfU11", 18, 12, "机组1通风机1电流预警")
-	checkFanI("CfbkEfU11", "IEfU12", 18, 13, "机组1通风机2电流预警")
-	checkFanI("CfbkEfU21", "IEfU21", 18, 14, "机组2通风机1电流预警")
-	checkFanI("CfbkEfU21", "IEfU22", 18, 15, "机组2通风机2电流预警")
-	// 冷凝风机额定2.0A，保护整定2.3A，阈值23 — PHM 3.7
-	checkFanI("CfbkCfU11", "ICfU11", 23, 16, "机组1冷凝风机1电流预警")
-	checkFanI("CfbkCfU11", "ICfU12", 23, 17, "机组1冷凝风机2电流预警")
-	checkFanI("CfbkCfU21", "ICfU21", 23, 18, "机组2冷凝风机1电流预警")
-	checkFanI("CfbkCfU21", "ICfU22", 23, 19, "机组2冷凝风机2电流预警")
-	// 废排风机额定2.0A，保护整定2.3A，阈值23 — PHM 3.8
-	checkFanI("CfbkExufan", "IExufan", 23, 20, "废排风机电流预警")
+	checkFanI("CfbkEfU11", "IEfU11", efThresh, 12, "机组1通风机1电流预警")
+	checkFanI("CfbkEfU11", "IEfU12", efThresh, 13, "机组1通风机2电流预警")
+	checkFanI("CfbkEfU21", "IEfU21", efThresh, 14, "机组2通风机1电流预警")
+	checkFanI("CfbkEfU21", "IEfU22", efThresh, 15, "机组2通风机2电流预警")
+	checkFanI("CfbkCfU11", "ICfU11", cfThresh, 16, "机组1冷凝风机1电流预警")
+	checkFanI("CfbkCfU11", "ICfU12", cfThresh, 17, "机组1冷凝风机2电流预警")
+	checkFanI("CfbkCfU21", "ICfU21", cfThresh, 18, "机组2冷凝风机1电流预警")
+	checkFanI("CfbkCfU21", "ICfU22", cfThresh, 19, "机组2冷凝风机2电流预警")
+	checkFanI("CfbkExufan", "IExufan", exufThresh, 20, "废排风机电流预警")
 
 	// ================================================================
-	// 5. 压缩机电流预警 (HVAC_21 ~ HVAC_24) -> 新风 < 35℃ 且 I > 18A -> 持续 10 分钟
+	// 5. 压缩机电流预警 (HVAC_21 ~ HVAC_24) -> 新风 < 35℃ 且 I 超阈值 -> 持续时间由 DB 配置
 	// ================================================================
+	cpThresh := csRawThreshold("WARN_CP_CURRENT", 180) // 18A × 10
+	cpDur := csDuration("WARN_CP_CURRENT", 10*time.Minute)
+
 	checkCpI := func(fasField, iField string, seq int, name string) {
 		code := hvacCode(base, seq)
-		isOverI := rawInt(raw, fasField) < 350 && rawInt(raw, iField) > 180
-		if p.checkRule(isOverI, 10*time.Minute, deviceID, code, currentTime) {
+		isOverI := rawInt(raw, fasField) < 350 && rawInt(raw, iField) > cpThresh
+		if p.checkRule(isOverI, cpDur, deviceID, code, currentTime) {
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
 		}
 	}
@@ -445,22 +457,27 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 	checkCpI("FasU2", "ICpU22", 24, "机组2压缩机2电流预警")
 
 	// ================================================================
-	// 6. 空气质量预警 (HVAC_125 ~ HVAC_126)
+	// 6. 空气质量预警 (HVAC_125 ~ HVAC_126) — 阈值与持续时间由 DB 配置
 	// ================================================================
+	co2Thresh := csRawThreshold("WARN_AQ_CO2", 4500)
+	co2Dur := csDuration("WARN_AQ_CO2", 15*time.Minute)
+	pm25Thresh := csRawThreshold("WARN_AQ_PM25", 75)
+	pm10Thresh := csRawThreshold("WARN_AQ_PM10", 150)
+	tvocThresh := csRawThreshold("WARN_AQ_TVOC", 600)
+	pmDur := csDuration("WARN_AQ_PM25", 20*time.Minute)
+
 	checkAQ := func(uIdx int, name string) {
-		code := hvacCode(base, uIdx+24) // 101+24=125, 126
+		code := hvacCode(base, uIdx+24) // uIdx=1→125, uIdx=2→126
 		fanRunning := rawBool(raw, fmt.Sprintf("CfbkEfU%d1", uIdx))
 		hasBeenRunning := p.checkRule(fanRunning, 20*time.Minute, deviceID, code+"_fanrun", currentTime)
 
-		// CO₂阈值4500ppm，持续15min — PHM 3.10 v02（v01为1200，v02修订为4500）
-		co2Err := hasBeenRunning && rawInt(raw, fmt.Sprintf("AqCo2U%d", uIdx)) > 4500
-		co2Hit := p.checkRule(co2Err, 15*time.Minute, deviceID, code+"_co2", currentTime)
+		co2Err := hasBeenRunning && rawInt(raw, fmt.Sprintf("AqCo2U%d", uIdx)) > co2Thresh
+		co2Hit := p.checkRule(co2Err, co2Dur, deviceID, code+"_co2", currentTime)
 
-		// PM2.5/PM10/TVOC 持续20min — PHM 3.10
-		pmTvocErr := hasBeenRunning && (rawInt(raw, fmt.Sprintf("AqPm25U%d", uIdx)) > 75 ||
-			rawInt(raw, fmt.Sprintf("AqPm10U%d", uIdx)) > 150 ||
-			rawInt(raw, fmt.Sprintf("AqTvocU%d", uIdx)) > 600)
-		pmTvocHit := p.checkRule(pmTvocErr, 20*time.Minute, deviceID, code+"_pmtvoc", currentTime)
+		pmTvocErr := hasBeenRunning && (rawInt(raw, fmt.Sprintf("AqPm25U%d", uIdx)) > pm25Thresh ||
+			rawInt(raw, fmt.Sprintf("AqPm10U%d", uIdx)) > pm10Thresh ||
+			rawInt(raw, fmt.Sprintf("AqTvocU%d", uIdx)) > tvocThresh)
+		pmTvocHit := p.checkRule(pmTvocErr, pmDur, deviceID, code+"_pmtvoc", currentTime)
 
 		if co2Hit || pmTvocHit {
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
