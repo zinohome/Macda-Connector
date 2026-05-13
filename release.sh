@@ -79,8 +79,7 @@ cmd_prepare() {
         dist/docker-compose-Web.yml \
         dist/docker-compose-Data.yml \
         dist/README.md \
-        CHANGELOG.md \
-        "$RELEASE_STATE_FILE"
+        CHANGELOG.md
     git commit -m "chore(release): prepare ${version}"
 
     log_info "Prepare 完成！确认无误后执行: ./release.sh publish"
