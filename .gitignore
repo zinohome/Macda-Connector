@@ -106,6 +106,3 @@ Thumbs.db
 
 # 编译产物（超过 GitHub 100MB 限制，通过 Dockerfile 构建）
 connect/cmd/connect-nb67/connect-nb67
-
-# Release script state
-.release-version
