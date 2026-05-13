@@ -353,6 +353,33 @@ services:
     networks:
       - macdanet
 
+  # 地面健康管理平台报送服务：6.1 预警/报警、6.6 心跳、6.7 寿命数据
+  ground-reporter:
+    image: harbor.naivehero.top:8443/macda2/ground-reporter:v2.5.0
+    container_name: ground-reporter
+    hostname: ground-reporter
+    restart: unless-stopped
+    environment:
+      - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
+      # 地面健康管理平台地址（现场联调时补充真实 IP/PORT）
+      - PLATFORM_IP=10.12.48.187
+      - PLATFORM_PORT=8188
+      - PLATFORM_TIMEOUT_SEC=10
+      - PLATFORM_RETRY_MAX=3
+      - PLATFORM_RETRY_BACKOFF_MS=1000
+      # 空调子系统标识（subsystem=5，固定）
+      - SUBSYSTEM_CODE=5
+      - TRAIN_TYPE=B
+      # 心跳周期（分钟）与每日批量报送时刻（小时，0=凌晨）
+      - HEARTBEAT_INTERVAL_MIN=10
+      - DAILY_BATCH_HOUR=0
+      - LOG_LEVEL=INFO
+    depends_on:
+      connect-event-builder:
+        condition: service_healthy
+    networks:
+      - macdanet
+
   timescaledb:
     image: harbor.naivehero.top:8443/macda2/timescaledb-ha:pg14-ts2.19-all
     container_name: timescaledb
