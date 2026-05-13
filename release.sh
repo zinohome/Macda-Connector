@@ -11,6 +11,12 @@ set -euo pipefail
 REGISTRY="harbor.naivehero.top:8443/macda2"
 RELEASE_STATE_FILE=".release-version"
 
+# docker 命令（自动判断是否需要 sudo）
+DOCKER="docker"
+if ! docker info &>/dev/null 2>&1; then
+    DOCKER="sudo docker"
+fi
+
 # ── 颜色输出 ───────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[1;36m'; NC='\033[0m'
@@ -130,7 +136,7 @@ cmd_publish() {
 
     # ── 构建 nb67-web ──────────────────────────────────────────
     log_step "构建 nb67-web"
-    docker build --platform linux/amd64 \
+    $DOCKER build --platform linux/amd64 \
         --tag "$web_image" \
         --file web-nb67-web/Dockerfile \
         web-nb67-web
@@ -138,7 +144,7 @@ cmd_publish() {
 
     # ── 构建 nb67-bff ──────────────────────────────────────────
     log_step "构建 nb67-bff"
-    docker build --platform linux/amd64 \
+    $DOCKER build --platform linux/amd64 \
         --tag "$bff_image" \
         --file web-nb67-bff/Dockerfile \
         web-nb67-bff
@@ -146,7 +152,7 @@ cmd_publish() {
 
     # ── 构建 nb-parse-connect ──────────────────────────────────
     log_step "构建 nb-parse-connect"
-    docker build --platform linux/amd64 \
+    $DOCKER build --platform linux/amd64 \
         --tag "$connect_image" \
         --file connect/Dockerfile.connect \
         connect
@@ -154,9 +160,9 @@ cmd_publish() {
 
     # ── 推送镜像 ───────────────────────────────────────────────
     log_step "推送镜像"
-    docker push "$web_image"     && log_info "推送: $web_image"
-    docker push "$bff_image"     && log_info "推送: $bff_image"
-    docker push "$connect_image" && log_info "推送: $connect_image"
+    $DOCKER push "$web_image"     && log_info "推送: $web_image"
+    $DOCKER push "$bff_image"     && log_info "推送: $bff_image"
+    $DOCKER push "$connect_image" && log_info "推送: $connect_image"
 
     # ── git tag + push ─────────────────────────────────────────
     log_step "打 Tag 并推送"
