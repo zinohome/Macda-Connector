@@ -30,10 +30,11 @@ import (
 
 // warnEntry 单条预警配置的运行时表示。
 type warnEntry struct {
-	TriggerValue    float64 // UI 显示单位阈值
+	TriggerValue    float64 // UI 显示单位阈值（超温类为超出量，单位℃）
 	DurationSeconds int     // 持续时间门控（秒），0 表示不覆盖硬编码
 	Enabled         bool
 	RawScale        float64 // params.raw_scale，默认 1.0
+	TargetTemp      float64 // params.target_temp（℃），0=未配置；超温类专用
 }
 
 type configMap map[string]warnEntry
@@ -112,11 +113,15 @@ func (cs *ConfigStore) load() error {
 			continue
 		}
 		rawScale := 1.0
+		targetTemp := 0.0
 		if paramsJSON.Valid {
 			var params map[string]any
 			if json.Unmarshal([]byte(paramsJSON.String), &params) == nil {
 				if s, ok := params["raw_scale"].(float64); ok && s > 0 {
 					rawScale = s
+				}
+				if t, ok := params["target_temp"].(float64); ok && t > 0 {
+					targetTemp = t
 				}
 			}
 		}
@@ -125,6 +130,7 @@ func (cs *ConfigStore) load() error {
 			DurationSeconds: dur,
 			Enabled:         enabled,
 			RawScale:        rawScale,
+			TargetTemp:      targetTemp,
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -189,4 +195,25 @@ func csIsEnabled(warnCode string) bool {
 		return true
 	}
 	return e.Enabled
+}
+
+// csOvertempAbsThreshold 返回车厢超温的绝对阈值（原始传感器单位）。
+// 从 DB 读取 target_temp（目标温度℃）和 trigger_value（允许超出量℃），
+// 计算 absolute_raw = (target_temp + trigger_value) × raw_scale。
+// 未配置或未启用时返回 defaultRaw（硬编码降级，默认 300 = (26+4)×10）。
+func csOvertempAbsThreshold(warnCode string, defaultRaw int64) int64 {
+	cs := globalConfigStore
+	if cs == nil {
+		return defaultRaw
+	}
+	p := cs.val.Load()
+	if p == nil {
+		return defaultRaw
+	}
+	m := *p.(*configMap)
+	e, ok := m[warnCode]
+	if !ok || !e.Enabled || e.TargetTemp <= 0 {
+		return defaultRaw
+	}
+	return int64((e.TargetTemp + e.TriggerValue) * e.RawScale)
 }

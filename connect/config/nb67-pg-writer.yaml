@@ -50,7 +50,7 @@ output:
       ) ON CONFLICT (device_id, event_time, ingest_time) DO NOTHING;
     args_mapping: |
       root = [
-        this.event_time_text,
+        this.event_time_text + "+08:00",
         this.ingest_time,
         this.process_time,
         this.event_time_valid,

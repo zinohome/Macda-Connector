@@ -211,7 +211,7 @@ func (p *NB67EventProcessor) Process(ctx context.Context, msg *service.Message) 
 		DeviceID:      input.DeviceID,
 		EventTimeText: input.EventTimeText,
 		IngestTime:    input.IngestTime,
-		ProcessTime:   time.Now().UTC().Format(time.RFC3339Nano),
+		ProcessTime:   time.Now().In(beijingLoc).Format(time.RFC3339Nano),
 	}
 
 	// 【核心修复】：根据 RUNTIME 环境选择时间源
@@ -393,12 +393,16 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 		hits = append(hits, PredictHit{Code: hvacCode(base, 8), Name: "回风温度传感器预警", Severity: 3})
 	}
 
-	// HVAC_09: 车厢超温预警 -> 系统正常运行 > 20min，且车温超阈值 -> 持续 2 分钟 (WARN_CABIN_OVERHEAT)
-	overtempThresh := csRawThreshold("WARN_CABIN_OVERHEAT", 40)
+	// HVAC_09: 车厢超温预警（PHM 文档条件）
+	// 条件1：制冷系统无故障 —— 暂不纳入，以 buildAlarmHits 空作近似
+	// 条件2：运行于强冷(2)/弱冷(3)模式，持续 > 20min
+	// 条件3：回风温度(RasU) > 制冷目标温度 + 4℃，持续 > 2min
+	// overtempThresh = (target_temp + trigger_value) × raw_scale，如 (26+4)×10=300
+	overtempThresh := csOvertempAbsThreshold("WARN_CABIN_OVERHEAT", 300)
 	overtempDur := csDuration("WARN_CABIN_OVERHEAT", 2*time.Minute)
-	coolingNormal := len(buildAlarmHits(raw)) == 0 && (wModeU1 == 2 || wModeU2 == 2)
+	coolingNormal := len(buildAlarmHits(raw)) == 0 && (wModeU1 == 2 || wModeU1 == 3 || wModeU2 == 2 || wModeU2 == 3)
 	sysRunningLong := p.checkRule(coolingNormal, 20*time.Minute, deviceID, "cooling_normal_20", currentTime)
-	isOvertemp := sysRunningLong && (rawInt(raw, "Tveh1") > overtempThresh || rawInt(raw, "Tveh2") > overtempThresh)
+	isOvertemp := sysRunningLong && (rawInt(raw, "RasU1") > overtempThresh || rawInt(raw, "RasU2") > overtempThresh)
 	if p.checkRule(isOvertemp, overtempDur, deviceID, hvacCode(base, 9), currentTime) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 9), Name: "车厢温度超温预警", Severity: 3})
 	}
