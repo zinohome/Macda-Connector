@@ -55,7 +55,14 @@ for stack_cfg in "desktop:${COMPOSE_DESKTOP}" "dev:${COMPOSE_DEV}" "mock:${COMPO
         ${DC} -p "${name}" -f "${cfg}" down --remove-orphans 2>/dev/null || true
     fi
 done
-log_info "所有容器已停止"
+
+# 强制清理可能遗留的 MACDA 相关容器
+# （解决不同 project 名 / 手动启动 / baseenv 默认 project 导致的孤儿容器冲突）
+log_info "清理遗留容器..."
+${DOCKER} ps -a --format "{{.Names}}" | \
+    grep -E "^nb67-|^dev-connect|^dev-init|^baseenv-connect|^timescaledb$|^pgadmin$|^redpanda-|^redpanda-console$|^mock-" | \
+    xargs -r ${DOCKER} rm -f 2>/dev/null || true
+log_info "所有容器已停止并清理"
 
 # ── Step 2: 清空数据目录（仅 --clean 模式）───────────────────────────────
 if [[ "${DO_CLEAN}" == "true" ]]; then
@@ -115,7 +122,7 @@ for sql in 01-init.sql 02-migration-20260504.sql 03-migration-20260512.sql 04-mi
         log_error "找不到 SQL 文件: ${src}"
     fi
 done
-log_info "数据库初始化 SQL 就位 (3个文件)"
+log_info "数据库初始化 SQL 就位 (5个文件)"
 
 # ── Step 4: 按序启动三个栈 ───────────────────────────────────────────────
 log_step "Step 4: 启动容器栈"
