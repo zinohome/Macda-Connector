@@ -32,7 +32,7 @@ pipeline:
     # 3. 字段平铺与标准化，防范字符串型数字的 panic 错误
     - mapping: |
         root.event_time = (this.event_meta.event_time_text + "+08:00") | "1970-01-01T00:00:00+08:00"
-        root.ingest_time = this.event_meta.ingest_time | now().format("2006-01-02T15:04:05-07:00", "Asia/Shanghai")
+        root.ingest_time = this.event_meta.ingest_time | now().ts_format("2006-01-02T15:04:05-07:00", "Asia/Shanghai")
         root.line_id = this.event_meta.line_id.number() | 0
         root.train_id = this.event_meta.train_id.number() | 0
         root.carriage_id = this.event_meta.carriage_id.number() | 0
