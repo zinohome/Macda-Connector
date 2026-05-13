@@ -32,7 +32,10 @@ ALTER TABLE hvac.warning_config
 
 -- 3.1 冷媒泄漏 (WARN_REFRIGERANT_LEAK)
 UPDATE hvac.warning_config SET
-    strategy = '1、检查风阀开启状态\n2、检查风机运行电流及工作状态\n3、确认制冷系统运行压力\n4、检查电子膨胀阀系统'
+    strategy = E'1、检查风阀开启状态
+2、检查风机运行电流及工作状态
+3、确认制冷系统运行压力
+4、检查电子膨胀阀系统'
 WHERE warn_code = 'WARN_REFRIGERANT_LEAK';
 
 -- 3.2 制冷系统预警 (WARN_COOLING_SYSTEM)
@@ -152,3 +155,8 @@ UPDATE hvac.warning_config SET
     params = COALESCE(params, '{}'::jsonb)
              || '{"min_cooling_runtime_s": 0}'::jsonb
 WHERE warn_code = 'WARN_CABIN_OVERHEAT';
+
+-- 修正：将字面量 \n 转换为真实换行符（兼容各版本 psql 写入方式）
+UPDATE hvac.warning_config SET strategy        = replace(strategy,        '\n', chr(10));
+UPDATE hvac.warning_config SET default_strategy = replace(default_strategy, '\n', chr(10))
+    WHERE default_strategy IS NOT NULL;
