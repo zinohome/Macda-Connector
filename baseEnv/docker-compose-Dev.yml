@@ -363,9 +363,10 @@ services:
     restart: unless-stopped
     environment:
       - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
-      # 地面健康管理平台地址（现场联调时补充真实 IP/PORT；本地测试改为 mock-platform）
+      # 地面健康管理平台地址与认证（现场联调时补充真实值；本地测试 IP 改为 mock-platform）
       - PLATFORM_IP=10.12.48.187
       - PLATFORM_PORT=8188
+      - PLATFORM_API_KEY=
       - PLATFORM_TIMEOUT_SEC=10
       - PLATFORM_RETRY_MAX=3
       - PLATFORM_RETRY_BACKOFF_MS=1000

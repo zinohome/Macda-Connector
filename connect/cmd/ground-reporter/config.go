@@ -8,10 +8,11 @@ import (
 
 type Config struct {
 	// Platform HTTP endpoint
-	PlatformIP            string
-	PlatformPort          int
-	PlatformTimeoutSec    int
-	PlatformRetryMax      int
+	PlatformIP             string
+	PlatformPort           int
+	PlatformApiKey         string // X-Api-Key header; empty = no auth
+	PlatformTimeoutSec     int
+	PlatformRetryMax       int
 	PlatformRetryBackoffMs int
 
 	// HVAC subsystem identity
@@ -32,6 +33,7 @@ func loadConfig() Config {
 	return Config{
 		PlatformIP:             getEnv("PLATFORM_IP", "10.12.48.187"),
 		PlatformPort:           getEnvInt("PLATFORM_PORT", 8188),
+		PlatformApiKey:         getEnv("PLATFORM_API_KEY", ""),
 		PlatformTimeoutSec:     getEnvInt("PLATFORM_TIMEOUT_SEC", 10),
 		PlatformRetryMax:       getEnvInt("PLATFORM_RETRY_MAX", 3),
 		PlatformRetryBackoffMs: getEnvInt("PLATFORM_RETRY_BACKOFF_MS", 1000),

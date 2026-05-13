@@ -65,10 +65,16 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		pretty.Write(body) // 格式化失败就原样输出
 	}
 
+	apiKey := r.Header.Get("X-Api-Key")
+	if apiKey == "" {
+		apiKey = "(未设置)"
+	}
+
 	sep := "─────────────────────────────────────────────────"
 	fmt.Printf("\n%s\n", sep)
 	fmt.Printf("[%s]  %s\n", ts, name)
 	fmt.Printf("路径: %s %s\n", r.Method, r.URL.Path)
+	fmt.Printf("X-Api-Key: %s\n", apiKey)
 	fmt.Printf("Body:\n%s\n", pretty.String())
 	fmt.Printf("%s\n", sep)
 
