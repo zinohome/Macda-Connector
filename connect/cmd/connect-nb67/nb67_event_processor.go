@@ -394,14 +394,28 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 	}
 
 	// HVAC_09: 车厢超温预警（PHM 文档条件）
-	// 条件1：制冷系统无故障 —— 暂不纳入，以 buildAlarmHits 空作近似
-	// 条件2：运行于强冷(2)/弱冷(3)模式，持续 > 20min
-	// 条件3：回风温度(RasU) > 制冷目标温度 + 4℃，持续 > 2min
-	// overtempThresh = (target_temp + trigger_value) × raw_scale，如 (26+4)×10=300
+	// 条件1：制冷系统核心部件无故障（PHM "制冷系统无故障"）
+	//   注意：仅检查压缩机/变频器/高低压等制冷核心故障，传感器故障（如 BfltDiffpresU）不纳入，
+	//   避免因 mock 帧 presdiff=32767 误触发传感器故障位而永久屏蔽超温预警。
+	// 条件2：运行于强冷(2)/弱冷(3)模式，持续 > min_cooling_runtime_s
+	// 条件3：回风温度(RasU) > 制冷目标温度 + delta，持续 > duration_seconds
+	coolingSystemFaulty :=
+		rawBool(raw, "BfltPowersupplyU1") || rawBool(raw, "BfltPowersupplyU2") ||
+			rawBool(raw, "BfltTempover") ||
+			rawBool(raw, "BlpfltCompU11") || rawBool(raw, "BlpfltCompU12") ||
+			rawBool(raw, "BlpfltCompU21") || rawBool(raw, "BlpfltCompU22") ||
+			rawBool(raw, "BscfltCompU11") || rawBool(raw, "BscfltCompU12") ||
+			rawBool(raw, "BscfltCompU21") || rawBool(raw, "BscfltCompU22") ||
+			rawBool(raw, "BfltHighpresU11") || rawBool(raw, "BfltHighpresU12") ||
+			rawBool(raw, "BfltHighpresU21") || rawBool(raw, "BfltHighpresU22") ||
+			rawBool(raw, "BfltLowpresU11") || rawBool(raw, "BfltLowpresU12") ||
+			rawBool(raw, "BfltLowpresU21") || rawBool(raw, "BfltLowpresU22") ||
+			rawBool(raw, "BfltVfdU11") || rawBool(raw, "BfltVfdU12") ||
+			rawBool(raw, "BfltVfdU21") || rawBool(raw, "BfltVfdU22")
 	overtempThresh := csOvertempAbsThreshold("WARN_CABIN_OVERHEAT", 300)
 	overtempDur := csDuration("WARN_CABIN_OVERHEAT", 2*time.Minute)
 	coolingPrecondDur := csCoolingPreconditionDur("WARN_CABIN_OVERHEAT", 20*time.Minute)
-	coolingNormal := len(buildAlarmHits(raw)) == 0 && (wModeU1 == 2 || wModeU1 == 3 || wModeU2 == 2 || wModeU2 == 3)
+	coolingNormal := !coolingSystemFaulty && (wModeU1 == 2 || wModeU1 == 3 || wModeU2 == 2 || wModeU2 == 3)
 	sysRunningLong := p.checkRule(coolingNormal, coolingPrecondDur, deviceID, "cooling_normal_20", currentTime)
 	isOvertemp := sysRunningLong && (rawInt(raw, "RasU1") > overtempThresh || rawInt(raw, "RasU2") > overtempThresh)
 	if p.checkRule(isOvertemp, overtempDur, deviceID, hvacCode(base, 9), currentTime) {
