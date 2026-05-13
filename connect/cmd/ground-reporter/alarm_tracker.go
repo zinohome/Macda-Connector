@@ -97,10 +97,11 @@ type HitCode struct {
 	Name string
 }
 
+// newUUID generates a 32-char hex UUID (no dashes) matching platform field max-length=32.
 func newUUID() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+	return fmt.Sprintf("%08x%04x%04x%04x%012x",
 		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
