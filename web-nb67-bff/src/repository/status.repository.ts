@@ -136,6 +136,21 @@ export class StatusRepository {
     /**
      * 获取实时预警详情 (适配前端 Object.entries 逻辑)
      */
+    // HVAC 预警序号 → warning_config.warn_code 映射
+    private static hvacSeqToWarnCode(seq: number): string | null {
+        if (seq >= 1  && seq <= 4)  return 'WARN_REFRIGERANT_LEAK';
+        if (seq >= 5  && seq <= 6)  return 'WARN_COOLING_SYSTEM';
+        if (seq >= 7  && seq <= 8)  return 'WARN_TEMP_SENSOR';
+        if (seq === 9)               return 'WARN_CABIN_OVERHEAT';
+        if (seq >= 10 && seq <= 11) return 'WARN_FILTER_CLOG';
+        if (seq >= 12 && seq <= 15) return 'WARN_EF_CURRENT';
+        if (seq >= 16 && seq <= 19) return 'WARN_CF_CURRENT';
+        if (seq === 20)              return 'WARN_EXUF_CURRENT';
+        if (seq >= 21 && seq <= 24) return 'WARN_CP_CURRENT';
+        if (seq === 25 || seq === 26) return 'WARN_AQ_CO2';
+        return null;
+    }
+
     static async getRealtimeWarnings(trainId?: number) {
         let query = db
             .selectFrom('hvac.fact_event')
@@ -153,21 +168,35 @@ export class StatusRepository {
             query = query.where('train_id', '=', trainId);
         }
 
-        const data = await query.execute();
+        const [data, configs] = await Promise.all([
+            query.execute(),
+            db.selectFrom('hvac.warning_config' as any).selectAll().execute() as Promise<any[]>
+        ]);
+
+        // 构建 warn_code → strategy 查找表
+        const strategyMap: Record<string, string> = {};
+        configs.forEach((c: any) => {
+            if (c.warn_code && c.strategy) strategyMap[c.warn_code] = c.strategy;
+        });
 
         const grouped: Record<string, any[]> = {};
         data.forEach(row => {
             const code = row.fault_code;
             if (code) {
-                if (!grouped[code]) {
-                    grouped[code] = [];
-                }
+                // 从 HVAC 编码提取序号：HVAC307 → 307 % 100 = 7
+                const num = parseInt(code.replace(/[^0-9]/g, ''), 10);
+                const seq = isNaN(num) ? -1 : num % 100;
+                const warnCode = this.hvacSeqToWarnCode(seq);
+                const strategy = warnCode ? (strategyMap[warnCode] || '') : '';
+
+                if (!grouped[code]) grouped[code] = [];
                 grouped[code].push({
                     name: row.fault_name,
                     warning_time: formatTime((row as any)[this.timeCol]),
                     carriage_no: row.carriage_id || 0,
                     train_no: row.train_id || 0,
-                    line_no: row.line_id || 0
+                    line_no: row.line_id || 0,
+                    strategy
                 });
             }
         });

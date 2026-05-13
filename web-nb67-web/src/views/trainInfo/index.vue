@@ -1529,20 +1529,13 @@ async function getTrainApi() {
 
                     if (!seenState.has(uniqueKey)) {
                         const newItem = {
-                            ...items, 
+                            ...items,
                             code: key,
                             warning_time: formatTime(items.warning_time),
                             name: items.name || items.alert_name || items.warning_info || '未知预警',
                             carriage_no: carNo,
-                            precautions: ''
+                            precautions: items.strategy || ''
                         }
-                        const cleanCode = newItem.code.replace('dvc_', '')
-                        proposeAdvice.forEach((p) => {
-                            if(p.value == newItem.code || p.value == cleanCode){
-                                newItem.precautions = p.title
-                                if(newItem.name === '未知预警') newItem.name = p.name
-                            }
-                        })
                         tempState.push(newItem)
                         seenState.add(uniqueKey)
                     }
