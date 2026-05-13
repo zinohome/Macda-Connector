@@ -72,6 +72,7 @@
                 </el-form-item>
             </el-form>
             <template #footer>
+                <el-button type="warning" :loading="resetting" @click="resetEdit" style="float:left">重置出厂设置</el-button>
                 <el-button @click="editVisible = false">取消</el-button>
                 <el-button type="primary" :loading="saving" @click="saveEdit">确认保存</el-button>
             </template>
@@ -82,8 +83,8 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getWarningConfigs, updateWarningConfig } from '@/api/api'
-import { ElMessage } from 'element-plus'
+import { getWarningConfigs, updateWarningConfig, resetWarningConfig } from '@/api/api'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
 const route = useRoute()
@@ -93,6 +94,7 @@ const tableData = ref([])
 
 const editVisible = ref(false)
 const saving = ref(false)
+const resetting = ref(false)
 const editForm = reactive({
     id: null, component_name: '', threshold_good: '', threshold_normal: '', threshold_bad: '',
     trigger_operator: '>', trigger_value: 0, clear_value: 0,
@@ -159,6 +161,30 @@ const saveEdit = async () => {
         ElMessage.error('保存失败')
     } finally {
         saving.value = false
+    }
+}
+
+const resetEdit = async () => {
+    try {
+        await ElMessageBox.confirm(
+            `确认将「${editForm.component_name}」重置为 PHM 出厂设置？`,
+            '重置确认', { type: 'warning', confirmButtonText: '确认重置', cancelButtonText: '取消' }
+        )
+    } catch { return }
+    resetting.value = true
+    try {
+        const res = await resetWarningConfig(editForm.id)
+        if (res?.code === 200) {
+            ElMessage.success('已重置为出厂设置')
+            editVisible.value = false
+            fetchData()
+        } else {
+            ElMessage.error(res?.message || '重置失败')
+        }
+    } catch (e) {
+        ElMessage.error('重置失败')
+    } finally {
+        resetting.value = false
     }
 }
 

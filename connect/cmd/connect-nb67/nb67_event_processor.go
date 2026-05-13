@@ -400,8 +400,9 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 	// overtempThresh = (target_temp + trigger_value) × raw_scale，如 (26+4)×10=300
 	overtempThresh := csOvertempAbsThreshold("WARN_CABIN_OVERHEAT", 300)
 	overtempDur := csDuration("WARN_CABIN_OVERHEAT", 2*time.Minute)
+	coolingPrecondDur := csCoolingPreconditionDur("WARN_CABIN_OVERHEAT", 20*time.Minute)
 	coolingNormal := len(buildAlarmHits(raw)) == 0 && (wModeU1 == 2 || wModeU1 == 3 || wModeU2 == 2 || wModeU2 == 3)
-	sysRunningLong := p.checkRule(coolingNormal, 20*time.Minute, deviceID, "cooling_normal_20", currentTime)
+	sysRunningLong := p.checkRule(coolingNormal, coolingPrecondDur, deviceID, "cooling_normal_20", currentTime)
 	isOvertemp := sysRunningLong && (rawInt(raw, "RasU1") > overtempThresh || rawInt(raw, "RasU2") > overtempThresh)
 	if p.checkRule(isOvertemp, overtempDur, deviceID, hvacCode(base, 9), currentTime) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 9), Name: "车厢温度超温预警", Severity: 3})

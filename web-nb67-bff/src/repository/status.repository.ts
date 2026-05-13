@@ -603,6 +603,21 @@ export class StatusRepository {
             .execute();
     }
 
+    static async resetWarningConfig(id: number) {
+        return await db.executeQuery(
+            sql`UPDATE hvac.warning_config
+                SET trigger_value    = default_trigger_value,
+                    clear_value      = default_clear_value,
+                    duration_seconds = default_duration_seconds,
+                    threshold_good   = default_threshold_good,
+                    threshold_normal = default_threshold_normal,
+                    threshold_bad    = default_threshold_bad,
+                    strategy         = default_strategy
+                WHERE id = ${sql.lit(id)}
+                  AND default_trigger_value IS NOT NULL`.compile(db)
+        );
+    }
+
     // B8: 获取指定车厢最新数据时间（供前端离线检测）
     static async getLatestDataTime(trainId: number, carriageId: number): Promise<Date | null> {
         const result = await db

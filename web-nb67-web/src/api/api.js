@@ -98,6 +98,7 @@ export const getTrendParamsApi = () => request('/api/rest/carriage/TrendParams',
 // B7: 预警条件配置 CRUD
 export const getWarningConfigs = () => request('/api/rest/warning/config', 'get')
 export const updateWarningConfig = (id, data) => request(`/api/rest/warning/config/${id}`, 'put', data)
+export const resetWarningConfig = (id) => request(`/api/rest/warning/config/${id}/reset`, 'post')
 
 // B8: 最新数据时间（离线检测）
 export const getLatestDataTime = (params) => request('/api/rest/train/LatestDataTime', 'get', params)

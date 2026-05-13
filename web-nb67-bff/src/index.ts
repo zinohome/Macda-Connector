@@ -714,6 +714,15 @@ async function bootstrap() {
             }
         });
 
+        fastify.post('/api/rest/warning/config/:id/reset', async (request: any) => {
+            try {
+                await StatusRepository.resetWarningConfig(parseInt(request.params.id));
+                return { code: 200, message: '已重置为出厂设置' };
+            } catch (err: any) {
+                return { code: 500, message: err.message };
+            }
+        });
+
         // B8: 最新数据时间戳（前端离线检测用）
         fastify.get('/api/rest/train/LatestDataTime', async (request: any) => {
             const { trainId, carriageId } = request.query;

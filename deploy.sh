@@ -107,7 +107,7 @@ fi
 
 # 3c. init-db SQL 文件
 mkdir -p "${HOST_DATA}/timescaledb/init-db"
-for sql in 01-init.sql 02-migration-20260504.sql 03-migration-20260512.sql 04-migration-20260513.sql; do
+for sql in 01-init.sql 02-migration-20260504.sql 03-migration-20260512.sql 04-migration-20260513.sql 05-migration-20260513.sql; do
     src="${BASENV_DIR}/init-db/${sql}"
     if [[ -f "$src" ]]; then
         sudo cp "$src" "${HOST_DATA}/timescaledb/init-db/"
@@ -167,6 +167,9 @@ ${DOCKER} exec -i timescaledb psql -U postgres postgres \
 log_info "执行 04-migration-20260513.sql（WARN_CABIN_OVERHEAT 目标温度绝对阈值修正）..."
 ${DOCKER} exec -i timescaledb psql -U postgres postgres \
     < "${HOST_DATA}/timescaledb/init-db/04-migration-20260513.sql" &>/dev/null
+log_info "执行 05-migration-20260513.sql（PHM策略更新+出厂默认+测试模式阈值）..."
+${DOCKER} exec -i timescaledb psql -U postgres postgres \
+    < "${HOST_DATA}/timescaledb/init-db/05-migration-20260513.sql" &>/dev/null
 
 # 验证表存在
 TABLE_COUNT=$(${DOCKER} exec timescaledb psql -U postgres postgres -tAc \

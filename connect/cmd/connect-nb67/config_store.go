@@ -30,11 +30,12 @@ import (
 
 // warnEntry 单条预警配置的运行时表示。
 type warnEntry struct {
-	TriggerValue    float64 // UI 显示单位阈值（超温类为超出量，单位℃）
-	DurationSeconds int     // 持续时间门控（秒），0 表示不覆盖硬编码
-	Enabled         bool
-	RawScale        float64 // params.raw_scale，默认 1.0
-	TargetTemp      float64 // params.target_temp（℃），0=未配置；超温类专用
+	TriggerValue         float64 // UI 显示单位阈值（超温类为超出量，单位℃）
+	DurationSeconds      int     // 持续时间门控（秒），0 表示立即触发
+	Enabled              bool
+	RawScale             float64 // params.raw_scale，默认 1.0
+	TargetTemp           float64 // params.target_temp（℃），0=未配置；超温类专用
+	MinCoolingRuntimeS   int     // params.min_cooling_runtime_s（秒），-1=未配置
 }
 
 type configMap map[string]warnEntry
@@ -114,6 +115,7 @@ func (cs *ConfigStore) load() error {
 		}
 		rawScale := 1.0
 		targetTemp := 0.0
+		minCoolingRuntimeS := -1
 		if paramsJSON.Valid {
 			var params map[string]any
 			if json.Unmarshal([]byte(paramsJSON.String), &params) == nil {
@@ -123,14 +125,18 @@ func (cs *ConfigStore) load() error {
 				if t, ok := params["target_temp"].(float64); ok && t > 0 {
 					targetTemp = t
 				}
+				if v, ok := params["min_cooling_runtime_s"].(float64); ok && v >= 0 {
+					minCoolingRuntimeS = int(v)
+				}
 			}
 		}
 		m[code] = warnEntry{
-			TriggerValue:    tv,
-			DurationSeconds: dur,
-			Enabled:         enabled,
-			RawScale:        rawScale,
-			TargetTemp:      targetTemp,
+			TriggerValue:       tv,
+			DurationSeconds:    dur,
+			Enabled:            enabled,
+			RawScale:           rawScale,
+			TargetTemp:         targetTemp,
+			MinCoolingRuntimeS: minCoolingRuntimeS,
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -195,6 +201,25 @@ func csIsEnabled(warnCode string) bool {
 		return true
 	}
 	return e.Enabled
+}
+
+// csCoolingPreconditionDur 返回 HVAC_09 的冷却模式前置持续时间。
+// 优先读 params.min_cooling_runtime_s；未配置则返回 defaultDur（硬编码 20min）。
+func csCoolingPreconditionDur(warnCode string, defaultDur time.Duration) time.Duration {
+	cs := globalConfigStore
+	if cs == nil {
+		return defaultDur
+	}
+	p := cs.val.Load()
+	if p == nil {
+		return defaultDur
+	}
+	m := *p.(*configMap)
+	e, ok := m[warnCode]
+	if !ok || e.MinCoolingRuntimeS < 0 {
+		return defaultDur
+	}
+	return time.Duration(e.MinCoolingRuntimeS) * time.Second
 }
 
 // csOvertempAbsThreshold 返回车厢超温的绝对阈值（原始传感器单位）。
