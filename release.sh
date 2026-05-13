@@ -89,14 +89,16 @@ cmd_prepare() {
 # ── 生成 CHANGELOG ─────────────────────────────────────────────
 _gen_changelog() {
     local version="$1"
+    # 幂等性守卫：同一版本不重复写入
+    grep -qF "## ${version}" CHANGELOG.md && { log_info "CHANGELOG 已含 ${version}，跳过"; return; }
     local today; today=$(date +%Y-%m-%d)
     local last_tag; last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
     local range="${last_tag:+${last_tag}..}HEAD"
 
     local feats fixes chores
-    feats=$(git log  $range --pretty=format:"- %s" --grep="^feat"  2>/dev/null || true)
-    fixes=$(git log  $range --pretty=format:"- %s" --grep="^fix"   2>/dev/null || true)
-    chores=$(git log $range --pretty=format:"- %s" --grep="^chore" 2>/dev/null || true)
+    feats=$(git log  "$range" --pretty=format:"- %s" --grep="^feat"  2>/dev/null || true)
+    fixes=$(git log  "$range" --pretty=format:"- %s" --grep="^fix"   2>/dev/null || true)
+    chores=$(git log "$range" --pretty=format:"- %s" --grep="^chore" 2>/dev/null || true)
 
     local entry
     entry="## ${version} (${today})\n"
@@ -159,7 +161,7 @@ cmd_publish() {
 
     # ── git tag + push ─────────────────────────────────────────
     log_step "打 Tag 并推送"
-    git tag "$version"
+    git tag "$version" 2>/dev/null || { log_warn "Tag $version 已存在，跳过创建"; }
     git push origin main
     git push origin "$version"
     log_info "Tag $version 已推送"
