@@ -162,21 +162,27 @@ log_step "Step 6: 初始化数据库 Schema"
 # 说明：不依赖 initdb 自动执行（数据目录非空时会被跳过）
 # SQL 文件全部使用 IF NOT EXISTS / WHERE NOT EXISTS，多次执行安全无副作用
 
-log_info "执行 01-init.sql（创建 Schema + 表 + hypertable）..."
-${DOCKER} exec -i timescaledb psql -U postgres postgres \
-    < "${HOST_DATA}/timescaledb/init-db/01-init.sql" &>/dev/null
-log_info "执行 02-migration-20260504.sql（recovery_time + warning_config）..."
-${DOCKER} exec -i timescaledb psql -U postgres postgres \
-    < "${HOST_DATA}/timescaledb/init-db/02-migration-20260504.sql" &>/dev/null
-log_info "执行 03-migration-20260512.sql（warning_config raw_scale + duration_seconds）..."
-${DOCKER} exec -i timescaledb psql -U postgres postgres \
-    < "${HOST_DATA}/timescaledb/init-db/03-migration-20260512.sql" &>/dev/null
-log_info "执行 04-migration-20260513.sql（WARN_CABIN_OVERHEAT 目标温度绝对阈值修正）..."
-${DOCKER} exec -i timescaledb psql -U postgres postgres \
-    < "${HOST_DATA}/timescaledb/init-db/04-migration-20260513.sql" &>/dev/null
-log_info "执行 05-migration-20260513.sql（PHM策略更新+出厂默认+测试模式阈值）..."
-${DOCKER} exec -i timescaledb psql -U postgres postgres \
-    < "${HOST_DATA}/timescaledb/init-db/05-migration-20260513.sql" &>/dev/null
+run_sql() {
+    local label="$1" file="$2"
+    log_info "执行 ${label}..."
+    # ON_ERROR_STOP=1：遇 ERROR 立即非零退出，配合外层 set -e 快速失败
+    # stdout 丢弃（NOTICE 太多），stderr 保留（ERROR/FATAL 可见）
+    if ! ${DOCKER} exec -i timescaledb psql -U postgres postgres \
+            -v ON_ERROR_STOP=1 < "${file}" >/dev/null; then
+        log_error "SQL 执行失败: ${label}"
+    fi
+}
+
+run_sql "01-init.sql（Schema + 表 + hypertable）" \
+    "${HOST_DATA}/timescaledb/init-db/01-init.sql"
+run_sql "02-migration-20260504.sql（recovery_time + warning_config）" \
+    "${HOST_DATA}/timescaledb/init-db/02-migration-20260504.sql"
+run_sql "03-migration-20260512.sql（raw_scale + duration_seconds）" \
+    "${HOST_DATA}/timescaledb/init-db/03-migration-20260512.sql"
+run_sql "04-migration-20260513.sql（WARN_CABIN_OVERHEAT 阈值修正）" \
+    "${HOST_DATA}/timescaledb/init-db/04-migration-20260513.sql"
+run_sql "05-migration-20260513.sql（PHM策略+出厂默认+测试模式）" \
+    "${HOST_DATA}/timescaledb/init-db/05-migration-20260513.sql"
 
 # 验证表存在
 TABLE_COUNT=$(${DOCKER} exec timescaledb psql -U postgres postgres -tAc \

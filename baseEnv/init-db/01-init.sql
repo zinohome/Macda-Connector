@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS hvac.fact_raw (
 COMMENT ON TABLE hvac.fact_raw IS '设备明细底层存根数据宽表';
 
 -- 将表转化为 Hypertable，极速写入及查询。以 event_time 作为时序切片键，分块长度7天
-SELECT create_hypertable('hvac.fact_raw', 'event_time', chunk_time_interval => INTERVAL '7 days');
+SELECT create_hypertable('hvac.fact_raw', 'event_time', chunk_time_interval => INTERVAL '7 days', if_not_exists => TRUE);
 
 -- 为支持 DEV 模式下的解析时间分析，建立辅助索引
 CREATE INDEX IF NOT EXISTS ix_fact_raw_ingest_time ON hvac.fact_raw (ingest_time DESC);
@@ -122,4 +122,5 @@ GROUP BY bucket_time, train_id, carriage_id;
 SELECT add_continuous_aggregate_policy('hvac.mv_temperature_hourly',
   start_offset => INTERVAL '3 days',
   end_offset => INTERVAL '1 hour',
-  schedule_interval => INTERVAL '1 hour');
+  schedule_interval => INTERVAL '1 hour',
+  if_not_exists => TRUE);
