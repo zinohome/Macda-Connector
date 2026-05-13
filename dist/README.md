@@ -1,7 +1,7 @@
 # MACDA Connector — 部署手册
 
-> **版本**：v2.1.2  
-> **更新**：2026-02-24
+> **版本**：v2.5.0  
+> **更新**：2026-05-13
 
 ---
 
@@ -270,8 +270,8 @@ sed -i 's/192.168.32.17/<服务器IP>/g' docker-compose-Data.yml
 
 | 服务 | 镜像 |
 |------|------|
-| 前端 (Nginx) | `harbor.naivehero.top:8443/macda2/nb67-web:v2.1.2` |
-| BFF (Node.js) | `harbor.naivehero.top:8443/macda2/nb67-bff:v2.1.2` |
-| Connect 流水线 | `harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full` |
+| 前端 (Nginx) | `harbor.naivehero.top:8443/macda2/nb67-web:v2.5.0` |
+| BFF (Node.js) | `harbor.naivehero.top:8443/macda2/nb67-bff:v2.5.0` |
+| Connect 流水线 | `harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.0` |
 | TimescaleDB | `harbor.naivehero.top:8443/macda2/timescaledb-ha:pg14-ts2.19-all` |
 | Redpanda | `harbor.naivehero.top:8443/macda2/redpanda:v25.3.7` |
