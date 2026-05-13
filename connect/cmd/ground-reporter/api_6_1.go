@@ -3,10 +3,27 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"strconv"
 )
+
+// carriageNames maps carriage ID (1-6) to the physical coach designation.
+// Order matches the spec: "Tc1,Mp1,M1,M2,Mp2,Tc2 分别对应 1-6 车厢".
+var carriageNames = map[int]string{
+	1: "Tc1",
+	2: "Mp1",
+	3: "M1",
+	4: "M2",
+	5: "Mp2",
+	6: "Tc2",
+}
+
+func coachName(carriageID int) string {
+	if name, ok := carriageNames[carriageID]; ok {
+		return name
+	}
+	return strconv.Itoa(carriageID)
+}
 
 const path61 = "/gate/METRO-PHM/api/faultRecordsSubsystem/saveRecord"
 
@@ -105,7 +122,7 @@ func buildRecord61(cfg Config, meta EventMeta, msgType, code, location, uuid str
 		MessageType: msgType,
 		TrainType:   cfg.TrainType,
 		TrainNo:     meta.TrainID,
-		Coach:       fmt.Sprintf("%s%d", cfg.TrainType, meta.CarriageID),
+		Coach:       coachName(meta.CarriageID),
 		Location:    location,
 		Code:        code,
 		Station1:    "",
