@@ -85,7 +85,7 @@ fi
 log_step "Step 3: 预置宿主机文件"
 
 # 3a. Connect 配置文件（避免 Docker 创建假目录）
-mkdir -p "${HOST_DATA}/connect/config"
+sudo mkdir -p "${HOST_DATA}/connect/config"
 for yaml in nb67-parser.yaml nb67-storage-writer.yaml nb67-event-builder.yaml \
             nb67-event-writer.yaml nb67-pg-writer.yaml; do
     src="${CONNECT_CONFIG_DIR}/${yaml}"
@@ -101,7 +101,7 @@ done
 log_info "Connect 配置文件就位 (5个 yaml)"
 
 # 3b. mock 数据源（二进制录制帧）
-mkdir -p "${HOST_DATA}/mock/connect/data/input"
+sudo mkdir -p "${HOST_DATA}/mock/connect/data/input"
 FRAME_FILE="${MOCK_DATA_DIR}/whole_frame-260203"
 if [[ -f "$FRAME_FILE" ]]; then
     [[ -d "${HOST_DATA}/mock/connect/data/input/whole_frame-260203" ]] && \
@@ -113,7 +113,7 @@ else
 fi
 
 # 3c. init-db SQL 文件
-mkdir -p "${HOST_DATA}/timescaledb/init-db"
+sudo mkdir -p "${HOST_DATA}/timescaledb/init-db"
 for sql in 01-init.sql 02-migration-20260504.sql 03-migration-20260512.sql 04-migration-20260513.sql 05-migration-20260513.sql; do
     src="${BASENV_DIR}/init-db/${sql}"
     if [[ -f "$src" ]]; then
