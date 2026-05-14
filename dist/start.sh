@@ -41,6 +41,26 @@ log_info()  { echo -e "\033[0;32m[INFO]\033[0m  $*"; }
 log_step()  { echo -e "\n\033[1;36m══════ $* ══════\033[0m"; }
 log_error() { echo -e "\033[0;31m[ERROR]\033[0m $*" >&2; }
 
+# ── 1panel 检测 ──────────────────────────────────────────────
+check_1panel() {
+    if command -v 1pctl &>/dev/null 2>&1 || \
+       systemctl is-active --quiet 1panel 2>/dev/null || \
+       [ -f "/usr/local/bin/1panel" ]; then
+        echo -e "\n\033[0;31m[ERR]\033[0m  检测到 1panel，请勿直接使用 start.sh！"
+        echo ""
+        echo "       应在 1panel 中管理各编排应用："
+        echo "         $(dirname "$0")/1panel/data     ← 先启动"
+        echo "         $(dirname "$0")/1panel/web"
+        echo "         $(dirname "$0")/1panel/report"
+        echo "         $(dirname "$0")/1panel/mock     ← 按需"
+        echo "         $(dirname "$0")/1panel/desktop  ← 按需"
+        echo ""
+        echo "       如需强制使用 start.sh，请运行：./start.sh --force"
+        echo ""
+        exit 1
+    fi
+}
+
 # ── 前置检查 ─────────────────────────────────────────────────
 check() {
     if ! command -v docker &>/dev/null; then
@@ -129,8 +149,17 @@ status() {
 
 # ── 主入口 ───────────────────────────────────────────────────
 main() {
+    # --force 跳过 1panel 检测（高级用户明确知晓风险时使用）
+    local force=false
+    local args=()
+    for arg in "$@"; do
+        [[ "$arg" == "--force" ]] && force=true || args+=("$arg")
+    done
+
+    [[ "${force}" == "false" ]] && check_1panel
     check
-    local cmd="${1:-start}"
+
+    local cmd="${args[0]:-start}"
 
     case "${cmd}" in
         start)   start ;;
@@ -140,7 +169,7 @@ main() {
         status)  status ;;
         report)  docker compose -f "${REPORT_COMPOSE}" up -d; log_info "report 启动完毕 ✓" ;;
         *)
-            echo "用法: $0 [start|stop|restart|status|mock|report]"
+            echo "用法: $0 [start|stop|restart|status|mock|report|--force]"
             exit 1
             ;;
     esac

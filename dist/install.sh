@@ -182,8 +182,6 @@ for mock_file in "${SCRIPT_DIR}"/mock-data/*; do
 done
 
 # ── 6. 生成 1panel 编排目录 ──────────────────────────────────
-# 每个环境一个子目录，1panel 按目录名识别独立应用。
-# 无 1panel 的环境直接用 start.sh，忽略此目录即可。
 log_step "生成 1panel 编排目录"
 
 PANEL_ROOT="${SCRIPT_DIR}/1panel"
@@ -200,32 +198,47 @@ for env_name in data web mock report desktop; do
     src_file="${SCRIPT_DIR}/${PANEL_ENVS[$env_name]}"
     env_dir="${PANEL_ROOT}/${env_name}"
     mkdir -p "${env_dir}"
-    # 始终覆盖（保持与源文件同步）
-    cp "${src_file}" "${env_dir}/docker-compose.yml"
+    # 在文件头注入 name: 字段，1panel 和 docker compose 都以此作为应用名称
+    { echo "name: ${env_name}"; echo ""; cat "${src_file}"; } > "${env_dir}/docker-compose.yml"
     echo "DATA_DIR=${BASE_DATA_DIR}" > "${env_dir}/.env"
-    log_success "1panel/${env_name}/ ← ${PANEL_ENVS[$env_name]}"
+    log_success "1panel/${env_name}/docker-compose.yml  (name: ${env_name})"
 done
 
 log_info "1panel 目录就绪: ${PANEL_ROOT}"
 
-# ── 7. 完成摘要 ───────────────────────────────────────────────
+# ── 7. 检测 1panel，输出对应指引 ─────────────────────────────
+HAS_1PANEL=false
+if command -v 1pctl &>/dev/null 2>&1 || \
+   systemctl is-active --quiet 1panel 2>/dev/null || \
+   [ -f "/usr/local/bin/1panel" ]; then
+    HAS_1PANEL=true
+fi
+
 log_step "安装完成"
 echo ""
 echo "  数据根目录 : ${BASE_DATA_DIR}"
-echo "  .env 文件  : ${ENV_FILE}"
 echo ""
-echo "  ── 无 1panel 环境（推荐）────────────────────────────"
-echo "    chmod +x start.sh"
-echo "    ./start.sh          # 启动所有服务（Data + Web + Report）"
-echo "    ./start.sh mock     # 同上 + Mock 数据源"
-echo ""
-echo "  ── 有 1panel 环境 ───────────────────────────────────"
-echo "    在 1panel 中分别添加以下目录为独立编排应用："
-echo "    必须先启动 data，再启动其他环境"
-echo ""
-echo "    $(pwd)/1panel/data    ← 基础设施（先启动）"
-echo "    $(pwd)/1panel/web     ← 前端应用"
-echo "    $(pwd)/1panel/report  ← 地面平台报送"
-echo "    $(pwd)/1panel/mock    ← Mock 数据源（按需启动）"
-echo "    $(pwd)/1panel/desktop ← 远程桌面（按需启动）"
+
+if [[ "${HAS_1PANEL}" == "true" ]]; then
+    echo -e "  \033[1;32m✓ 检测到 1panel，请在 1panel 中按以下顺序添加编排应用：\033[0m"
+    echo ""
+    echo "  ① 必须最先启动："
+    echo "     $(pwd)/1panel/data"
+    echo ""
+    echo "  ② 数据层就绪后启动："
+    echo "     $(pwd)/1panel/web"
+    echo "     $(pwd)/1panel/report"
+    echo ""
+    echo "  ③ 按需启动："
+    echo "     $(pwd)/1panel/mock     ← Mock 数据源"
+    echo "     $(pwd)/1panel/desktop  ← 远程桌面"
+    echo ""
+    echo "  ⚠️  请勿直接运行 start.sh（与 1panel 管理冲突）"
+else
+    echo -e "  \033[1;32m✓ 未检测到 1panel，使用 start.sh 管理服务：\033[0m"
+    echo ""
+    echo "    chmod +x start.sh"
+    echo "    ./start.sh        # 启动全部服务（Data + Web + Report）"
+    echo "    ./start.sh mock   # 同上 + Mock 数据源"
+fi
 echo ""
