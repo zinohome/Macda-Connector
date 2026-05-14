@@ -98,8 +98,8 @@ services:
 
   mock-connect:
     image: harbor.naivehero.top:8443/macda2/connect:latest
-    #hostname: mock-connect
-    #container_name: mock-connect
+    hostname: mock-connect
+    container_name: mock-connect
     restart: on-failure
     depends_on:
       mock-redpanda:
