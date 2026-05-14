@@ -31,8 +31,8 @@ IMAGES=(
     "harbor.naivehero.top:8443/macda2/redpanda:v25.3.7"
     "harbor.naivehero.top:8443/macda2/redpanda-console:v3.5.2"
 
-    # ── 数据流处理 (Redpanda Connect) ────────────────────────
-    "harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.2.0-full"
+    # ── 数据流处理 (Redpanda Connect + NB67 解析器) ──────────
+    "harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.0"
     "harbor.naivehero.top:8443/macda2/connect:latest"
 
     # ── 时序数据库 ────────────────────────────────────────────
@@ -43,8 +43,14 @@ IMAGES=(
     "harbor.naivehero.top:8443/macda2/storage-adapter:v2.1.2"
 
     # ── 前端应用 ──────────────────────────────────────────────
-    "harbor.naivehero.top:8443/macda2/nb67-bff:v2.1.2"
-    "harbor.naivehero.top:8443/macda2/nb67-web:v2.1.2"
+    "harbor.naivehero.top:8443/macda2/nb67-bff:v2.5.0"
+    "harbor.naivehero.top:8443/macda2/nb67-web:v2.5.0"
+
+    # ── 地面平台报送服务 ──────────────────────────────────────
+    "harbor.naivehero.top:8443/macda2/ground-reporter:v2.5.0"
+
+    # ── mock-platform 运行时（report 环境用）─────────────────
+    "golang:1.24-alpine"
 )
 
 # ── 工具函数 ─────────────────────────────────────────────────
