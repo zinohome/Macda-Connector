@@ -1,7 +1,7 @@
 # MACDA Connector — 部署手册
 
 > **版本**：v2.5.0  
-> **更新**：2026-05-13
+> **更新**：2026-05-14
 
 ---
 
@@ -11,50 +11,62 @@
 dist/
 ├── image-save.sh               ← 【有网络机器】拉取并打包所有镜像为 .tar
 ├── image-load.sh               ← 【离线服务器】加载镜像 + MD5 完整性校验
-├── install.sh                  ← 初始化目录权限 + 复制配置文件
-├── start.sh                    ← 一键启动/停止/重启/状态
+├── install.sh                  ← 初始化目录权限 + 复制配置文件（支持 --1panel 模式）
+├── start.sh                    ← 一键启动/停止/重启/状态（普通环境使用）
 ├── docker-compose-Data.yml     ← 基础设施层（Redpanda + TimescaleDB + Connect 流水线）
 ├── docker-compose-Web.yml      ← 应用层（BFF + 前端 Nginx）
+├── docker-compose-report.yml   ← 报送层（ground-reporter + mock-platform）
 ├── docker-compose-mock.yml     ← Mock 数据源（调试/演示用）
-├── docker-compose-Desktop.yml  ← 本地单机开发环境
+├── docker-compose-Desktop.yml  ← 远程桌面（webtop GUI，按需启动）
 ├── config/                     ← Redpanda Connect 流水线配置文件
 │   ├── nb67-parser.yaml
 │   ├── nb67-event-builder.yaml
 │   ├── nb67-event-writer.yaml
 │   ├── nb67-storage-writer.yaml
 │   └── nb67-pg-writer.yaml
-├── init-db/
-│   └── 01-init.sql             ← TimescaleDB 初始化 SQL（首次部署执行）
+├── init-db/                    ← TimescaleDB 初始化与迁移 SQL（start.sh 自动执行）
+│   ├── 01-init.sql
+│   ├── 02-migration-20260504.sql
+│   ├── 03-migration-20260512.sql
+│   ├── 04-migration-20260513.sql
+│   └── 05-migration-20260513.sql
+├── mock-platform/
+│   └── main.go                 ← mock-platform 源码（install.sh 复制到 DATA_DIR）
 ├── mock-data/
 │   └── whole_frame-260203      ← NB67 测试帧数据（Mock 模式使用）
 ├── images/                     ← image-save.sh 生成的 .tar 镜像文件目录
 └── README.md                   ← 本文档
 ```
 
+> `1panel/` 目录由 `install.sh --1panel` 自动生成，不在版本控制中。
+
 ---
 
 ## 🏗️ 系统架构
 
 ```
-                        ┌─────────────────────────────────────────────┐
-                        │               Docker Network: macdanet       │
-                        │                                             │
-  [ 设备/信号源 ]  ──►  │  mock-redpanda  (信号模拟, 仅调试)          │
-                        │       ↓                                     │
-  [ 真实设备   ]  ──►  │  Redpanda 集群  (3节点, 生产级消息队列)      │
-                        │  ├── connect-topic-in    (信号接入)          │
-                        │  ├── connect-parser      (NB67协议解析)     │
-                        │  ├── connect-storage-writer (原始数据落盘)  │
-                        │  ├── connect-event-builder  (事件检测)      │
-                        │  ├── connect-pg-writer      (事件持久化)    │
-                        │  └── connect-event-writer   (事件历史写入)  │
-                        │       ↓                                     │
-                        │  TimescaleDB  (时序数据库)                  │
-                        │       ↓                                     │
-                        │  nb67-bff     (BFF API + WebSocket)         │
-                        │       ↓                                     │
-  [ 浏览器 ]  ◄──────  │  nb67-web     (Nginx, 对外 :8080)           │
-                        └─────────────────────────────────────────────┘
+                        ┌──────────────────────────────────────────────────────┐
+                        │                Docker Network: macdanet               │
+                        │                                                      │
+  [ 设备/信号源 ]  ──►  │  mock-redpanda   (信号模拟，仅调试)                  │
+                        │       ↓                                              │
+  [ 真实设备   ]  ──►  │  Redpanda 集群   (3节点，生产级消息队列)              │
+                        │  ├── connect-topic-in      (信号接入)                │
+                        │  ├── connect-parser        (NB67协议解析)            │
+                        │  ├── connect-storage-writer (原始数据落盘)           │
+                        │  ├── connect-event-builder  (事件检测)               │
+                        │  ├── connect-pg-writer      (数据持久化)             │
+                        │  └── connect-event-writer   (事件历史写入)           │
+                        │       ↓                                              │
+                        │  TimescaleDB    (时序数据库)                         │
+                        │       ↓                                              │
+                        │  nb67-bff       (BFF API + WebSocket)               │
+                        │       ↓                                              │
+  [ 浏览器 ]  ◄──────  │  nb67-web       (Nginx，对外 :8080)                  │
+                        │                                                      │
+                        │  ground-reporter  ──►  地面健康管理平台               │
+                        │  mock-platform    ◄──  (本地测试接收端，:18188)       │
+                        └──────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -70,171 +82,129 @@ dist/
 | 服务器内存 | ≥ 8 GB |
 | 服务器磁盘 | ≥ 50 GB |
 
-### 1. 运行安装脚本（首次部署）
+---
+
+### 方式一：普通环境（无 1panel）
+
+#### 1. 运行安装脚本
 
 ```bash
-# 赋予执行权限
 chmod +x install.sh start.sh
 
-# 以 root 运行安装脚本（默认数据目录: /data/MACDA2）
+# 以 root 运行（默认数据目录: /data/MACDA2）
 sudo ./install.sh
 
-# 自定义数据目录（所有 docker-compose 挂载路径随之更改）
+# 自定义数据目录
 sudo ./install.sh --data-dir /opt/macda
 
 # 仅更新配置文件，不影响已有数据
 sudo ./install.sh --update
 ```
 
-安装脚本会自动完成：
-- 生成 `.env` 文件（写入 `DATA_DIR=<路径>`，docker-compose 自动读取，**无需手动修改任何 yml**）
-- 创建 `${DATA_DIR}/` 下所有必要的挂载目录
-- 设置 Redpanda (101:101)、TimescaleDB (1000:1000)、PgAdmin (5050:5050) 目录权限
-- 复制 `config/*.yaml` → `${DATA_DIR}/connect/config/`
-- 复制 `init-db/01-init.sql` → `${DATA_DIR}/timescaledb/init-db/`
-- 复制 `mock-data/*` → `${DATA_DIR}/mock/connect/data/input/`
+安装脚本自动完成：
+- 生成 `.env`（写入 `DATA_DIR`，docker-compose 自动读取，无需手动修改 yml）
+- 创建所有挂载目录并设置权限（Redpanda 101:101 / TimescaleDB 1000:1000 / PgAdmin 5050:5050）
+- 复制 Connect 配置、5 个 SQL 文件、mock-platform 源码、Mock 测试数据
 
-### 2. 准备镜像
+#### 2. 准备镜像
 
-**方式 A：在线部署**（服务器能访问 Harbor 镜像仓库）
-
+**在线部署**（服务器能访问 Harbor）：
 ```bash
-# Harbor 对外开放，无需登录，启动时 docker compose 会自动拉取镜像
-./start.sh
+# docker compose 启动时自动拉取，无需额外操作
 ```
 
-**方式 B：离线部署**（服务器无外网，需提前准备镜像包）
-
+**离线部署**（无外网）：
 ```bash
-# ① 在有网络的机器上打包镜像
-chmod +x image-save.sh
-./image-save.sh                # 拉取并打包到 images/*.tar
+# ① 有网络的机器上打包镜像
+chmod +x image-save.sh && ./image-save.sh
 
-# ② 将整个 dist/ 目录传输到离线服务器
-scp -r dist/ user@server:/opt/macda/
-# 或者打包后通过 U 盘/内网传输
+# ② 传输整个 dist/ 到目标服务器
 tar czf macda-dist.tar.gz dist/
 
-# ③ 在离线服务器上加载镜像
+# ③ 在目标服务器加载
 chmod +x image-load.sh
-./image-load.sh --verify       # 先验证文件完整性（MD5 校验）
-./image-load.sh                # 加载所有镜像到 Docker
+./image-load.sh --verify   # 先验证 MD5
+./image-load.sh            # 加载所有镜像
 ```
 
-### 3. 一键启动
+#### 3. 一键启动
 
 ```bash
-# 启动全部服务（基础设施 + 应用层）
-./start.sh
-
-# 如需同时启动 mock 数据源（演示/调试模式，会自动读取 mock-data/ 下的测试帧）
-./start.sh mock
+./start.sh            # 启动全部服务（Data + Web + Report）
+./start.sh mock       # 同上 + Mock 数据源（调试/演示用）
+./start.sh desktop    # 同上 + 远程桌面（:10001）
+./start.sh all        # 全部启动（含 Mock + Desktop）
 ```
 
-### 5. 验证部署
+#### 4. 验证
 
 ```bash
-# 查看所有容器状态
 ./start.sh status
 
-# 正常状态下应看到所有容器为 Up (healthy)
-# 访问前端
+# 前端访问
 http://<服务器IP>:8080
 
-# 访问 API 文档
-http://<服务器IP>:8080/api/docs  (通过 Nginx 代理)
-
-# 访问 Redpanda Console（消息队列管理）
+# Redpanda Console
 http://<服务器IP>:28080
+
+# mock-platform（本地报送验证）
+http://<服务器IP>:18188
 ```
 
 ---
 
-## 📈 水平扩展（Scale）
+### 方式二：1panel 环境
 
-### 扩展原则
-
-系统所有 Kafka Topic 均为 **3 分区**，这决定了 Connect 处理服务的有效扩展上限：
-
-> **黄金法则：单个消费者服务的实例数 ≤ Topic 分区数（3）**
->
-> 超过分区数的实例会空转，浪费资源但不会报错。
-
-### 可扩展的服务
-
-以下 5 个 Connect 服务支持水平扩展（故意未设置 `container_name`）：
-
-| 服务名 | 消费 Topic | 生产 Topic | 建议实例数 |
-|--------|-----------|-----------|-----------|
-| `connect-parser` | `signal-in` | `signal-parsed` | 1 ~ 3 |
-| `connect-storage-writer` | `signal-in` | `signal-storage` | 1 ~ 3 |
-| `connect-event-builder` | `signal-parsed` | `signal-alarm`, `signal-life` | 1 ~ 3 |
-| `connect-pg-writer` | `signal-alarm`, `signal-life` | — (写 TimescaleDB) | 1 ~ 3 |
-| `connect-event-writer` | `signal-alarm` | — (写 TimescaleDB) | 1 ~ 3 |
-
-> ⚠️ `connect-topic-in`、`timescaledb`、`redpanda-*` 等服务**不支持**通过 `--scale` 扩展。
-
-### 操作命令
+#### 1. 运行安装脚本（加 --1panel 参数）
 
 ```bash
-# 查看当前各服务实例数
-docker compose -f docker-compose-Data.yml ps
-
-# 将 connect-parser 扩展到 3 个实例（生产高流量推荐）
-docker compose -f docker-compose-Data.yml up -d --scale connect-parser=3
-
-# 同时扩展多个服务（一条命令）
-docker compose -f docker-compose-Data.yml up -d \
-  --scale connect-parser=3 \
-  --scale connect-storage-writer=3 \
-  --scale connect-event-builder=2 \
-  --scale connect-pg-writer=2 \
-  --scale connect-event-writer=2
-
-# 缩减回 1 个实例
-docker compose -f docker-compose-Data.yml up -d --scale connect-parser=1
+sudo ./install.sh --1panel
 ```
 
-### 扩展策略参考
+脚本除完成普通安装外，还会在 `dist/1panel/` 下生成 5 个子目录，每个目录含独立的 `docker-compose.yml`（注入 `name:` 字段）和 `.env` 文件。
 
-```
-信号接入量        推荐配置
-──────────────────────────────────────────────────
-低负载 (< 1K/s)   所有服务保持 1 实例（默认）
-中负载 (1K~5K/s)  connect-parser=2, 其余 1
-高负载 (> 5K/s)   connect-parser=3, connect-storage-writer=3,
-                  connect-event-builder=2, 其余 2
-```
+安装完成后脚本会打印每个子目录的完整路径。
 
-> 💡 **扩展时无需重启其他服务**，新实例启动后 Kafka 会自动触发 Rebalance，将分区分配给新实例。
+#### 2. 在 1panel 中按顺序添加编排应用
+
+> **注意：必须先启动 data，再启动其他环境**
+
+| 顺序 | 1panel 应用名 | 路径 |
+|------|-------------|------|
+| ① | **data** | `<dist路径>/1panel/data` |
+| ② | **web** | `<dist路径>/1panel/web` |
+| ② | **report** | `<dist路径>/1panel/report` |
+| ③按需 | **mock** | `<dist路径>/1panel/mock` |
+| ③按需 | **desktop** | `<dist路径>/1panel/desktop` |
+
+在 1panel「容器」→「编排」→「创建编排」中，选择对应目录即可。应用名称由 `name:` 字段决定，与目录名一致。
 
 ---
 
-## ⚙️ 关键配置说明
+## ⚙️ 关键配置
 
+### 地面平台报送（ground-reporter）
 
-### 修改数据库连接（BFF）
-
-编辑 `docker-compose-Web.yml`，修改以下环境变量：
+编辑 `docker-compose-report.yml`，修改以下环境变量：
 
 ```yaml
 environment:
-  - DATABASE_URL=postgres://postgres:passw0rd@timescaledb:5432/postgres?sslmode=disable
-  - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
+  - PLATFORM_IP=10.12.48.187    # 地面健康管理平台真实 IP
+  - PLATFORM_PORT=8188           # 端口
+  - PLATFORM_API_KEY=            # X-Api-Key 认证（现场联调时填写）
 ```
+
+本地测试时将 `PLATFORM_IP` 改为 `mock-platform`，`mock-platform` 会将收到的 JSON 格式化打印到日志。
 
 ### 切换时间分析模式
 
 ```yaml
-environment:
-  # DEV: 使用数据入库时间（设备时钟不可信时使用）
-  # PRD: 使用设备上报事件时间（设备时钟已校准时使用）
-  - RUNTIME=DEV
+# docker-compose-Web.yml 中 nb67-bff 的环境变量
+- RUNTIME=DEV   # 使用数据入库时间（设备时钟不可信）
+- RUNTIME=PRD   # 使用设备上报事件时间（设备时钟已校准）
 ```
 
 ### 修改外网访问地址（Redpanda）
-
-在 `docker-compose-Data.yml` 中，将所有 `192.168.32.17` 替换为实际服务器 IP：
 
 ```bash
 sed -i 's/192.168.32.17/<服务器IP>/g' docker-compose-Data.yml
@@ -242,14 +212,31 @@ sed -i 's/192.168.32.17/<服务器IP>/g' docker-compose-Data.yml
 
 ---
 
+## 📈 水平扩展
+
+所有 Kafka Topic 均为 **3 分区**，单服务有效扩展上限为 3 个实例。
+
+> ⚠️ 使用 `--scale` 扩展时，需先移除对应服务的 `container_name:`，否则多实例会因名称冲突报错。
+
+```bash
+# 扩展 connect-parser 到 3 个实例
+docker compose -f docker-compose-Data.yml up -d --scale connect-parser=3
+```
+
+| 信号接入量 | 推荐配置 |
+|-----------|---------|
+| 低 (< 1K/s) | 所有服务 1 实例（默认）|
+| 中 (1K~5K/s) | connect-parser=2，其余 1 |
+| 高 (> 5K/s) | connect-parser=3，connect-storage-writer=3，其余 2 |
+
+---
+
 ## 🛑 停止服务
 
 ```bash
-# 停止所有服务（保留数据）
-./start.sh stop
-
-# 重启所有服务
-./start.sh restart
+./start.sh stop      # 停止所有服务（保留数据）
+./start.sh restart   # 重启所有服务
+./start.sh status    # 查看状态
 ```
 
 ---
@@ -258,11 +245,11 @@ sed -i 's/192.168.32.17/<服务器IP>/g' docker-compose-Data.yml
 
 | 问题 | 原因 | 解决方案 |
 |------|------|---------|
-| `nb67-bff` 容器 unhealthy | BFF 正在连接 DB/Kafka，有 30s 启动宽限期 | 等待 30s 后再检查状态 |
-| `nb67-web` 启动失败 | 依赖 `nb67-bff` 健康检查通过 | 等 BFF 变为 healthy 后自动启动 |
-| Redpanda 无法启动 | 数据目录权限问题 | 检查 `/data/MACDA2/redpanda/` 目录权限 (需 101:101) |
-| TimescaleDB 无数据表 | 首次部署未执行初始化 SQL | 复制 `init-db/01-init.sql` 到 `/data/MACDA2/timescaledb/init-db/` 后重建容器 |
-| 前端图片丢失 | 镜像版本过旧 | 重新拉取最新镜像 `docker compose pull` |
+| `nb67-bff` unhealthy | BFF 正在连接 DB/Kafka，有 30s 宽限期 | 等待 30s 后再检查 |
+| Redpanda 无法启动 | 数据目录权限问题 | 检查 `${DATA_DIR}/redpanda/` 权限（需 101:101） |
+| TimescaleDB 无数据表 | SQL 未执行 | 重新运行 `sudo ./install.sh` 后重启容器 |
+| ground-reporter 连接超时 | 平台 IP 不通 | 检查 `PLATFORM_IP` 配置；本地测试改为 `mock-platform` |
+| 1panel 显示应用名错误 | 未使用 `--1panel` 参数生成子目录 | 重新运行 `sudo ./install.sh --1panel` |
 
 ---
 
@@ -273,5 +260,7 @@ sed -i 's/192.168.32.17/<服务器IP>/g' docker-compose-Data.yml
 | 前端 (Nginx) | `harbor.naivehero.top:8443/macda2/nb67-web:v2.5.0` |
 | BFF (Node.js) | `harbor.naivehero.top:8443/macda2/nb67-bff:v2.5.0` |
 | Connect 流水线 | `harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.0` |
+| 地面报送服务 | `harbor.naivehero.top:8443/macda2/ground-reporter:v2.5.0` |
 | TimescaleDB | `harbor.naivehero.top:8443/macda2/timescaledb-ha:pg14-ts2.19-all` |
 | Redpanda | `harbor.naivehero.top:8443/macda2/redpanda:v25.3.7` |
+| mock-platform | `golang:1.24-alpine`（运行时镜像，需联网）|
