@@ -23,6 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATA_COMPOSE="${SCRIPT_DIR}/docker-compose-Data.yml"
 WEB_COMPOSE="${SCRIPT_DIR}/docker-compose-Web.yml"
 MOCK_COMPOSE="${SCRIPT_DIR}/docker-compose-mock.yml"
+REPORT_COMPOSE="${SCRIPT_DIR}/docker-compose-report.yml"
 
 # 加载 .env（由 install.sh 生成），将 DATA_DIR export 给 docker-compose
 if [[ -f "${SCRIPT_DIR}/.env" ]]; then
@@ -52,15 +53,41 @@ check() {
     fi
 }
 
+# ── 等待 TimescaleDB 就绪并执行数据库迁移 ─────────────────────
+run_migrations() {
+    log_step "等待 TimescaleDB 就绪"
+    local elapsed=0
+    until docker exec timescaledb psql -U postgres postgres -c "SELECT 1" &>/dev/null; do
+        sleep 3; elapsed=$((elapsed + 3))
+        [[ $elapsed -ge 60 ]] && { log_error "TimescaleDB 启动超时"; return 1; }
+        echo -n "."
+    done
+    echo ""
+    log_info "TimescaleDB 就绪，执行数据库迁移..."
+    for sql in "${DATA_DIR}/timescaledb/init-db"/*.sql; do
+        [[ -f "$sql" ]] || continue
+        docker exec -i timescaledb psql -U postgres postgres \
+            -v ON_ERROR_STOP=1 < "$sql" >/dev/null
+        log_info "  ✓ $(basename "$sql")"
+    done
+    log_info "数据库迁移完成 ✓"
+}
+
 # ── 启动服务 ─────────────────────────────────────────────────
 start() {
     log_step "启动基础设施层 (Data)"
     docker compose -f "${DATA_COMPOSE}" up -d
     log_info "基础设施启动完毕 ✓"
 
+    run_migrations
+
     log_step "启动应用层 (Web)"
     docker compose -f "${WEB_COMPOSE}" up -d
     log_info "应用层启动完毕 ✓"
+
+    log_step "启动报送层 (Report)"
+    docker compose -f "${REPORT_COMPOSE}" up -d
+    log_info "报送层启动完毕 ✓"
 
     if [[ "${1:-}" == "mock" ]]; then
         log_step "启动 Mock 数据源"
@@ -74,6 +101,9 @@ start() {
 
 # ── 停止服务 ─────────────────────────────────────────────────
 stop() {
+    log_step "停止报送层 (Report)"
+    docker compose -f "${REPORT_COMPOSE}" down 2>/dev/null || true
+
     log_step "停止应用层 (Web)"
     docker compose -f "${WEB_COMPOSE}" down
 
@@ -108,8 +138,9 @@ main() {
         stop)    stop ;;
         restart) stop; sleep 2; start ;;
         status)  status ;;
+        report)  docker compose -f "${REPORT_COMPOSE}" up -d; log_info "report 启动完毕 ✓" ;;
         *)
-            echo "用法: $0 [start|stop|restart|status|mock]"
+            echo "用法: $0 [start|stop|restart|status|mock|report]"
             exit 1
             ;;
     esac

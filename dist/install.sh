@@ -124,6 +124,9 @@ mk_dir "${BASE_DATA_DIR}/mock/redpanda/data"
 mk_dir "${BASE_DATA_DIR}/mock/connect/data"
 mk_dir "${BASE_DATA_DIR}/mock/connect/data/input"
 
+# report 环境目录（mock-platform 源码）
+mk_dir "${BASE_DATA_DIR}/connect/tests/mock-platform"
+
 # ── 2. 设置目录权限 ───────────────────────────────────────────
 log_step "设置目录权限"
 
@@ -160,8 +163,15 @@ done
 # ── 4. 复制数据库初始化 SQL ───────────────────────────────────
 log_step "复制数据库初始化脚本"
 
-cp_file "${SCRIPT_DIR}/init-db/01-init.sql" \
-        "${BASE_DATA_DIR}/timescaledb/init-db/01-init.sql"
+for sql_file in "${SCRIPT_DIR}"/init-db/*.sql; do
+    cp_file "${sql_file}" "${BASE_DATA_DIR}/timescaledb/init-db/$(basename "${sql_file}")"
+done
+
+# ── 4b. 复制 mock-platform 源码（report 环境用）─────────────────
+log_step "复制 mock-platform 源码"
+
+cp_file "${SCRIPT_DIR}/mock-platform/main.go" \
+        "${BASE_DATA_DIR}/connect/tests/mock-platform/main.go"
 
 # ── 5. 复制 Mock 测试数据 ─────────────────────────────────────
 log_step "复制 Mock 测试数据"
@@ -185,4 +195,5 @@ echo "  下一步："
 echo "    chmod +x start.sh"
 echo "    ./start.sh          # 启动所有服务"
 echo "    ./start.sh mock     # 启动服务 + Mock 数据源"
+echo "    ./start.sh report   # 启动报送服务（report 环境）"
 echo ""
