@@ -181,19 +181,51 @@ for mock_file in "${SCRIPT_DIR}"/mock-data/*; do
     cp_file "${mock_file}" "${BASE_DATA_DIR}/mock/connect/data/input/$(basename "${mock_file}")"
 done
 
-# ── 6. 完成摘要 ───────────────────────────────────────────────
+# ── 6. 生成 1panel 编排目录 ──────────────────────────────────
+# 每个环境一个子目录，1panel 按目录名识别独立应用。
+# 无 1panel 的环境直接用 start.sh，忽略此目录即可。
+log_step "生成 1panel 编排目录"
+
+PANEL_ROOT="${SCRIPT_DIR}/1panel"
+
+declare -A PANEL_ENVS=(
+    [data]="docker-compose-Data.yml"
+    [web]="docker-compose-Web.yml"
+    [mock]="docker-compose-mock.yml"
+    [report]="docker-compose-report.yml"
+    [desktop]="docker-compose-Desktop.yml"
+)
+
+for env_name in data web mock report desktop; do
+    src_file="${SCRIPT_DIR}/${PANEL_ENVS[$env_name]}"
+    env_dir="${PANEL_ROOT}/${env_name}"
+    mkdir -p "${env_dir}"
+    # 始终覆盖（保持与源文件同步）
+    cp "${src_file}" "${env_dir}/docker-compose.yml"
+    echo "DATA_DIR=${BASE_DATA_DIR}" > "${env_dir}/.env"
+    log_success "1panel/${env_name}/ ← ${PANEL_ENVS[$env_name]}"
+done
+
+log_info "1panel 目录就绪: ${PANEL_ROOT}"
+
+# ── 7. 完成摘要 ───────────────────────────────────────────────
 log_step "安装完成"
 echo ""
 echo "  数据根目录 : ${BASE_DATA_DIR}"
 echo "  .env 文件  : ${ENV_FILE}"
 echo ""
-echo "  目录结构:"
-find "${BASE_DATA_DIR}" -maxdepth 3 -type d | sort | \
-    sed "s|${BASE_DATA_DIR}|  \${DATA_DIR}|"
-echo ""
-echo "  下一步："
+echo "  ── 无 1panel 环境（推荐）────────────────────────────"
 echo "    chmod +x start.sh"
-echo "    ./start.sh          # 启动所有服务"
-echo "    ./start.sh mock     # 启动服务 + Mock 数据源"
-echo "    ./start.sh report   # 启动报送服务（report 环境）"
+echo "    ./start.sh          # 启动所有服务（Data + Web + Report）"
+echo "    ./start.sh mock     # 同上 + Mock 数据源"
+echo ""
+echo "  ── 有 1panel 环境 ───────────────────────────────────"
+echo "    在 1panel 中分别添加以下目录为独立编排应用："
+echo "    必须先启动 data，再启动其他环境"
+echo ""
+echo "    $(pwd)/1panel/data    ← 基础设施（先启动）"
+echo "    $(pwd)/1panel/web     ← 前端应用"
+echo "    $(pwd)/1panel/report  ← 地面平台报送"
+echo "    $(pwd)/1panel/mock    ← Mock 数据源（按需启动）"
+echo "    $(pwd)/1panel/desktop ← 远程桌面（按需启动）"
 echo ""

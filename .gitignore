@@ -111,3 +111,6 @@ connect/cmd/ground-reporter/ground-reporter
 
 # Release script state
 .release-version
+
+# dist/1panel/ 由 install.sh 自动生成，不需要追踪
+dist/1panel/
