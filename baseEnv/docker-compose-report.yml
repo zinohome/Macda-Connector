@@ -1,0 +1,47 @@
+services:
+  ground-reporter:
+    image: harbor.naivehero.top:8443/macda2/ground-reporter:v2.5.0
+    container_name: ground-reporter
+    hostname: ground-reporter
+    restart: unless-stopped
+    environment:
+      - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
+      # 地面健康管理平台地址与认证（现场联调时补充真实值；本地测试改为 mock-platform）
+      - PLATFORM_IP=mock-platform
+      - PLATFORM_PORT=8188
+      - PLATFORM_API_KEY=
+      - PLATFORM_TIMEOUT_SEC=10
+      - PLATFORM_RETRY_MAX=3
+      - PLATFORM_RETRY_BACKOFF_MS=1000
+      # 空调子系统标识（固定）
+      - SUBSYSTEM_CODE=5
+      - TRAIN_TYPE=B
+      # 心跳周期（分钟）与每日批量报送时刻（小时，0=凌晨）
+      - HEARTBEAT_INTERVAL_MIN=10
+      - DAILY_BATCH_HOUR=0
+      - LOG_LEVEL=INFO
+    depends_on:
+      mock-platform:
+        condition: service_started
+    networks:
+      - macdanet
+
+  mock-platform:
+    image: golang:1.24-alpine
+    container_name: mock-platform
+    hostname: mock-platform
+    restart: unless-stopped
+    working_dir: /app
+    command: go run main.go -port 8188
+    volumes:
+      - ../connect/tests/mock-platform:/app:ro
+    ports:
+      - "18188:8188"
+    networks:
+      - macdanet
+
+networks:
+  macdanet:
+    name: macdanet
+    driver: bridge
+    external: true
