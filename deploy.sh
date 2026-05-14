@@ -11,7 +11,9 @@ set -euo pipefail
 # ── 配置区 ─────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASENV_DIR="${SCRIPT_DIR}/baseEnv"
+REPORTENV_DIR="${SCRIPT_DIR}/reportEnv"
 CONNECT_CONFIG_DIR="${SCRIPT_DIR}/connect/config"
+MOCK_PLATFORM_DIR="${SCRIPT_DIR}/connect/tests/mock-platform"
 MOCK_DATA_DIR="${SCRIPT_DIR}/dist/mock-data"
 
 # 宿主机数据挂载根目录
@@ -21,6 +23,7 @@ HOST_DATA="/data/MACDA2"
 COMPOSE_MOCK="${BASENV_DIR}/docker-compose-mock.yml"
 COMPOSE_DEV="${BASENV_DIR}/docker-compose-Dev.yml"
 COMPOSE_DESKTOP="${BASENV_DIR}/docker-compose-desktop.yml"
+COMPOSE_REPORT="${REPORTENV_DIR}/docker-compose-report.yml"
 
 # docker 命令（自动判断是否需要 sudo）
 DOCKER="docker"
@@ -47,7 +50,7 @@ done
 # ── Step 1: 停止所有栈 ────────────────────────────────────────────────────
 log_step "Step 1: 停止所有容器栈"
 
-for stack_cfg in "desktop:${COMPOSE_DESKTOP}" "dev:${COMPOSE_DEV}" "mock:${COMPOSE_MOCK}"; do
+for stack_cfg in "report:${COMPOSE_REPORT}" "desktop:${COMPOSE_DESKTOP}" "dev:${COMPOSE_DEV}" "mock:${COMPOSE_MOCK}"; do
     name="${stack_cfg%%:*}"
     cfg="${stack_cfg##*:}"
     if [[ -f "$cfg" ]]; then
@@ -60,7 +63,7 @@ done
 # （解决不同 project 名 / 手动启动 / baseenv 默认 project 导致的孤儿容器冲突）
 log_info "清理遗留容器..."
 ${DOCKER} ps -a --format "{{.Names}}" | \
-    grep -E "^nb67-|^dev-connect|^dev-init|^baseenv-connect|^timescaledb$|^pgadmin$|^redpanda-|^redpanda-console$|^mock-" | \
+    grep -E "^nb67-|^dev-connect|^dev-init|^baseenv-connect|^timescaledb$|^pgadmin$|^redpanda-|^redpanda-console$|^mock-|^ground-reporter$|^mock-platform$" | \
     xargs -r ${DOCKER} rm -f 2>/dev/null || true
 log_info "所有容器已停止并清理"
 
@@ -124,6 +127,11 @@ for sql in 01-init.sql 02-migration-20260504.sql 03-migration-20260512.sql 04-mi
 done
 log_info "数据库初始化 SQL 就位 (5个文件)"
 
+# 3d. mock-platform 源码（report 环境 ground-reporter 用）
+sudo mkdir -p "${HOST_DATA}/connect/tests/mock-platform"
+sudo cp "${MOCK_PLATFORM_DIR}/main.go" "${HOST_DATA}/connect/tests/mock-platform/"
+log_info "mock-platform 源码就位"
+
 # ── Step 4: 按序启动三个栈 ───────────────────────────────────────────────
 log_step "Step 4: 启动容器栈"
 
@@ -138,6 +146,10 @@ log_info "dev 栈已启动"
 log_info "启动 desktop（远程桌面 GUI）..."
 ${DC} -p desktop -f "${COMPOSE_DESKTOP}" up -d 2>/dev/null || \
     log_warn "desktop 启动失败或未配置，跳过"
+
+log_info "启动 report（地面平台报送 + mock-platform）..."
+${DC} -p report -f "${COMPOSE_REPORT}" up -d
+log_info "report 栈已启动"
 
 # ── Step 5: 等待 TimescaleDB 就绪 ────────────────────────────────────────
 log_step "Step 5: 等待 TimescaleDB 就绪"
