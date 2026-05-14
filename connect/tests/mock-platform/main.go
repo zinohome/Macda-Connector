@@ -29,6 +29,9 @@ func main() {
 	flag.Parse()
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 	mux.HandleFunc("/", handleRequest)
 
 	addr := fmt.Sprintf("0.0.0.0:%d", *port)

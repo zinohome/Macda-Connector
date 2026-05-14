@@ -1,3 +1,5 @@
+name: report
+
 services:
   ground-reporter:
     image: harbor.naivehero.top:8443/macda2/ground-reporter:v2.5.0
