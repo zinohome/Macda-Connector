@@ -2,26 +2,20 @@
 # =============================================================
 # install.sh — MACDA Connector 初始化安装脚本
 #
-# 功能：
-#   1. 接受可选的 --data-dir 参数自定义数据根目录
-#   2. 生成 .env 文件（docker-compose 自动读取，无需手动修改 yml）
-#   3. 创建所有 docker-compose 挂载所需的宿主机目录
-#   4. 复制配置文件到对应挂载目录
-#   5. 设置正确的目录权限（Redpanda 需要 101:101）
-#
 # 用法：
-#   sudo ./install.sh                            # 使用默认目录 /data/MACDA2
-#   sudo ./install.sh --data-dir /opt/macda      # 自定义数据根目录
-#   sudo ./install.sh --update                   # 仅更新配置文件（不覆盖已有数据）
-#   sudo ./install.sh --data-dir /opt/macda --update
+#   sudo ./install.sh                              # 普通环境（用 start.sh 管理）
+#   sudo ./install.sh --1panel                     # 1panel 环境（生成子目录，在 1panel 中管理）
+#   sudo ./install.sh --data-dir /opt/macda        # 自定义数据根目录
+#   sudo ./install.sh --update                     # 仅更新配置文件（不覆盖已有数据）
 # =============================================================
 
 set -euo pipefail
 
 # ── 参数解析 ─────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_DATA_DIR="/data/MACDA2"   # 默认数据根目录
+BASE_DATA_DIR="/data/MACDA2"
 UPDATE_ONLY=false
+USE_1PANEL=false
 ENV_FILE="${SCRIPT_DIR}/.env"
 
 while [[ $# -gt 0 ]]; do
@@ -34,8 +28,12 @@ while [[ $# -gt 0 ]]; do
             UPDATE_ONLY=true
             shift
             ;;
+        --1panel)
+            USE_1PANEL=true
+            shift
+            ;;
         *)
-            echo "用法: $0 [--data-dir <路径>] [--update]"
+            echo "用法: $0 [--data-dir <路径>] [--update] [--1panel]"
             exit 1
             ;;
     esac
@@ -181,62 +179,55 @@ for mock_file in "${SCRIPT_DIR}"/mock-data/*; do
     cp_file "${mock_file}" "${BASE_DATA_DIR}/mock/connect/data/input/$(basename "${mock_file}")"
 done
 
-# ── 6. 生成 1panel 编排目录 ──────────────────────────────────
-log_step "生成 1panel 编排目录"
+# ── 6. 生成 1panel 编排目录（仅 --1panel 模式）──────────────
+if [[ "${USE_1PANEL}" == "true" ]]; then
+    log_step "生成 1panel 编排目录"
 
-PANEL_ROOT="${SCRIPT_DIR}/1panel"
+    PANEL_ROOT="${SCRIPT_DIR}/1panel"
 
-declare -A PANEL_ENVS=(
-    [data]="docker-compose-Data.yml"
-    [web]="docker-compose-Web.yml"
-    [mock]="docker-compose-mock.yml"
-    [report]="docker-compose-report.yml"
-    [desktop]="docker-compose-Desktop.yml"
-)
+    declare -A PANEL_ENVS=(
+        [data]="docker-compose-Data.yml"
+        [web]="docker-compose-Web.yml"
+        [mock]="docker-compose-mock.yml"
+        [report]="docker-compose-report.yml"
+        [desktop]="docker-compose-Desktop.yml"
+    )
 
-for env_name in data web mock report desktop; do
-    src_file="${SCRIPT_DIR}/${PANEL_ENVS[$env_name]}"
-    env_dir="${PANEL_ROOT}/${env_name}"
-    mkdir -p "${env_dir}"
-    # 在文件头注入 name: 字段，1panel 和 docker compose 都以此作为应用名称
-    { echo "name: ${env_name}"; echo ""; cat "${src_file}"; } > "${env_dir}/docker-compose.yml"
-    echo "DATA_DIR=${BASE_DATA_DIR}" > "${env_dir}/.env"
-    log_success "1panel/${env_name}/docker-compose.yml  (name: ${env_name})"
-done
+    for env_name in data web mock report desktop; do
+        src_file="${SCRIPT_DIR}/${PANEL_ENVS[$env_name]}"
+        env_dir="${PANEL_ROOT}/${env_name}"
+        mkdir -p "${env_dir}"
+        # 注入 name: 字段，1panel 以此作为应用名称（而非目录名）
+        { echo "name: ${env_name}"; echo ""; cat "${src_file}"; } > "${env_dir}/docker-compose.yml"
+        echo "DATA_DIR=${BASE_DATA_DIR}" > "${env_dir}/.env"
+        log_success "1panel/${env_name}/  (name: ${env_name})"
+    done
 
-log_info "1panel 目录就绪: ${PANEL_ROOT}"
-
-# ── 7. 检测 1panel，输出对应指引 ─────────────────────────────
-HAS_1PANEL=false
-if command -v 1pctl &>/dev/null 2>&1 || \
-   systemctl is-active --quiet 1panel 2>/dev/null || \
-   [ -f "/usr/local/bin/1panel" ]; then
-    HAS_1PANEL=true
+    log_info "1panel 目录就绪: ${PANEL_ROOT}"
 fi
 
+# ── 7. 完成摘要 ───────────────────────────────────────────────
 log_step "安装完成"
 echo ""
 echo "  数据根目录 : ${BASE_DATA_DIR}"
 echo ""
 
-if [[ "${HAS_1PANEL}" == "true" ]]; then
-    echo -e "  \033[1;32m✓ 检测到 1panel，请在 1panel 中按以下顺序添加编排应用：\033[0m"
+if [[ "${USE_1PANEL}" == "true" ]]; then
+    echo "  ── 1panel 模式 ──────────────────────────────────────"
+    echo "  在 1panel 中按以下顺序添加编排应用（路径即为应用名）："
     echo ""
-    echo "  ① 必须最先启动："
-    echo "     $(pwd)/1panel/data"
+    echo "  ① 先启动（基础设施）："
+    echo "     ${SCRIPT_DIR}/1panel/data"
     echo ""
-    echo "  ② 数据层就绪后启动："
-    echo "     $(pwd)/1panel/web"
-    echo "     $(pwd)/1panel/report"
+    echo "  ② 再启动："
+    echo "     ${SCRIPT_DIR}/1panel/web"
+    echo "     ${SCRIPT_DIR}/1panel/report"
     echo ""
     echo "  ③ 按需启动："
-    echo "     $(pwd)/1panel/mock     ← Mock 数据源"
-    echo "     $(pwd)/1panel/desktop  ← 远程桌面"
-    echo ""
-    echo "  ⚠️  请勿直接运行 start.sh（与 1panel 管理冲突）"
+    echo "     ${SCRIPT_DIR}/1panel/mock     ← Mock 数据源"
+    echo "     ${SCRIPT_DIR}/1panel/desktop  ← 远程桌面"
 else
-    echo -e "  \033[1;32m✓ 未检测到 1panel，使用 start.sh 管理服务：\033[0m"
-    echo ""
+    echo "  ── 普通环境 ─────────────────────────────────────────"
     echo "    chmod +x start.sh"
     echo "    ./start.sh        # 启动全部服务（Data + Web + Report）"
     echo "    ./start.sh mock   # 同上 + Mock 数据源"
