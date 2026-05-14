@@ -353,55 +353,7 @@ services:
     networks:
       - macdanet
 
-  # 地面健康管理平台报送服务：6.1 预警/报警、6.6 心跳、6.7 寿命数据
-  # 本地联调测试时将 PLATFORM_IP 改为 mock-platform，并启用 mock profile：
-  #   docker compose -f docker-compose-Dev.yml --profile mock up -d
-  ground-reporter:
-    image: harbor.naivehero.top:8443/macda2/ground-reporter:v2.5.0
-    container_name: ground-reporter
-    hostname: ground-reporter
-    restart: unless-stopped
-    environment:
-      - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
-      # 地面健康管理平台地址与认证（现场联调时补充真实值；本地测试 IP 改为 mock-platform）
-      - PLATFORM_IP=10.12.48.187
-      - PLATFORM_PORT=8188
-      - PLATFORM_API_KEY=
-      - PLATFORM_TIMEOUT_SEC=10
-      - PLATFORM_RETRY_MAX=3
-      - PLATFORM_RETRY_BACKOFF_MS=1000
-      # 空调子系统标识（subsystem=5，固定）
-      - SUBSYSTEM_CODE=5
-      - TRAIN_TYPE=B
-      # 心跳周期（分钟）与每日批量报送时刻（小时，0=凌晨）
-      - HEARTBEAT_INTERVAL_MIN=10
-      - DAILY_BATCH_HOUR=0
-      - LOG_LEVEL=INFO
-    depends_on:
-      connect-event-builder:
-        condition: service_healthy
-    networks:
-      - macdanet
-
-  # 本地测试专用：模拟地面健康管理平台，格式化打印收到的 JSON
-  # 启用方式（两步）:
-  #   1. docker compose -f docker-compose-Dev.yml --profile mock up -d mock-platform
-  #   2. 修改 ground-reporter 的 PLATFORM_IP=mock-platform 后重启容器
-  # 宿主机也可直接 curl http://localhost:18188/... 手动测试
-  mock-platform:
-    image: golang:1.24-alpine
-    container_name: mock-platform
-    hostname: mock-platform
-    restart: unless-stopped
-    working_dir: /app
-    command: go run main.go -port 8188
-    volumes:
-      - ../connect/tests/mock-platform:/app:ro
-    ports:
-      - "18188:8188"
-    profiles: ["mock"]
-    networks:
-      - macdanet
+  # ground-reporter 和 mock-platform 已移至 docker-compose-report.yml 独立管理
 
   timescaledb:
     image: harbor.naivehero.top:8443/macda2/timescaledb-ha:pg14-ts2.19-all

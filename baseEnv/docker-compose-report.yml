@@ -22,7 +22,7 @@ services:
       - LOG_LEVEL=INFO
     depends_on:
       mock-platform:
-        condition: service_started
+        condition: service_healthy
     networks:
       - macdanet
 
@@ -37,6 +37,12 @@ services:
       - ../connect/tests/mock-platform:/app:ro
     ports:
       - "18188:8188"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8188/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
     networks:
       - macdanet
 
