@@ -24,6 +24,7 @@ DATA_COMPOSE="${SCRIPT_DIR}/docker-compose-Data.yml"
 WEB_COMPOSE="${SCRIPT_DIR}/docker-compose-Web.yml"
 MOCK_COMPOSE="${SCRIPT_DIR}/docker-compose-mock.yml"
 REPORT_COMPOSE="${SCRIPT_DIR}/docker-compose-report.yml"
+DESKTOP_COMPOSE="${SCRIPT_DIR}/docker-compose-Desktop.yml"
 
 # 加载 .env（由 install.sh 生成），将 DATA_DIR export 给 docker-compose
 if [[ -f "${SCRIPT_DIR}/.env" ]]; then
@@ -89,10 +90,16 @@ start() {
     docker compose -f "${REPORT_COMPOSE}" up -d
     log_info "报送层启动完毕 ✓"
 
-    if [[ "${1:-}" == "mock" ]]; then
+    if [[ "${1:-}" == "mock" ]] || [[ "${1:-}" == "all" ]]; then
         log_step "启动 Mock 数据源"
         docker compose -f "${MOCK_COMPOSE}" up -d
         log_info "Mock 数据源启动完毕 ✓"
+    fi
+
+    if [[ "${1:-}" == "desktop" ]] || [[ "${1:-}" == "all" ]]; then
+        log_step "启动 Desktop（远程桌面）"
+        docker compose -f "${DESKTOP_COMPOSE}" up -d
+        log_info "Desktop 启动完毕 ✓"
     fi
 
     log_step "所有服务状态"
@@ -116,6 +123,12 @@ stop() {
         docker compose -f "${MOCK_COMPOSE}" down
     fi
 
+    # 如果 desktop 在运行，也一并停止
+    if docker compose -f "${DESKTOP_COMPOSE}" ps -q 2>/dev/null | grep -q .; then
+        log_step "停止 Desktop"
+        docker compose -f "${DESKTOP_COMPOSE}" down
+    fi
+
     log_info "所有服务已停止 ✓"
 }
 
@@ -135,12 +148,18 @@ main() {
     case "${cmd}" in
         start)   start ;;
         mock)    start mock ;;
+        desktop) start desktop ;;
+        all)     start all ;;
         stop)    stop ;;
         restart) stop; sleep 2; start ;;
         status)  status ;;
         report)  docker compose -f "${REPORT_COMPOSE}" up -d; log_info "report 启动完毕 ✓" ;;
         *)
-            echo "用法: $0 [start|stop|restart|status|mock|report]"
+            echo "用法: $0 [start|stop|restart|status|mock|desktop|all|report]"
+            echo "  start    - 启动 Data + Web + Report"
+            echo "  mock     - 同上 + Mock 数据源"
+            echo "  desktop  - 同上 + 远程桌面"
+            echo "  all      - 全部启动（含 Mock + Desktop）"
             exit 1
             ;;
     esac
