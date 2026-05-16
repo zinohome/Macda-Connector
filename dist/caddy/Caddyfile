@@ -1,0 +1,21 @@
+{
+	# 关闭自动 HTTPS（使用手动提供的自签名证书）
+	auto_https off
+	# 无 SNI 时（如直接 IP 访问）使用此主机名查找证书
+	default_sni 192.168.66.12
+}
+
+# ── HTTPS：IP 地址和域名访问 ─────────────────────────────────
+# 同时匹配 https://192.168.66.12 和 https://test.macda.org
+https://192.168.66.12, https://test.macda.org {
+	# 指定自签名证书文件（用户可替换 /data/MACDA2/caddy/certs/ 下的文件）
+	tls /etc/caddy/certs/server.crt /etc/caddy/certs/server.key
+
+	# 反向代理到前端服务（通过 Docker 内网访问）
+	reverse_proxy nb67-web:8080
+}
+
+# ── HTTP：重定向到 HTTPS ──────────────────────────────────────
+http://192.168.66.12, http://test.macda.org {
+	redir https://{host}{uri} permanent
+}
