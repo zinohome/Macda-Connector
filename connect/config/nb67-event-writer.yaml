@@ -52,8 +52,7 @@ output:
         event_time, ingest_time, line_id, train_id, carriage_id, device_id,
         event_type, fault_code, fault_name, severity, payload_json
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      ON CONFLICT (event_time, device_id, fault_code) DO UPDATE 
-      SET ingest_time = EXCLUDED.ingest_time;
+      ON CONFLICT (event_time, device_id, fault_code) DO NOTHING;
     args_mapping: |
       root = [
         this.event_time, this.ingest_time, this.line_id, this.train_id, this.carriage_id, this.device_id,
