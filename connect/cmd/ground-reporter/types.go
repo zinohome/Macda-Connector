@@ -54,8 +54,8 @@ type ParsedMsg struct {
 // --- Platform API payload types ---
 
 // Record61 is the JSON body for 6.1 (fault/predict write).
+// Per platform spec, id is not transmitted (stored server-side only).
 type Record61 struct {
-	ID          string `json:"id"`
 	MessageType string `json:"message_type"` // "0"=fault "1"=predict
 	TrainType   string `json:"train_type"`
 	TrainNo     string `json:"train_no"`

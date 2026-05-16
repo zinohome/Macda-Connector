@@ -50,10 +50,10 @@ func Handle61Alarm(ctx context.Context, client *PlatformClient, tracker *AlarmTr
 
 	var records []Record61
 	for _, hit := range diff.Added {
-		records = append(records, buildRecord61(cfg, msg.EventMeta, si, "0", hit.Code, hit.Name, hit.UUID, hit.StartTime, 0))
+		records = append(records, buildRecord61(cfg, msg.EventMeta, si, "0", hit.Code, hit.StartTime, 0))
 	}
 	for _, hit := range diff.Removed {
-		records = append(records, buildRecord61(cfg, msg.EventMeta, si, "0", hit.Code, hit.Name, hit.UUID, hit.StartTime, hit.EndTime))
+		records = append(records, buildRecord61(cfg, msg.EventMeta, si, "0", hit.Code, hit.StartTime, hit.EndTime))
 	}
 
 	if len(records) == 0 {
@@ -90,10 +90,10 @@ func Handle61Predict(ctx context.Context, client *PlatformClient, tracker *Alarm
 
 	var records []Record61
 	for _, hit := range diff.Added {
-		records = append(records, buildRecord61(cfg, msg.EventMeta, si, "1", hit.Code, hit.Name, hit.UUID, hit.StartTime, 0))
+		records = append(records, buildRecord61(cfg, msg.EventMeta, si, "1", hit.Code, hit.StartTime, 0))
 	}
 	for _, hit := range diff.Removed {
-		records = append(records, buildRecord61(cfg, msg.EventMeta, si, "1", hit.Code, hit.Name, hit.UUID, hit.StartTime, hit.EndTime))
+		records = append(records, buildRecord61(cfg, msg.EventMeta, si, "1", hit.Code, hit.StartTime, hit.EndTime))
 	}
 
 	if len(records) == 0 {
@@ -106,24 +106,19 @@ func Handle61Predict(ctx context.Context, client *PlatformClient, tracker *Alarm
 
 // buildRecord61 constructs a single 6.1 record.
 // endTimeMs == 0 means alarm is still open (endtime = "").
-func buildRecord61(cfg Config, meta EventMeta, si StationInfo, msgType, code, location, uuid string, startMs, endMs int64) Record61 {
+// location is looked up from the alertcode table by code; code itself is passed through unchanged.
+func buildRecord61(cfg Config, meta EventMeta, si StationInfo, msgType, code string, startMs, endMs int64) Record61 {
 	endTime := ""
 	if endMs > 0 {
 		endTime = strconv.FormatInt(endMs, 10)
 	}
 
-	// Use "KTA" as fallback code for raw fault bits that have no PHM code mapping.
-	if msgType == "0" && code == "" {
-		code = "KTA"
-	}
-
 	return Record61{
-		ID:          uuid,
 		MessageType: msgType,
 		TrainType:   cfg.TrainType,
-		TrainNo:     meta.TrainID,
+		TrainNo:     padTrainNo(meta.TrainID),
 		Coach:       coachName(meta.CarriageID),
-		Location:    location,
+		Location:    locationByCode(code),
 		Code:        code,
 		Station1:    strconv.Itoa(int(si.CurStation)),
 		Station2:    strconv.Itoa(int(si.NextStation)),

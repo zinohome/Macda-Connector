@@ -27,7 +27,7 @@ func Handle67LifeAction(ctx context.Context, client *PlatformClient, cfg Config,
 		records = append(records, LifeRecord67{
 			LineName:     msg.EventMeta.LineID,
 			TrainType:    cfg.TrainType,
-			TrainNo:      msg.EventMeta.TrainID,
+			TrainNo:      padTrainNo(msg.EventMeta.TrainID),
 			PartCode:     hit.Code,
 			ServiceTime:  ts,
 			ServiceValue: hit.Value,
@@ -73,7 +73,7 @@ func sendDailyBatch(ctx context.Context, client *PlatformClient, cache *LifeCach
 		records = append(records, LifeRecord67{
 			LineName:     e.LineName,
 			TrainType:    cfg.TrainType,
-			TrainNo:      e.TrainID,
+			TrainNo:      padTrainNo(e.TrainID),
 			PartCode:     e.PartCode,
 			ServiceTime:  ts,
 			ServiceValue: e.ServiceValue,
