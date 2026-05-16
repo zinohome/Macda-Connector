@@ -24,15 +24,6 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 
-	// --- 6.1: signal-alarm ---
-	wg.Add(1)
-	go consumeTopic(ctx, &wg, cfg.KafkaBrokers,
-		"signal-alarm", "ground-reporter-alarm",
-		func(data []byte) {
-			Handle61Alarm(ctx, client, tracker, stationCache, cfg, data)
-		},
-	)
-
 	// --- 6.1: signal-predict ---
 	wg.Add(1)
 	go consumeTopic(ctx, &wg, cfg.KafkaBrokers,
