@@ -67,7 +67,7 @@
                     <el-table-column prop="unit_name"    label="机组"           width="90"  fixed="left" show-overflow-tooltip />
                     <el-table-column prop="i_inner_temp" label="室内温度(℃)"    width="120" show-overflow-tooltip />
                     <el-table-column prop="i_outer_temp" label="新风温度(℃)"    width="120" show-overflow-tooltip />
-                    <el-table-column prop="i_set_temp"   label="设定温度(℃)"    width="120" show-overflow-tooltip />
+                    <el-table-column prop="i_set_temp"   label="过热度(℃)"      width="120" show-overflow-tooltip />
                     <el-table-column prop="i_hum"        label="湿度(%)"        width="90"  show-overflow-tooltip />
                     <el-table-column prop="i_co2"        label="CO₂(ppm)"       width="110" show-overflow-tooltip />
                     <el-table-column prop="work_status"  label="工作状态"        width="100" show-overflow-tooltip />
