@@ -41,9 +41,10 @@ type LifeHit struct {
 }
 
 // ParsedMsg is a minimal view of signal-parsed used only for life cache population.
+// line_id and train_id are integers in the signal-parsed JSON schema.
 type ParsedMsg struct {
-	LineID     string         `json:"line_id"`
-	TrainID    string         `json:"train_id"`
+	LineID     int            `json:"line_id"`
+	TrainID    int            `json:"train_id"`
 	CarriageID int            `json:"carriage_id"`
 	DeviceID   string         `json:"device_id"`
 	IngestTime string         `json:"ingest_time"`

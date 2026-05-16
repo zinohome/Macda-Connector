@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -89,9 +90,9 @@ func (c *LifeCache) Update(msg ParsedMsg, trainType string) {
 		key := partCacheKey{DeviceID: msg.DeviceID, PartCode: code}
 
 		c.cache[key] = &PartEntry{
-			LineName:     msg.LineID,
+			LineName:     strconv.Itoa(msg.LineID),
 			TrainType:    trainType,
-			TrainID:      msg.TrainID,
+			TrainID:      strconv.Itoa(msg.TrainID),
 			CarriageID:   msg.CarriageID,
 			PartCode:     code,
 			ServiceValue: serviceValue,
