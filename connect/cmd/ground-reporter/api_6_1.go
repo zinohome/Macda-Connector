@@ -25,11 +25,9 @@ func coachName(carriageID int) string {
 	return strconv.Itoa(carriageID)
 }
 
-const path61 = "/gate/METRO-PHM/api/faultRecordsSubsystem/saveRecord"
-
 // Handle61Alarm processes a signal-alarm message: diffs against active state,
 // then POSTs start/end records to the platform.
-func Handle61Alarm(ctx context.Context, client *PlatformClient, tracker *AlarmTracker, cfg Config, data []byte) {
+func Handle61Alarm(ctx context.Context, client *PlatformClient, tracker *AlarmTracker, sc *StationCache, cfg Config, data []byte) {
 	var msg SubEventMsg
 	if err := json.Unmarshal(data, &msg); err != nil {
 		log.Printf("[WARN] 6.1 alarm: bad json: %v", err)
@@ -48,25 +46,26 @@ func Handle61Alarm(ctx context.Context, client *PlatformClient, tracker *AlarmTr
 
 	ts := nowMs()
 	diff := tracker.Diff(msg.EventMeta.DeviceID, codes, ts)
+	si := sc.Get(msg.EventMeta.DeviceID)
 
 	var records []Record61
 	for _, hit := range diff.Added {
-		records = append(records, buildRecord61(cfg, msg.EventMeta, "0", hit.Code, hit.Name, hit.UUID, hit.StartTime, 0))
+		records = append(records, buildRecord61(cfg, msg.EventMeta, si, "0", hit.Code, hit.Name, hit.UUID, hit.StartTime, 0))
 	}
 	for _, hit := range diff.Removed {
-		records = append(records, buildRecord61(cfg, msg.EventMeta, "0", hit.Code, hit.Name, hit.UUID, hit.StartTime, hit.EndTime))
+		records = append(records, buildRecord61(cfg, msg.EventMeta, si, "0", hit.Code, hit.Name, hit.UUID, hit.StartTime, hit.EndTime))
 	}
 
 	if len(records) == 0 {
 		return
 	}
-	if err := client.PostJSON(ctx, path61, records); err != nil {
+	if err := client.PostJSON(ctx, cfg.FaultRecordURL, records); err != nil {
 		log.Printf("[ERROR] 6.1 alarm POST failed: %v", err)
 	}
 }
 
 // Handle61Predict processes a signal-predict message the same way as alarm.
-func Handle61Predict(ctx context.Context, client *PlatformClient, tracker *AlarmTracker, cfg Config, data []byte) {
+func Handle61Predict(ctx context.Context, client *PlatformClient, tracker *AlarmTracker, sc *StationCache, cfg Config, data []byte) {
 	var msg SubEventMsg
 	if err := json.Unmarshal(data, &msg); err != nil {
 		log.Printf("[WARN] 6.1 predict: bad json: %v", err)
@@ -87,26 +86,27 @@ func Handle61Predict(ctx context.Context, client *PlatformClient, tracker *Alarm
 
 	ts := nowMs()
 	diff := tracker.Diff(deviceKey, codes, ts)
+	si := sc.Get(msg.EventMeta.DeviceID)
 
 	var records []Record61
 	for _, hit := range diff.Added {
-		records = append(records, buildRecord61(cfg, msg.EventMeta, "1", hit.Code, hit.Name, hit.UUID, hit.StartTime, 0))
+		records = append(records, buildRecord61(cfg, msg.EventMeta, si, "1", hit.Code, hit.Name, hit.UUID, hit.StartTime, 0))
 	}
 	for _, hit := range diff.Removed {
-		records = append(records, buildRecord61(cfg, msg.EventMeta, "1", hit.Code, hit.Name, hit.UUID, hit.StartTime, hit.EndTime))
+		records = append(records, buildRecord61(cfg, msg.EventMeta, si, "1", hit.Code, hit.Name, hit.UUID, hit.StartTime, hit.EndTime))
 	}
 
 	if len(records) == 0 {
 		return
 	}
-	if err := client.PostJSON(ctx, path61, records); err != nil {
+	if err := client.PostJSON(ctx, cfg.FaultRecordURL, records); err != nil {
 		log.Printf("[ERROR] 6.1 predict POST failed: %v", err)
 	}
 }
 
 // buildRecord61 constructs a single 6.1 record.
 // endTimeMs == 0 means alarm is still open (endtime = "").
-func buildRecord61(cfg Config, meta EventMeta, msgType, code, location, uuid string, startMs, endMs int64) Record61 {
+func buildRecord61(cfg Config, meta EventMeta, si StationInfo, msgType, code, location, uuid string, startMs, endMs int64) Record61 {
 	endTime := ""
 	if endMs > 0 {
 		endTime = strconv.FormatInt(endMs, 10)
@@ -125,8 +125,8 @@ func buildRecord61(cfg Config, meta EventMeta, msgType, code, location, uuid str
 		Coach:       coachName(meta.CarriageID),
 		Location:    location,
 		Code:        code,
-		Station1:    "",
-		Station2:    "",
+		Station1:    strconv.Itoa(int(si.CurStation)),
+		Station2:    strconv.Itoa(int(si.NextStation)),
 		StartTime:   strconv.FormatInt(startMs, 10),
 		EndTime:     endTime,
 		Subsystem:   cfg.SubsystemCode,

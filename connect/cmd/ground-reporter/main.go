@@ -13,12 +13,13 @@ import (
 func main() {
 	cfg := loadConfig()
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
-	log.Printf("[INFO] ground-reporter starting: platform=%s:%d subsystem=%s trainType=%s",
-		cfg.PlatformIP, cfg.PlatformPort, cfg.SubsystemCode, cfg.TrainType)
+	log.Printf("[INFO] ground-reporter starting: faultRecordURL=%s sysStatusURL=%s lifeRecordURL=%s subsystem=%s trainType=%s",
+		cfg.FaultRecordURL, cfg.SysStatusURL, cfg.LifeRecordURL, cfg.SubsystemCode, cfg.TrainType)
 
 	client := newPlatformClient(cfg)
 	tracker := newAlarmTracker()
 	lifeCache := newLifeCache()
+	stationCache := newStationCache()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
@@ -28,7 +29,7 @@ func main() {
 	go consumeTopic(ctx, &wg, cfg.KafkaBrokers,
 		"signal-alarm", "ground-reporter-alarm",
 		func(data []byte) {
-			Handle61Alarm(ctx, client, tracker, cfg, data)
+			Handle61Alarm(ctx, client, tracker, stationCache, cfg, data)
 		},
 	)
 
@@ -37,7 +38,7 @@ func main() {
 	go consumeTopic(ctx, &wg, cfg.KafkaBrokers,
 		"signal-predict", "ground-reporter-predict",
 		func(data []byte) {
-			Handle61Predict(ctx, client, tracker, cfg, data)
+			Handle61Predict(ctx, client, tracker, stationCache, cfg, data)
 		},
 	)
 
@@ -50,7 +51,7 @@ func main() {
 		},
 	)
 
-	// --- 6.7 daily cache: signal-parsed ---
+	// --- 6.7 daily cache + station cache: signal-parsed ---
 	wg.Add(1)
 	go consumeTopic(ctx, &wg, cfg.KafkaBrokers,
 		"signal-parsed", "ground-reporter-life-cache",
@@ -63,6 +64,7 @@ func main() {
 				return
 			}
 			lifeCache.Update(msg, cfg.TrainType)
+			stationCache.Update(msg)
 		},
 	)
 

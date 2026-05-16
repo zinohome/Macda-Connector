@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-const path66 = "/gate/METRO-SELFCHECK-SUBSYSTEM/api/faultRecordsSubsystem/saveStatus"
-
 // Run66Heartbeat sends a heartbeat to the platform every HeartbeatIntervalMin minutes.
 // Runs until ctx is cancelled.
 func Run66Heartbeat(ctx context.Context, client *PlatformClient, cfg Config) {
@@ -40,7 +38,7 @@ func sendHeartbeat(ctx context.Context, client *PlatformClient, cfg Config) {
 			Time:        strconv.FormatInt(nowMs(), 10),
 		},
 	}
-	if err := client.PostJSON(ctx, path66, payload); err != nil {
+	if err := client.PostJSON(ctx, cfg.SysStatusURL, payload); err != nil {
 		log.Printf("[ERROR] 6.6 heartbeat POST failed: %v", err)
 		return
 	}

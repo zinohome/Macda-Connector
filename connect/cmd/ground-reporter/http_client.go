@@ -11,7 +11,6 @@ import (
 )
 
 type PlatformClient struct {
-	base       string // e.g. "http://10.12.48.187:8188"
 	apiKey     string // X-Api-Key header value; empty = omit header
 	httpClient *http.Client
 	retryMax   int
@@ -20,7 +19,6 @@ type PlatformClient struct {
 
 func newPlatformClient(cfg Config) *PlatformClient {
 	return &PlatformClient{
-		base:   fmt.Sprintf("http://%s:%d", cfg.PlatformIP, cfg.PlatformPort),
 		apiKey: cfg.PlatformApiKey,
 		httpClient: &http.Client{
 			Timeout: time.Duration(cfg.PlatformTimeoutSec) * time.Second,
@@ -30,15 +28,13 @@ func newPlatformClient(cfg Config) *PlatformClient {
 	}
 }
 
-// PostJSON marshals body as JSON array and POSTs to path, retrying on transient failures.
-// body may be a single struct or a slice; it is always wrapped in [] when it's not already a slice.
-func (c *PlatformClient) PostJSON(ctx context.Context, path string, body any) error {
+// PostJSON marshals body as JSON and POSTs to the given full URL, retrying on transient failures.
+func (c *PlatformClient) PostJSON(ctx context.Context, url string, body any) error {
 	data, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
 
-	url := c.base + path
 	backoff := time.Duration(c.backoffMs) * time.Millisecond
 
 	for attempt := 0; attempt <= c.retryMax; attempt++ {
@@ -54,9 +50,9 @@ func (c *PlatformClient) PostJSON(ctx context.Context, path string, body any) er
 		if err = c.doPost(ctx, url, data); err == nil {
 			return nil
 		}
-		log.Printf("[WARN] POST %s attempt %d/%d failed: %v", path, attempt+1, c.retryMax+1, err)
+		log.Printf("[WARN] POST %s attempt %d/%d failed: %v", url, attempt+1, c.retryMax+1, err)
 	}
-	return fmt.Errorf("POST %s: all %d attempts failed, last error: %w", path, c.retryMax+1, err)
+	return fmt.Errorf("POST %s: all %d attempts failed, last error: %w", url, c.retryMax+1, err)
 }
 
 func (c *PlatformClient) doPost(ctx context.Context, url string, data []byte) error {

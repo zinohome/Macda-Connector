@@ -7,7 +7,7 @@ version: '3.8'
 #   - mock-platform   : 本地接收服务器（测试用），格式化打印收到的 JSON
 # 注意：
 #   - 基础设施（Redpanda、TimescaleDB）由 docker-compose-Data.yml 提供
-#   - 联调时将 PLATFORM_IP 改为真实平台地址并填写 PLATFORM_API_KEY
+#   - 联调时将三个 *_URL 改为真实平台地址并填写 PLATFORM_API_KEY
 # =============================================================
 
 services:
@@ -19,9 +19,10 @@ services:
     restart: unless-stopped
     environment:
       - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
-      # 地面健康管理平台地址与认证（联调时填写真实值；本地测试改为 mock-platform）
-      - PLATFORM_IP=mock-platform
-      - PLATFORM_PORT=8188
+      # 各协议章节上报接口（联调时填写真实地址；本地测试指向 mock-platform）
+      - FAULT_RECORD_URL=https://clznyw7.nbmetro.com/gate/METRO-PHM/api/faultRecordsSubsystem/saveRecord
+      - SYS_STATUS_URL=https://clznyw7.nbmetro.com/gate/METRO-SELFCHECK-SUBSYSTEM/api/faultRecordsSubsystem/saveStatus
+      - LIFE_RECORD_URL=https://clznyw7.nbmetro.com/gate/METRO-PHM/api/devices/status/train/saveOrUpdate
       - PLATFORM_API_KEY=
       - PLATFORM_TIMEOUT_SEC=10
       - PLATFORM_RETRY_MAX=3

@@ -7,9 +7,12 @@ import (
 )
 
 type Config struct {
-	// Platform HTTP endpoint
-	PlatformIP             string
-	PlatformPort           int
+	// Platform endpoint URLs (full URLs, one per protocol chapter)
+	FaultRecordURL string // 6.1 预警/报警写入
+	SysStatusURL   string // 6.6 运行状态心跳
+	LifeRecordURL  string // 6.7 寿命状态数据
+
+	// Common HTTP settings
 	PlatformApiKey         string // X-Api-Key header; empty = no auth
 	PlatformTimeoutSec     int
 	PlatformRetryMax       int
@@ -31,8 +34,10 @@ type Config struct {
 
 func loadConfig() Config {
 	return Config{
-		PlatformIP:             getEnv("PLATFORM_IP", "10.12.48.187"),
-		PlatformPort:           getEnvInt("PLATFORM_PORT", 8188),
+		FaultRecordURL: getEnv("FAULT_RECORD_URL", "https://clznyw7.nbmetro.com/gate/METRO-PHM/api/faultRecordsSubsystem/saveRecord"),
+		SysStatusURL:   getEnv("SYS_STATUS_URL", "https://clznyw7.nbmetro.com/gate/METRO-SELFCHECK-SUBSYSTEM/api/faultRecordsSubsystem/saveStatus"),
+		LifeRecordURL:  getEnv("LIFE_RECORD_URL", "https://clznyw7.nbmetro.com/gate/METRO-PHM/api/devices/status/train/saveOrUpdate"),
+
 		PlatformApiKey:         getEnv("PLATFORM_API_KEY", ""),
 		PlatformTimeoutSec:     getEnvInt("PLATFORM_TIMEOUT_SEC", 10),
 		PlatformRetryMax:       getEnvInt("PLATFORM_RETRY_MAX", 3),

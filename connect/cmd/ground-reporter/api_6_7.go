@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-const path67 = "/gate/METRO-PHM/api/devices/status/train/saveOrUpdate"
-
 // Handle67LifeAction processes a signal-life message and immediately POSTs
 // each LifeHit as a per-action life record to the platform.
 func Handle67LifeAction(ctx context.Context, client *PlatformClient, cfg Config, data []byte) {
@@ -39,7 +37,7 @@ func Handle67LifeAction(ctx context.Context, client *PlatformClient, cfg Config,
 		})
 	}
 
-	if err := client.PostJSON(ctx, path67, records); err != nil {
+	if err := client.PostJSON(ctx, cfg.LifeRecordURL, records); err != nil {
 		log.Printf("[ERROR] 6.7 life action POST failed: %v", err)
 	}
 }
@@ -85,7 +83,7 @@ func sendDailyBatch(ctx context.Context, client *PlatformClient, cache *LifeCach
 		})
 	}
 
-	if err := client.PostJSON(ctx, path67, records); err != nil {
+	if err := client.PostJSON(ctx, cfg.LifeRecordURL, records); err != nil {
 		log.Printf("[ERROR] 6.7 daily batch POST failed: %v", err)
 		return
 	}

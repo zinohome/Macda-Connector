@@ -8,9 +8,10 @@ services:
     restart: unless-stopped
     environment:
       - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
-      # 地面健康管理平台地址与认证（现场联调时补充真实值；本地测试改为 mock-platform）
-      - PLATFORM_IP=mock-platform
-      - PLATFORM_PORT=8188
+      # 各协议章节上报接口（本地测试指向 mock-platform；联调时改为真实地址）
+      - FAULT_RECORD_URL=http://mock-platform:8188/gate/METRO-PHM/api/faultRecordsSubsystem/saveRecord
+      - SYS_STATUS_URL=http://mock-platform:8188/gate/METRO-SELFCHECK-SUBSYSTEM/api/faultRecordsSubsystem/saveStatus
+      - LIFE_RECORD_URL=http://mock-platform:8188/gate/METRO-PHM/api/devices/status/train/saveOrUpdate
       - PLATFORM_API_KEY=
       - PLATFORM_TIMEOUT_SEC=10
       - PLATFORM_RETRY_MAX=3
