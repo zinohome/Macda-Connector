@@ -125,6 +125,11 @@ mk_dir "${BASE_DATA_DIR}/mock/connect/data/input"
 # report 环境目录（mock-platform 源码）
 mk_dir "${BASE_DATA_DIR}/connect/tests/mock-platform"
 
+# Caddy 反向代理持久化目录
+mk_dir "${BASE_DATA_DIR}/caddy/config"
+mk_dir "${BASE_DATA_DIR}/caddy/certs"
+mk_dir "${BASE_DATA_DIR}/caddy/data"
+
 # ── 2. 设置目录权限 ───────────────────────────────────────────
 log_step "设置目录权限"
 
@@ -179,6 +184,11 @@ for mock_file in "${SCRIPT_DIR}"/mock-data/*; do
     cp_file "${mock_file}" "${BASE_DATA_DIR}/mock/connect/data/input/$(basename "${mock_file}")"
 done
 
+# ── 5b. 复制 Caddyfile 模板 ──────────────────────────────────
+log_step "复制 Caddy 配置文件"
+
+cp_file "${SCRIPT_DIR}/caddy/Caddyfile" "${BASE_DATA_DIR}/caddy/config/Caddyfile"
+
 # ── 6. 生成 1panel 编排目录（仅 --1panel 模式）──────────────
 if [[ "${USE_1PANEL}" == "true" ]]; then
     log_step "生成 1panel 编排目录"
@@ -203,6 +213,13 @@ if [[ "${USE_1PANEL}" == "true" ]]; then
         log_success "1panel/${env_name}/  (name: ${env_name})"
     done
 
+    # Caddy 单独处理（docker-compose 文件已含 name: 字段，直接复制即可）
+    caddy_dir="${PANEL_ROOT}/caddy"
+    mkdir -p "${caddy_dir}"
+    cp "${SCRIPT_DIR}/docker-compose-caddy.yml" "${caddy_dir}/docker-compose.yml"
+    echo "DATA_DIR=${BASE_DATA_DIR}" > "${caddy_dir}/.env"
+    log_success "1panel/caddy/  (name: caddy)"
+
     log_info "1panel 目录就绪: ${PANEL_ROOT}"
 fi
 
@@ -226,6 +243,12 @@ if [[ "${USE_1PANEL}" == "true" ]]; then
     echo "  ③ 按需启动："
     echo "     ${SCRIPT_DIR}/1panel/mock     ← Mock 数据源"
     echo "     ${SCRIPT_DIR}/1panel/desktop  ← 远程桌面"
+    echo ""
+    echo "  ④ HTTPS 反向代理（可选）："
+    echo "     # 先生成自签名证书："
+    echo "     DATA_DIR=${BASE_DATA_DIR} ${SCRIPT_DIR}/caddy/generate-certs.sh"
+    echo "     # 再在 1panel 中添加编排："
+    echo "     ${SCRIPT_DIR}/1panel/caddy  ← Caddy HTTPS 反代"
 else
     echo "  ── 普通环境 ─────────────────────────────────────────"
     echo "    chmod +x start.sh"
