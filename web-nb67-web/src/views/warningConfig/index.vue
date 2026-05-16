@@ -11,7 +11,7 @@
                 <div class="section-header">
                     <span class="title-icon"></span>
                     <span class="title-text">预警条件设置</span>
-                    <span class="hint">修改阈值后重启 event-builder 容器生效</span>
+                    <span class="hint">修改阈值后30秒自动生效</span>
                 </div>
                 <el-table :data="tableData" border stripe style="width:100%" v-loading="loading">
                     <el-table-column prop="component_name" label="组件名称" min-width="220" show-overflow-tooltip />
