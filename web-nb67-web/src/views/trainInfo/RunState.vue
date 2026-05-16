@@ -60,6 +60,7 @@ const rows = [
     { label: '冷凝风机', key: 'cf',     isStatus: true },
     { label: '新风阀',  key: 'fadpos',  suffix: '%' },
     { label: '回风阀',  key: 'radpos',  suffix: '%' },
+    { label: '废排风阀', key: 'dmp_exu_pos', suffix: '%', isGlobal: true },
     // 空气质量6行（来自示意图右上角，需求2迁移至此）
     { label: 'CO₂',    key: 'aq_co2',   suffix: 'ppm', isAQ: true },
     { label: 'TVOC',   key: 'aq_tvoc',  suffix: 'ppb', isAQ: true },
@@ -107,7 +108,12 @@ const getVal = (carIdx, pos, row) => {
         return Object.keys(carData).find(k => k.toLowerCase().replace(/_/g, '').includes(flatBase));
     };
 
-    if (row.isAQ) {
+    if (row.isGlobal) {
+        // 全局型：直接用 key 查找，不附加 _u${unitIdx}（如废排风阀，一车一个传感器）
+        const key = findKeyInObj(row.key)
+        const num = carData[key]
+        return num !== undefined && num !== null ? `${num}${row.suffix}` : '-'
+    } else if (row.isAQ) {
         // 空气质量类：每列只取机组1的值（每车厢一个传感器，U1/U2取平均或取U1）
         // key 格式：aq_co2 → AqCo2U1 / AqCo2U2
         const suffix = `U${unitIdx}`
@@ -119,7 +125,10 @@ const getVal = (carIdx, pos, row) => {
         const rawKey = keyMap[row.key]
         const val = rawKey ? carData[rawKey] : undefined
         if (val === undefined || val === null || val === '') return '-'
-        return `${val}${row.suffix}`
+        // aq_t 和 aq_h 原始值需 ÷10 后才是实际值（同协议约定）
+        const needsScale = row.key === 'aq_t' || row.key === 'aq_h'
+        const displayVal = needsScale ? (Number(val) / 10).toFixed(1) : val
+        return `${displayVal}${row.suffix}`
     } else if (row.isStatus) {
         // 状态类：构造基础 Key
         let baseKey = row.key.startsWith('comp_u')

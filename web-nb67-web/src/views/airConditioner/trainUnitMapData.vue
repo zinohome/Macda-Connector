@@ -5,13 +5,13 @@
             <div class="cardItem">
                 <div class="unitFont fontWidth"><span class="dataFont">{{ props.UnitNo =='1号机组' ? formatVal(props.crewDetails.i_cf_u12, 'A') : formatVal(props.crewDetails.i_cf_u22, 'A')  }}</span>A</div>
             </div>
-            <div class="popup cardAlign">冷凝风机2运行中</div>
+            <div class="popup cardAlign">冷凝风机2电流</div>
         </div>
         <div class="condensateFan2 orientation" :class="{ 'is-running': checkRun('cf', 1) }">
             <div class="cardItem">
                 <div class="unitFont fontWidth"><span class="dataFont">{{ props.UnitNo =='1号机组' ? formatVal(props.crewDetails.i_cf_u11, 'A') : formatVal(props.crewDetails.i_cf_u21, 'A')  }}</span>A</div>
             </div>
-            <div class="popup cardAlign">冷凝风机1运行中</div>
+            <div class="popup cardAlign">冷凝风机1电流</div>
         </div>
 
         <!-- 压缩机 -->
@@ -19,7 +19,7 @@
             <div class="cardItem">
                 <div class="unitFont compressor2A">
                     <span class="dataFont">{{ props.UnitNo =='1号机组' ? formatVal(props.crewDetails.i_cp_u12, 'A') : formatVal(props.crewDetails.i_cp_u22, 'A')  }}</span>A
-                    <div class="popup cardAlign">压缩机2已开启</div>
+                    <div class="popup cardAlign">压缩机2电流</div>
                 </div>
             </div>
             <div class="cardItem">
@@ -39,7 +39,7 @@
             <div class="cardItem">
                 <div class="unitFont compressor1A">
                     <span class="dataFont">{{ props.UnitNo =='1号机组' ? formatVal(props.crewDetails.i_cp_u11, 'A') : formatVal(props.crewDetails.i_cp_u21, 'A') }}</span>A
-                    <div class="popup cardAlign">压缩机1已开启</div>
+                    <div class="popup cardAlign">压缩机1电流</div>
                 </div>
             </div>
             <div class="cardItem">
@@ -102,7 +102,7 @@
             <div class="cardItem">
                 <div class="unitFont fontWidth"><span class="dataFont">{{ props.UnitNo =='1号机组' ? formatVal(props.crewDetails.i_ef_u12, 'A'): formatVal(props.crewDetails.i_ef_u22, 'A') }}</span>A</div>
             </div>
-            <div class="popup cardAlign">通风机2运行中</div>
+            <div class="popup cardAlign">通风机2电流</div>
         </div>
         <div class="supplyAirTemperature1 orientation">
             <div class="cardItem">
@@ -114,7 +114,7 @@
             <div class="cardItem">
                 <div class="unitFont fontWidth"><span class="dataFont">{{ props.UnitNo =='1号机组' ? formatVal(props.crewDetails.i_ef_u11, 'A'): formatVal(props.crewDetails.i_ef_u21, 'A')}}</span>A</div>
             </div>
-            <div class="popup cardAlign">通风机1运行中</div>
+            <div class="popup cardAlign">通风机1电流</div>
         </div>
 
         <!-- 膨胀阀 -->
@@ -160,7 +160,7 @@
         </div>
         <div class="percolator orientation">
             <div class="cardItem">
-                <div class="unitFont"><span class="dataFont">{{ props.UnitNo =='1号机组' ? formatVal(props.crewDetails.presdiff_u1, 'par'): formatVal(props.crewDetails.presdiff_u2, 'par')}}</span>par</div>
+                <div class="unitFont"><span class="dataFont">{{ props.UnitNo =='1号机组' ? formatVal(props.crewDetails.presdiff_u1, 'pa'): formatVal(props.crewDetails.presdiff_u2, 'pa')}}</span>pa</div>
             </div>
             <div class="popup cardAlign">滤网前后压差值</div>
         </div>
@@ -209,8 +209,8 @@ const formatVal = (val, unit) => {
     // 过滤传感器无数据的溢出值
     if (num === 32767 || num === 3276.7 || num === 65535) return '-'
     
-    // 不缩放的白名单
-    const noScaleUnits = ['步', '%', 'ppm', 'ppb', 'μg/m³', 'RH', 'par'];
+    // 不缩放的白名单（presdiff 需 ÷10，故 'pa' 不在此列）
+    const noScaleUnits = ['步', '%', 'ppm', 'ppb', 'μg/m³', 'RH'];
     if (noScaleUnits.includes(unit)) {
         return num;
     }

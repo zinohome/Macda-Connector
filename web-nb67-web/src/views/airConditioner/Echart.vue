@@ -158,13 +158,16 @@ const buildChartOptions = (timeAxis, seriesList) => ({
 const fetchData = async () => {
     if (!props.carriageId) return
     const params = selectedParams.value.length > 0 ? selectedParams.value : ['ras_u1', 'fas_u1', 'tic']
+    const requestedTab = currentTab.value  // 捕获请求时的 tab，防止异步竞态
     try {
         const res = await getThDataByDvcAddrApi({
             carriageNo: props.carriageId,
-            type: currentTab.value,
+            type: requestedTab,
             params,
         })
-        const list = res[currentTab.value] || res.data || []
+        // 若用户在等待期间切换了 tab，丢弃过期响应
+        if (currentTab.value !== requestedTab) return
+        const list = res[requestedTab] || res.data || []
         if (list.length === 0) { hasData.value = false; return }
         hasData.value = true
 

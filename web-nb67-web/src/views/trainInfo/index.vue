@@ -1498,6 +1498,7 @@ async function getTrainApi() {
                                 code: key,
                                 alarm_time: formatTime(item.alarm_time),
                                 carriage_no: carNo,
+                                train_no: item.train_no,
                                 precautions: ''
                             }
                             const cleanCode = newItem.code.replace('dvc_', '')
