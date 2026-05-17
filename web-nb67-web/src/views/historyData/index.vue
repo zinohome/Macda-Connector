@@ -18,6 +18,13 @@
                             <el-option v-for="item in carriageList" :key="item.carriage_no" :label="item.label" :value="item.carriage_no" />
                         </el-select>
                     </el-form-item>
+                    <el-form-item label="机组">
+                        <el-select v-model="filterForm.unitName" style="width:110px">
+                            <el-option label="全部机组" value="" />
+                            <el-option label="机组一" value="机组一" />
+                            <el-option label="机组二" value="机组二" />
+                        </el-select>
+                    </el-form-item>
                     <el-form-item label="时间范围">
                         <el-date-picker
                             v-model="filterForm.timeRange"
@@ -27,6 +34,8 @@
                             end-placeholder="结束时间"
                             format="YYYY-MM-DD HH:mm"
                             value-format="YYYY-MM-DD HH:mm:ss"
+                            :disabled-date="disabledDate"
+                            @calendar-change="onCalendarChange"
                         />
                     </el-form-item>
                     <el-form-item>
@@ -46,7 +55,6 @@
                     <el-button type="primary" size="small" icon="Download" :loading="downloading" @click="handleDownload">下载 ZIP</el-button>
                 </div>
 
-                <!-- 直接显示详情，无需先查日期列表 -->
                 <el-table
                     :data="detailList"
                     border stripe
@@ -57,43 +65,56 @@
                     :scrollbar-always-on="true"
                     class="no-ghost-table"
                 >
-                    <el-table-column type="index"        label="序号"          width="60"  fixed="left" align="center" />
-                    <el-table-column prop="train_id"     label="列车号"         width="90"  fixed="left" show-overflow-tooltip>
+                    <el-table-column type="index"           label="序号"              width="60"  fixed="left" align="center" />
+                    <el-table-column prop="train_id"        label="列车号"             width="90"  fixed="left" show-overflow-tooltip>
                         <template #default="s">{{ s.row.train_id ? `0${s.row.train_id}` : '-' }}</template>
                     </el-table-column>
-                    <el-table-column prop="carriage_id"  label="车厢"           width="80"  fixed="left" show-overflow-tooltip>
+                    <el-table-column prop="carriage_id"     label="车厢"               width="80"  fixed="left" show-overflow-tooltip>
                         <template #default="s">{{ CARRIAGE_MAP[String(s.row.carriage_id)] || s.row.carriage_id }}</template>
                     </el-table-column>
-                    <el-table-column prop="unit_name"    label="机组"           width="90"  fixed="left" show-overflow-tooltip />
-                    <el-table-column prop="i_inner_temp" label="室内温度(℃)"    width="120" show-overflow-tooltip />
-                    <el-table-column prop="i_outer_temp" label="新风温度(℃)"    width="120" show-overflow-tooltip />
-                    <el-table-column prop="i_set_temp"   label="过热度(℃)"      width="120" show-overflow-tooltip />
-                    <el-table-column prop="i_hum"        label="湿度(%)"        width="90"  show-overflow-tooltip />
-                    <el-table-column prop="i_co2"        label="CO₂(ppm)"       width="110" show-overflow-tooltip />
-                    <el-table-column prop="work_status"  label="工作状态"        width="100" show-overflow-tooltip />
-                    <el-table-column prop="dwef_op_tm"   label="通风机运行时间"  width="140" show-overflow-tooltip />
-                    <el-table-column prop="w_crnt_cf1"   label="冷凝风机电流1(A)" width="140" show-overflow-tooltip />
-                    <el-table-column prop="w_crnt_cf2"   label="冷凝风机电流2(A)" width="140" show-overflow-tooltip />
-                    <el-table-column prop="w_crnt_cp1"   label="压缩机电流1(A)"  width="130" show-overflow-tooltip />
-                    <el-table-column prop="w_crnt_cp2"   label="压缩机电流2(A)"  width="130" show-overflow-tooltip />
-                    <el-table-column prop="w_freq_cp1"   label="压缩机频率1(Hz)" width="130" show-overflow-tooltip />
-                    <el-table-column prop="w_freq_cp2"   label="压缩机频率2(Hz)" width="130" show-overflow-tooltip />
-                    <el-table-column prop="w_crnt_ef1"   label="送风机电流1(A)"  width="130" show-overflow-tooltip />
-                    <el-table-column prop="w_crnt_ef2"   label="送风机电流2(A)"  width="130" show-overflow-tooltip />
-                    <el-table-column prop="i_high_pres1" label="高压1(bar)"      width="110" show-overflow-tooltip />
-                    <el-table-column prop="i_low_pres1"  label="低压1(bar)"      width="110" show-overflow-tooltip />
-                    <el-table-column prop="i_high_pres2" label="高压2(bar)"      width="110" show-overflow-tooltip />
-                    <el-table-column prop="i_low_pres2"  label="低压2(bar)"      width="110" show-overflow-tooltip />
-                    <el-table-column prop="i_sat1"       label="送风温度1(℃)"    width="120" show-overflow-tooltip />
-                    <el-table-column prop="i_sat2"       label="送风温度2(℃)"    width="120" show-overflow-tooltip />
-                    <el-table-column prop="dwcf_op_tm1"  label="冷凝运行时间1"   width="140" show-overflow-tooltip />
-                    <el-table-column prop="dwcf_op_tm2"  label="冷凝运行时间2"   width="140" show-overflow-tooltip />
-                    <el-table-column prop="dwcp_op_tm1"  label="压缩机时间1"     width="130" show-overflow-tooltip />
-                    <el-table-column prop="dwcp_op_tm2"  label="压缩机时间2"     width="130" show-overflow-tooltip />
-                    <el-table-column prop="dwexufan_op_tm" label="废排风机时间"  width="130" show-overflow-tooltip />
-                    <el-table-column prop="dwfad_op_cnt" label="新风阀开度(%)"   width="120" show-overflow-tooltip />
-                    <el-table-column prop="dwrad_op_cnt" label="回风阀开度(%)"   width="120" show-overflow-tooltip />
-                    <el-table-column prop="event_time"   label="设备上报时间"    width="185" fixed="right" show-overflow-tooltip />
+                    <el-table-column prop="unit_name"       label="机组"               width="90"  fixed="left" show-overflow-tooltip />
+                    <el-table-column prop="i_inner_temp"    label="室内温度(℃)"        width="120" show-overflow-tooltip />
+                    <el-table-column prop="i_outer_temp"    label="新风温度(℃)"        width="120" show-overflow-tooltip />
+                    <el-table-column prop="i_set_temp"      label="过热度(℃)"          width="120" show-overflow-tooltip />
+                    <el-table-column prop="i_hum"           label="湿度(%)"            width="90"  show-overflow-tooltip />
+                    <el-table-column prop="i_co2"           label="CO₂(ppm)"           width="110" show-overflow-tooltip />
+                    <el-table-column prop="work_status"     label="工作状态"            width="100" show-overflow-tooltip />
+                    <el-table-column prop="dwef_op_tm"      label="通风机运行时间(秒)"  width="155" show-overflow-tooltip />
+                    <el-table-column prop="w_crnt_cf1"      label="冷凝风机电流1(A)"    width="140" show-overflow-tooltip />
+                    <el-table-column prop="w_crnt_cf2"      label="冷凝风机电流2(A)"    width="140" show-overflow-tooltip />
+                    <el-table-column prop="w_crnt_cp1"      label="压缩机电流1(A)"      width="130" show-overflow-tooltip />
+                    <el-table-column prop="w_crnt_cp2"      label="压缩机电流2(A)"      width="130" show-overflow-tooltip />
+                    <el-table-column prop="w_freq_cp1"      label="压缩机频率1(Hz)"     width="130" show-overflow-tooltip />
+                    <el-table-column prop="w_freq_cp2"      label="压缩机频率2(Hz)"     width="130" show-overflow-tooltip />
+                    <el-table-column prop="w_crnt_ef1"      label="送风机电流1(A)"      width="130" show-overflow-tooltip />
+                    <el-table-column prop="w_crnt_ef2"      label="送风机电流2(A)"      width="130" show-overflow-tooltip />
+                    <el-table-column prop="i_high_pres1"    label="高压1(bar)"          width="110" show-overflow-tooltip />
+                    <el-table-column prop="i_low_pres1"     label="低压1(bar)"          width="110" show-overflow-tooltip />
+                    <el-table-column prop="i_high_pres2"    label="高压2(bar)"          width="110" show-overflow-tooltip />
+                    <el-table-column prop="i_low_pres2"     label="低压2(bar)"          width="110" show-overflow-tooltip />
+                    <el-table-column prop="i_sat1"          label="送风温度1(℃)"        width="120" show-overflow-tooltip />
+                    <el-table-column prop="i_sat2"          label="送风温度2(℃)"        width="120" show-overflow-tooltip />
+                    <el-table-column prop="dwcf_op_tm1"     label="冷凝运行时间1(秒)"   width="150" show-overflow-tooltip />
+                    <el-table-column prop="dwcf_op_tm2"     label="冷凝运行时间2(秒)"   width="150" show-overflow-tooltip />
+                    <el-table-column prop="dwcp_op_tm1"     label="压缩机时间1(秒)"     width="135" show-overflow-tooltip />
+                    <el-table-column prop="dwcp_op_tm2"     label="压缩机时间2(秒)"     width="135" show-overflow-tooltip />
+                    <el-table-column prop="dwexufan_op_tm"  label="废排风机时间(秒)"    width="135" show-overflow-tooltip />
+                    <el-table-column prop="dwfad_op_cnt"    label="新风阀开度(%)"       width="120" show-overflow-tooltip />
+                    <el-table-column prop="dwrad_op_cnt"    label="回风阀开度(%)"       width="120" show-overflow-tooltip />
+                    <el-table-column prop="dmp_exu_pos"     label="废排风阀开度(%)"     width="130" show-overflow-tooltip />
+                    <el-table-column prop="start_station"   label="起始站"              width="110" show-overflow-tooltip>
+                        <template #default="s">{{ getStationName(s.row.line_id, s.row.start_station) }}</template>
+                    </el-table-column>
+                    <el-table-column prop="terminal_station" label="终点站"             width="110" show-overflow-tooltip>
+                        <template #default="s">{{ getStationName(s.row.line_id, s.row.terminal_station) }}</template>
+                    </el-table-column>
+                    <el-table-column prop="cur_station"     label="当前站"              width="110" show-overflow-tooltip>
+                        <template #default="s">{{ getStationName(s.row.line_id, s.row.cur_station) }}</template>
+                    </el-table-column>
+                    <el-table-column prop="next_station"    label="下一站"              width="110" show-overflow-tooltip>
+                        <template #default="s">{{ getStationName(s.row.line_id, s.row.next_station) }}</template>
+                    </el-table-column>
+                    <el-table-column prop="event_time"      label="设备上报时间"        width="185" fixed="right" show-overflow-tooltip />
                 </el-table>
 
                 <div class="detail-pagination">
@@ -121,6 +142,7 @@ import dayjs from 'dayjs'
 import { ElMessage } from 'element-plus'
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
+import { getStationName } from '@/config/stationMap.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -130,6 +152,7 @@ const CARRIAGE_MAP = { '1':'TC1','2':'MP1','3':'M1','4':'M2','5':'MP2','6':'TC2'
 const filterForm = reactive({
     trainNo: String(route.query.trainNo || '7001'),
     carriageNo: String(route.query.trainCoach || '1'),
+    unitName: '',
     timeRange: [
         dayjs().subtract(24, 'hour').format('YYYY-MM-DD HH:mm:ss'),
         dayjs().format('YYYY-MM-DD HH:mm:ss')
@@ -150,6 +173,19 @@ const carriageList = ref(Array.from({ length: 6 }, (_, i) => ({
     label: CARRIAGE_MAP[String(i + 1)] || `${i + 1}车厢`
 })))
 
+// 时间范围最多 7 天：记录用户点击的第一个日期，用于限制另一侧
+const pickerFirstDate = ref(null)
+const disabledDate = (time) => {
+    if (!pickerFirstDate.value) return false
+    const first = dayjs(pickerFirstDate.value)
+    const min = first.subtract(7, 'day').startOf('day')
+    const max = first.add(7, 'day').endOf('day')
+    return time.getTime() < min.valueOf() || time.getTime() > max.valueOf()
+}
+const onCalendarChange = ([start]) => {
+    pickerFirstDate.value = start || null
+}
+
 const loading = ref(false)
 const downloading = ref(false)
 const detailList = ref([])
@@ -164,6 +200,14 @@ const handleQuery = () => {
 
 const fetchDetailData = async () => {
     if (!filterForm.timeRange || filterForm.timeRange.length < 2) return
+
+    // 一周限制校验
+    const diff = dayjs(filterForm.timeRange[1]).diff(dayjs(filterForm.timeRange[0]), 'day', true)
+    if (diff > 7) {
+        ElMessage.warning('时间范围最多 7 天，请重新选择')
+        return
+    }
+
     loading.value = true
     try {
         const carriageStr = String(filterForm.carriageNo).replace(/^0+/, '').padStart(2, '0')
@@ -172,6 +216,7 @@ const fetchDetailData = async () => {
             state: fullCarId,
             startTime: filterForm.timeRange[0],
             endTime: filterForm.timeRange[1],
+            unitName: filterForm.unitName || '',
             page: detailPage.value,
             limit: detailPageSize.value
         })
@@ -192,16 +237,17 @@ const fetchDetailData = async () => {
 const CSV_HEADERS = [
     '序号','列车号','车厢','机组',
     '室内温度(℃)','新风温度(℃)','设定温度(℃)','湿度(%)','CO₂(ppm)',
-    '工作状态','通风机运行时间',
+    '工作状态','通风机运行时间(秒)',
     '冷凝风机电流1(A)','冷凝风机电流2(A)',
     '压缩机电流1(A)','压缩机电流2(A)',
     '压缩机频率1(Hz)','压缩机频率2(Hz)',
     '送风机电流1(A)','送风机电流2(A)',
     '高压1(bar)','低压1(bar)','高压2(bar)','低压2(bar)',
     '送风温度1(℃)','送风温度2(℃)',
-    '冷凝运行时间1','冷凝运行时间2',
-    '压缩机时间1','压缩机时间2',
-    '废排风机时间','新风阀开度(%)','回风阀开度(%)',
+    '冷凝运行时间1(秒)','冷凝运行时间2(秒)',
+    '压缩机时间1(秒)','压缩机时间2(秒)',
+    '废排风机时间(秒)','新风阀开度(%)','回风阀开度(%)',
+    '废排风阀开度(%)','起始站','终点站','当前站','下一站',
     '设备上报时间'
 ]
 
@@ -218,6 +264,11 @@ const rowToCsv = (row, idx) => {
         row.i_sat1, row.i_sat2,
         row.dwcf_op_tm1, row.dwcf_op_tm2, row.dwcp_op_tm1, row.dwcp_op_tm2,
         row.dwexufan_op_tm, row.dwfad_op_cnt, row.dwrad_op_cnt,
+        row.dmp_exu_pos,
+        getStationName(row.line_id, row.start_station),
+        getStationName(row.line_id, row.terminal_station),
+        getStationName(row.line_id, row.cur_station),
+        getStationName(row.line_id, row.next_station),
         row.event_time
     ]
     return fields.map(v => (v == null ? '' : `"${String(v).replace(/"/g, '""')}"`)).join(',')
@@ -225,22 +276,33 @@ const rowToCsv = (row, idx) => {
 
 const handleDownload = async () => {
     if (!filterForm.timeRange || filterForm.timeRange.length < 2) return
+
+    const diff = dayjs(filterForm.timeRange[1]).diff(dayjs(filterForm.timeRange[0]), 'day', true)
+    if (diff > 7) {
+        ElMessage.warning('时间范围最多 7 天，请重新选择')
+        return
+    }
+
     downloading.value = true
     try {
         const carriageStr = String(filterForm.carriageNo).replace(/^0+/, '').padStart(2, '0')
         const fullCarId = `${filterForm.trainNo}${carriageStr}`
         let page = 1; let allRows = []
         while (true) {
-            const res = await getTrainDataApi({ state: fullCarId,
-                startTime: filterForm.timeRange[0], endTime: filterForm.timeRange[1],
-                page, limit: 500 })
+            const res = await getTrainDataApi({
+                state: fullCarId,
+                startTime: filterForm.timeRange[0],
+                endTime: filterForm.timeRange[1],
+                unitName: filterForm.unitName || '',
+                page, limit: 500
+            })
             const batch = res?.data?.list || []
             allRows = allRows.concat(batch)
             if (allRows.length >= (res?.data?.total || 0) || batch.length < 500 || page >= 20) break
             page++
         }
         if (allRows.length === 0) { ElMessage.warning('暂无数据'); return }
-        const csv = '\ufeff' + CSV_HEADERS.join(',') + '\n' + allRows.map(rowToCsv).join('\n')
+        const csv = '﻿' + CSV_HEADERS.join(',') + '\n' + allRows.map(rowToCsv).join('\n')
         const zip = new JSZip()
         const fname = `历史数据_0${filterForm.trainNo}_${CARRIAGE_MAP[filterForm.carriageNo]||filterForm.carriageNo}_${dayjs().format('YYYYMMDD')}.csv`
         zip.file(fname, csv)

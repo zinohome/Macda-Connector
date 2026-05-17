@@ -359,7 +359,7 @@ async function bootstrap() {
         // 历史数据接口 (适配 HistoryData 页面)
         // 每条 DB 记录按机组一/机组二拆成两行输出
         fastify.get('/api/getTrainData', async (request: any) => {
-            const { state, startTime, endTime, page = 1, limit = 50 } = request.query;
+            const { state, startTime, endTime, page = 1, limit = 50, unitName = '' } = request.query;
             const trainId = state ? parseInt(String(state).slice(0, 4)) : undefined;
             const carriageId = state ? parseInt(String(state).slice(4, 6)) : undefined;
 
@@ -425,6 +425,12 @@ async function bootstrap() {
 
                             dwfad_op_cnt: raw.FadposU1 ?? '',
                             dwrad_op_cnt: raw.RadposU1 ?? '',
+                            dmp_exu_pos: raw.DmpExuPos ?? '',
+                            start_station: raw.StartStation ?? '',
+                            terminal_station: raw.TerminalStation ?? '',
+                            cur_station: raw.CurStation ?? '',
+                            next_station: raw.NextStation ?? '',
+                            line_id: row.line_id ?? '',
                         };
 
                         // ── 机组二 (U2x) ─────────────────────────────────
@@ -468,12 +474,20 @@ async function bootstrap() {
 
                             dwfad_op_cnt: raw.FadposU2 ?? '',
                             dwrad_op_cnt: raw.RadposU2 ?? '',
+                            dmp_exu_pos: raw.DmpExuPos ?? '',
+                            start_station: raw.StartStation ?? '',
+                            terminal_station: raw.TerminalStation ?? '',
+                            cur_station: raw.CurStation ?? '',
+                            next_station: raw.NextStation ?? '',
+                            line_id: row.line_id ?? '',
                         };
 
-                        return [unit1, unit2];
+                        const unitFilter = String(unitName || '');
+                        const units = [unit1, unit2];
+                        return unitFilter ? units.filter(u => u.unit_name === unitFilter) : units;
                     }),
-                    // 每条 DB 记录拆成 2 行，总数同步 ×2
-                    total: result.total * 2
+                    // 如果按机组过滤则每条 DB 记录只出一行，总数不需要 ×2
+                    total: unitName ? result.total : result.total * 2
                 }
             };
         });
