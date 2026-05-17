@@ -400,7 +400,7 @@ services:
       - macdanet
 
   nb67-web:
-    image: harbor.naivehero.top:8443/macda2/nb67-web:v2.5.0
+    image: harbor.naivehero.top:8443/macda2/nb67-web:v2.5.3
     container_name: nb67-web
     hostname: nb67-web
     restart: unless-stopped
@@ -418,7 +418,7 @@ services:
       - macdanet
 
   nb67-bff:
-    image: harbor.naivehero.top:8443/macda2/nb67-bff:v2.5.0
+    image: harbor.naivehero.top:8443/macda2/nb67-bff:v2.5.3
     container_name: nb67-bff
     hostname: nb67-bff
     restart: unless-stopped
