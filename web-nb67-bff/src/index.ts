@@ -281,10 +281,11 @@ async function bootstrap() {
                 };
 
                 const list = (result.list || []).map((row: any) => {
-                    let level = '一般';
+                    // 报警严重级别：参考 alertcode level 列，1→正常 2→中等 3→严重
+                    let level = '正常';
                     if (row.severity === 3) level = '严重';
-                    else if (row.severity === 2) level = '一般';
-                    else if (row.severity === 1) level = '轻微';
+                    else if (row.severity === 2) level = '中等';
+                    else if (row.severity === 1) level = '正常';
 
                     return {
                         train_id: row.train_id,
@@ -542,7 +543,8 @@ async function bootstrap() {
 
             const headers = ['列车号','车厢','机组','严重级别','故障详情','开始时间','结束时间','状态'];
             const rows = result.list.map((r: any) => {
-                const level = r.severity === 3 ? '严重' : r.severity === 2 ? '一般' : '轻微';
+                // 报警导出 severity：1→正常 2→中等 3→严重
+                const level = r.severity === 3 ? '严重' : r.severity === 2 ? '中等' : '正常';
                 return [
                     `0${r.train_id}`,
                     CARRIAGE_MAP[String(r.carriage_id)] || r.carriage_id,
@@ -635,11 +637,11 @@ async function bootstrap() {
                     train_id: row.train_id,
                     carriage_no: CARRIAGE_MAP[String(row.carriage_id)] || row.carriage_id,
                     unit_name: formatUnit(row.fault_code || ''),
-                    severity: row.severity === 3 ? '严重' : row.severity === 2 ? '一般' : '轻微',
+                    severity: '轻微',  // 预警严重级别固定为"轻微"
                     warn_name: row.fault_name,
                     fault_code: row.fault_code,
                     trigger_condition: getTriggerCondition(row),
-                    start_time: formatTime(row[config.runtime === 'DEV' ? 'ingest_time' : 'event_time']),
+                    start_time: formatTime(row.event_time),  // 始终用 event_time（实际触发时间）
                     end_time: row.recovery_time ? formatTime(row.recovery_time) : null,
                 }));
 
@@ -667,15 +669,14 @@ async function bootstrap() {
             const formatUnit = (code: string) => code?.toLowerCase().includes('u2') ? '机组二' : code?.toLowerCase().includes('u1') ? '机组一' : '-';
             const headers = ['列车号','车厢','机组','严重级别','预警名称','触发条件','开始时间','结束时间'];
             const rows = result.list.map((r: any) => {
-                const level = r.severity === 3 ? '严重' : r.severity === 2 ? '一般' : '轻微';
                 return [
                     `0${r.train_id}`,
                     CARRIAGE_MAP[String(r.carriage_id)] || r.carriage_id,
                     formatUnit(r.fault_code),
-                    level,
+                    '轻微',  // 预警严重级别固定为"轻微"
                     r.fault_name || '',
                     r.trigger_condition || '',
-                    formatTime(r[config.runtime === 'DEV' ? 'ingest_time' : 'event_time']),
+                    formatTime(r.event_time),  // 始终用 event_time（实际触发时间）
                     r.recovery_time ? formatTime(r.recovery_time) : ''
                 ].map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(',');
             });

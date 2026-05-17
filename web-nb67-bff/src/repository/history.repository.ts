@@ -134,31 +134,52 @@ export class HistoryRepository {
     ) {
         const startTime = new Date(triggerTime.getTime() - 30 * 60 * 1000);
 
-        // 根据 warn_code 确定展示哪些参数
-        const paramsByWarnCode: Record<string, string[]> = {
-            WARN_CABIN_OVERHEAT:   ['ras_u1', 'ras_u2', 'fas_u1', 'fas_u2', 'tic'],
-            WARN_REFRIGERANT_LEAK: ['suckp_u11', 'suckp_u21', 'highpress_u11', 'highpress_u21'],
-            WARN_COOLING_SYSTEM:   ['i_cp_u11', 'i_cp_u21', 'f_cp_u11', 'f_cp_u21'],
-            WARN_TEMP_SENSOR:      ['fas_u1', 'fas_u2', 'ras_u1', 'ras_u2'],
-            WARN_FILTER_CLOG:      ['presdiff_u1', 'presdiff_u2'],
-            WARN_EF_CURRENT:       ['ras_u1', 'ras_u2'],
-            WARN_CF_CURRENT:       ['ras_u1', 'ras_u2'],
-            WARN_EXUF_CURRENT:     ['ras_u1', 'ras_u2'],
-            WARN_CP_CURRENT:       ['i_cp_u11', 'i_cp_u21', 'fas_u1', 'fas_u2'],
-            WARN_AQ_CO2:           ['aq_co2_u1', 'aq_co2_u2'],
-            WARN_AQ_PM25:          ['aq_pm2_5_u1', 'aq_pm2_5_u2'],
-            WARN_AQ_PM10:          ['aq_pm10_u1', 'aq_pm10_u2'],
-            WARN_AQ_TVOC:          ['aq_tvoc_u1', 'aq_tvoc_u2'],
+        // HVAC 预警码格式：HVAC{carriage_id*100+seq}，seq%100 还原类型号
+        // 根据 seq 决定显示哪些相关参数，让趋势图与预警判断逻辑对应
+        const paramsBySeq: Record<number, string[]> = {
+            1:  ['suckp_u11', 'suckp_u12', 'highpress_u11', 'highpress_u12'],  // 机组1冷媒泄漏
+            2:  ['suckp_u11', 'suckp_u12', 'highpress_u11', 'highpress_u12'],
+            3:  ['suckp_u21', 'suckp_u22', 'highpress_u21', 'highpress_u22'],  // 机组2冷媒泄漏
+            4:  ['suckp_u21', 'suckp_u22', 'highpress_u21', 'highpress_u22'],
+            5:  ['i_cp_u11', 'i_cp_u12', 'f_cp_u11', 'f_cp_u12'],              // 机组1制冷系统
+            6:  ['i_cp_u21', 'i_cp_u22', 'f_cp_u21', 'f_cp_u22'],              // 机组2制冷系统
+            7:  ['fas_u1', 'fas_u2'],                                           // 新风温度差传感器
+            8:  ['ras_u1', 'ras_u2'],                                           // 回风温度差传感器
+            9:  ['ras_u1', 'ras_u2', 'tic'],                                   // 车厢超温
+            10: ['presdiff_u1'],                                                // 机组1滤网脏堵
+            11: ['presdiff_u2'],                                                // 机组2滤网脏堵
+            12: ['i_ef_u11', 'i_ef_u12'],                                       // 机组1通风机电流
+            13: ['i_ef_u11', 'i_ef_u12'],
+            14: ['i_ef_u21', 'i_ef_u22'],                                       // 机组2通风机电流
+            15: ['i_ef_u21', 'i_ef_u22'],
+            16: ['i_cf_u11', 'i_cf_u12'],                                       // 机组1冷凝风机电流
+            17: ['i_cf_u11', 'i_cf_u12'],
+            18: ['i_cf_u21', 'i_cf_u22'],                                       // 机组2冷凝风机电流
+            19: ['i_cf_u21', 'i_cf_u22'],
+            20: ['i_exufan'],                                                   // 废排风机电流
+            21: ['i_cp_u11', 'i_cp_u12', 'fas_u1'],                            // 机组1压缩机电流
+            22: ['i_cp_u11', 'i_cp_u12', 'fas_u1'],
+            23: ['i_cp_u21', 'i_cp_u22', 'fas_u2'],                            // 机组2压缩机电流
+            24: ['i_cp_u21', 'i_cp_u22', 'fas_u2'],
+            25: ['aq_co2_u1', 'aq_pm2_5_u1', 'aq_tvoc_u1'],                   // 机组1空气质量
+            26: ['aq_co2_u2', 'aq_pm2_5_u2', 'aq_tvoc_u2'],                   // 机组2空气质量
         };
 
-        const params = paramsByWarnCode[warnCode] || ['ras_u1', 'fas_u1', 'tic'];
+        let params: string[];
+        const hvacMatch = warnCode.match(/^HVAC(\d+)$/i);
+        if (hvacMatch && hvacMatch[1]) {
+            const seq = parseInt(hvacMatch[1]) % 100;
+            params = paramsBySeq[seq] || ['ras_u1', 'fas_u1', 'tic'];
+        } else {
+            params = ['ras_u1', 'fas_u1', 'tic'];
+        }
         const validParams = params.filter(p => TREND_PARAM_DEFS[p]);
 
         const selects: any[] = [
             sql.raw(this.timeCol).as('bucket'),
         ];
         for (const key of validParams) {
-            const def = TREND_PARAM_DEFS[key];
+            const def = TREND_PARAM_DEFS[key]!;
             const colExpr = def.col.includes("->")
                 ? `(${def.col})::numeric`
                 : `${def.col}::numeric`;
