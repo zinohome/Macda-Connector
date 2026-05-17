@@ -599,7 +599,34 @@ export class StatusRepository {
         }
 
         const filteredTotal = list.length;
-        const paginated = list.slice(offset, offset + limit);
+
+        // 计算每行的"发作起始时间"：同一故障连续触发共享同一 start_time，60s 无触发视为新的发作序列
+        const GAP_MS = 60_000;
+        const tCol = this.timeCol;
+        const asc = [...list].sort((a: any, b: any) => {
+            const ka = `${a.train_id}:${a.carriage_id}:${a.fault_code}`;
+            const kb = `${b.train_id}:${b.carriage_id}:${b.fault_code}`;
+            if (ka !== kb) return ka.localeCompare(kb);
+            return new Date(a[tCol]).getTime() - new Date(b[tCol]).getTime();
+        });
+        const startByRow = new Map<any, Date>();
+        const islandStart: Record<string, Date> = {};
+        const lastSeen: Record<string, number> = {};
+        for (const row of asc) {
+            const k = `${(row as any).train_id}:${(row as any).carriage_id}:${(row as any).fault_code}`;
+            const t = new Date((row as any)[tCol]).getTime();
+            const prev = lastSeen[k];
+            if (prev === undefined || t - prev > GAP_MS) {
+                islandStart[k] = new Date(t);
+            }
+            lastSeen[k] = t;
+            startByRow.set(row, islandStart[k]!);
+        }
+
+        const paginated = list.slice(offset, offset + limit).map((row: any) => ({
+            ...row,
+            occurrence_start: startByRow.get(row) ?? new Date((row as any)[tCol]),
+        }));
 
         return { list: paginated, total: filteredTotal };
     }

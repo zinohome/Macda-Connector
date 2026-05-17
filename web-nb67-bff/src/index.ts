@@ -641,7 +641,7 @@ async function bootstrap() {
                     warn_name: row.fault_name,
                     fault_code: row.fault_code,
                     trigger_condition: getTriggerCondition(row),
-                    start_time: formatTime(row.event_time),  // 始终用 event_time（实际触发时间）
+                    start_time: formatTime(row.occurrence_start ?? row[config.runtime === 'DEV' ? 'ingest_time' : 'event_time']),
                     end_time: row.recovery_time ? formatTime(row.recovery_time) : null,
                 }));
 
@@ -676,7 +676,7 @@ async function bootstrap() {
                     '轻微',  // 预警严重级别固定为"轻微"
                     r.fault_name || '',
                     r.trigger_condition || '',
-                    formatTime(r.event_time),  // 始终用 event_time（实际触发时间）
+                    formatTime(r.occurrence_start ?? r[config.runtime === 'DEV' ? 'ingest_time' : 'event_time']),
                     r.recovery_time ? formatTime(r.recovery_time) : ''
                 ].map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(',');
             });
