@@ -176,15 +176,18 @@ export class HistoryRepository {
         }
         const validParams = params.filter(p => TREND_PARAM_DEFS[p]);
 
+        // 使用 time_bucket 聚合，确保2小时窗口完整展示
+        // 10秒桶 → 2小时最多720个点，不受 LIMIT 截断影响
+        const bucketSize = '10 seconds';
         const selects: any[] = [
-            sql.raw(this.timeCol).as('bucket'),
+            sql.raw(`time_bucket('${bucketSize}', ${this.timeCol})`).as('bucket'),
         ];
         for (const key of validParams) {
             const def = TREND_PARAM_DEFS[key]!;
             const colExpr = def.col.includes("->")
                 ? `(${def.col})::numeric`
                 : `${def.col}::numeric`;
-            selects.push(sql.raw(`ROUND(${colExpr} / ${def.scale}, 1)`).as(key));
+            selects.push(sql.raw(`ROUND(AVG(${colExpr}) / ${def.scale}, 1)`).as(key));
         }
 
         const rows = await db
@@ -194,8 +197,8 @@ export class HistoryRepository {
             .where('carriage_id', '=', carriageId)
             .where(this.timeCol as any, '>=', startTime)
             .where(this.timeCol as any, '<=', endTime)
-            .orderBy(this.timeCol as any, 'asc')
-            .limit(2000)
+            .groupBy('bucket')
+            .orderBy('bucket', 'asc')
             .execute();
 
         return {
