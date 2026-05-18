@@ -96,7 +96,7 @@
             <div v-loading="detailLoading" style="height:360px;position:relative">
                 <div ref="detailChartRef" style="width:100%;height:100%"></div>
                 <div v-if="!detailHasData" style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#676e82">
-                    <img src="/img/no-data.svg" width="50" /><p style="margin-top:10px">暂无触发前历史数据</p>
+                    <img src="/img/no-data.svg" width="50" /><p style="margin-top:10px">该时间段（预警前后各1小时）暂无数据</p>
                 </div>
             </div>
         </el-dialog>
@@ -202,18 +202,34 @@ const showDetail = async (row) => {
         })
         if (res?.code === 200 && res.data?.data?.length > 0) {
             detailHasData.value = true
-            const { params, data } = res.data
+            const { params, data, triggerTime } = res.data
             const timeAxis = data.map(d => {
                 const t = new Date(d.bucket)
                 return `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`
             })
+            // 找最接近预警时刻的 x 轴索引，用于标注竖线
+            const triggerLabel = (() => {
+                const t = new Date(triggerTime || row.start_time)
+                return `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`
+            })()
+            let triggerIdx = timeAxis.findIndex(l => l >= triggerLabel)
+            if (triggerIdx === -1) triggerIdx = timeAxis.length - 1
             const series = params.map((p, i) => ({
                 name: p.label,
                 type: 'line',
                 smooth: true,
                 showSymbol: false,
                 data: data.map(d => d[p.key] ?? null),
-                lineStyle: { color: COLORS[i % COLORS.length], width: 2 }
+                lineStyle: { color: COLORS[i % COLORS.length], width: 2 },
+                ...(i === 0 ? {
+                    markLine: {
+                        silent: true,
+                        data: [{ xAxis: triggerIdx }],
+                        lineStyle: { color: '#e65355', type: 'dashed', width: 2 },
+                        label: { show: true, formatter: '预警时刻', color: '#e65355', position: 'insideEndTop', fontSize: 11 },
+                        symbol: ['none', 'none']
+                    }
+                } : {})
             }))
             nextTick(() => {
                 if (!detailChart && detailChartRef.value) detailChart = echarts.init(detailChartRef.value)

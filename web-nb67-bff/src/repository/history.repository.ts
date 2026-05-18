@@ -125,14 +125,15 @@ export class HistoryRepository {
             .execute();
     }
 
-    // B5: 预警触发前30分钟参数曲线（固定查与该预警相关的参数）
+    // B5: 预警发生时间前后各1小时参数曲线（固定查与该预警相关的参数）
     static async getPredictDetailCurve(
         trainId: number,
         carriageId: number,
         triggerTime: Date,
         warnCode: string
     ) {
-        const startTime = new Date(triggerTime.getTime() - 30 * 60 * 1000);
+        const startTime = new Date(triggerTime.getTime() - 60 * 60 * 1000);
+        const endTime   = new Date(triggerTime.getTime() + 60 * 60 * 1000);
 
         // HVAC 预警码格式：HVAC{carriage_id*100+seq}，seq%100 还原类型号
         // 根据 seq 决定显示哪些相关参数，让趋势图与预警判断逻辑对应
@@ -192,13 +193,14 @@ export class HistoryRepository {
             .where('train_id', '=', trainId)
             .where('carriage_id', '=', carriageId)
             .where(this.timeCol as any, '>=', startTime)
-            .where(this.timeCol as any, '<=', triggerTime)
+            .where(this.timeCol as any, '<=', endTime)
             .orderBy(this.timeCol as any, 'asc')
-            .limit(500)
+            .limit(2000)
             .execute();
 
         return {
             params: validParams.map(k => ({ key: k, ...TREND_PARAM_DEFS[k] })),
+            triggerTime: triggerTime.toISOString(),
             data: rows,
         };
     }
