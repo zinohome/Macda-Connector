@@ -43,8 +43,8 @@ IMAGES=(
     "harbor.naivehero.top:8443/macda2/storage-adapter:v2.1.2"
 
     # ── 前端应用 ──────────────────────────────────────────────
-    "harbor.naivehero.top:8443/macda2/nb67-bff:v2.5.0"
-    "harbor.naivehero.top:8443/macda2/nb67-web:v2.5.0"
+    "harbor.naivehero.top:8443/macda2/nb67-bff:v2.5.11"
+    "harbor.naivehero.top:8443/macda2/nb67-web:v2.5.12"
 
     # ── 地面平台报送服务 ──────────────────────────────────────
     "harbor.naivehero.top:8443/macda2/ground-reporter:v2.5.0"
