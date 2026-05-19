@@ -14,7 +14,7 @@ services:
 
   # ── 前端服务：Vue3 SPA + Nginx ───────────────────────────────
   nb67-web:
-    image: harbor.naivehero.top:8443/macda2/nb67-web:v2.5.11
+    image: harbor.naivehero.top:8443/macda2/nb67-web:v2.5.12
     container_name: nb67-web
     hostname: nb67-web
     restart: unless-stopped
