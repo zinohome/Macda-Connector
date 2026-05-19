@@ -47,7 +47,8 @@ import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { getRunningState } from '@/api/api'
 
 const props = defineProps({
-    trainId: { type: String, default: '' }
+    trainId:   { type: String, default: '' },
+    isOffline: { type: Boolean, default: false }
 })
 
 const rawData = ref([])
@@ -169,7 +170,15 @@ const fetchData = () => {
 
 watch(() => props.trainId, () => {
     rawData.value = [] // ID 变化时可以置空
-    fetchData()
+    if (!props.isOffline) fetchData()
+})
+
+watch(() => props.isOffline, (offline) => {
+    if (offline) {
+        rawData.value = [] // 离线时清空运行状态数据
+    } else {
+        fetchData() // 恢复在线时重新拉取
+    }
 })
 
 import { MONITOR_CONFIG } from '@/config/monitorConfig.js'

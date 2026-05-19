@@ -35,7 +35,8 @@ import { gettemperature } from '@/api/api.js'
 import trainUnitMapData from "./trainUnitMapData.vue";
 
 const props = defineProps({
-    carriageId: { type: String, default: '' }
+    carriageId: { type: String, default: '' },
+    isOffline:  { type: Boolean, default: false }
 })
 
 const selectedUnit = ref(1)
@@ -70,7 +71,15 @@ const fetchData = () => {
 watch(() => props.carriageId, () => {
     selectedUnit.value = 1
     crewDetails.value = {} // 车厢切换时重置
-    fetchData()
+    if (!props.isOffline) fetchData()
+})
+
+watch(() => props.isOffline, (offline) => {
+    if (offline) {
+        crewDetails.value = {} // 离线时清空所有显示数据
+    } else {
+        fetchData() // 恢复在线时重新拉取
+    }
 })
 
 import { MONITOR_CONFIG } from '@/config/monitorConfig.js'

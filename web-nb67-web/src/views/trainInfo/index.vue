@@ -27,6 +27,12 @@
             </div>
         </div>
 
+        <!-- 离线状态横幅 -->
+        <div v-if="isOffline" class="offline-banner">
+            <el-icon class="offline-icon"><WarningFilled /></el-icon>
+            列车离线 — 超过 5 分钟未收到数据，以下所有监测值已清除
+        </div>
+
         <div class="monitor-container">
             <!-- 2. 全车概览 (固定在顶部) -->
             <div class="section-box sticky-section">
@@ -35,12 +41,12 @@
 
             <!-- 3. 运行参数 (全车6节) -->
             <div class="section-box">
-                <RunState :trainId="currentTrainNo" />
+                <RunState :trainId="currentTrainNo" :isOffline="isOffline" />
             </div>
 
             <!-- 4. 机组原理图 -->
             <div class="section-box">
-                <TrainUnitMap :carriageId="fullCarriageId" />
+                <TrainUnitMap :carriageId="fullCarriageId" :isOffline="isOffline" />
             </div>
 
             <!-- 5. 健康评估信息 -->
@@ -94,7 +100,8 @@ import {
     getRealtimeAlarm,
     getActiveCarApi,
     getAirSystemApi,
-    getTrainSelection
+    getTrainSelection,
+    getLatestDataTime
 } from '@/api/api'
 let route = useRoute()
 let router = useRouter()
@@ -133,6 +140,32 @@ let ActualWarningData = ref([]) //实时报警
 let StateWarningData = ref([]) //状态预警
 let RunStateData = ref([]) //运行状态信息
 let CarTemperatureData = ref([]) //车厢温度信息
+
+// 离线检测：5分钟无新数据视为离线
+const isOffline = ref(false)
+const OFFLINE_THRESHOLD_MS = 5 * 60 * 1000
+let offlineCheckTimer = null
+
+const checkOnlineStatus = async () => {
+    if (!currentTrainNo.value || !currentCarriageNo.value) return
+    try {
+        const res = await getLatestDataTime({
+            trainId: currentTrainNo.value,
+            carriageId: currentCarriageNo.value
+        })
+        if (res && res.code === 200) {
+            const latest = res.data?.latest_time
+            if (!latest) {
+                isOffline.value = true
+                return
+            }
+            const ageMs = Date.now() - new Date(latest).getTime()
+            isOffline.value = ageMs > OFFLINE_THRESHOLD_MS
+        }
+    } catch {
+        // 网络异常时保持当前状态
+    }
+}
 
 const getCarriageName = (no) => {
     const map = {
@@ -1575,6 +1608,12 @@ onMounted(() => {
         currentCarriageNo.value = '1'
     }
     getTrainApi()
+    checkOnlineStatus()
+    offlineCheckTimer = setInterval(checkOnlineStatus, 30_000)
+})
+
+onUnmounted(() => {
+    if (offlineCheckTimer) clearInterval(offlineCheckTimer)
 })
 
 let timer = setInterval(() => {
@@ -1632,6 +1671,21 @@ onUnmounted(() => {
             }
         }
     }
+}
+
+.offline-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 15px 0;
+    padding: 8px 16px;
+    background: rgba(230, 83, 85, 0.15);
+    border: 1px solid #e65355;
+    border-radius: 6px;
+    color: #e65355;
+    font-size: 14px;
+    font-weight: 500;
+    .offline-icon { font-size: 16px; }
 }
 
 .monitor-container {
