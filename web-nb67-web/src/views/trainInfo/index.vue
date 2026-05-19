@@ -141,21 +141,27 @@ const OFFLINE_THRESHOLD_MS = 5 * 60 * 1000
 let offlineCheckTimer = null
 
 const checkOnlineStatus = async () => {
-    if (!currentTrainNo.value || !currentCarriageNo.value) return
+    if (!currentTrainNo.value) return
     try {
-        const res = await getLatestDataTime({
-            trainId: currentTrainNo.value,
-            carriageId: currentCarriageNo.value
-        })
-        if (res && res.code === 200) {
-            const latest = res.data?.latest_time
-            if (!latest) {
-                isOffline.value = true
-                return
-            }
-            const ageMs = Date.now() - new Date(latest).getTime()
-            isOffline.value = ageMs > OFFLINE_THRESHOLD_MS
+        const res = await getRunningState(currentTrainNo.value)
+        const records = res?.vw_running_state_info || []
+        if (records.length === 0) {
+            isOffline.value = true
+            return
         }
+        let latestMs = 0
+        for (const r of records) {
+            const t = r.ingest_time
+            if (t) {
+                const ms = new Date(t).getTime()
+                if (ms > latestMs) latestMs = ms
+            }
+        }
+        if (latestMs === 0) {
+            isOffline.value = true
+            return
+        }
+        isOffline.value = Date.now() - latestMs > OFFLINE_THRESHOLD_MS
     } catch {
         // 网络异常时保持当前状态
     }
