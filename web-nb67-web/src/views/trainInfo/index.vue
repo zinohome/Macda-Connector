@@ -30,7 +30,7 @@
         <div class="monitor-container">
             <!-- 2. 全车概览 (固定在顶部) -->
             <div class="section-box sticky-section">
-                <CarCrew :trainId="currentTrainNo" :activeCarriage="currentCarriageNo" @select="handleCarSelect" />
+                <CarCrew :trainId="currentTrainNo" :activeCarriage="currentCarriageNo" :isOffline="isOffline" @select="handleCarSelect" />
             </div>
 
             <!-- 3. 运行参数 (全车6节) -->
@@ -45,7 +45,7 @@
 
             <!-- 5. 健康评估信息 -->
             <div class="section-box">
-                <Healthy :carriageId="fullCarriageId" />
+                <Healthy :carriageId="fullCarriageId" :isOffline="isOffline" />
             </div>
 
             <!-- 6. 预警中心 (左右分栏) -->
@@ -64,7 +64,7 @@
 
             <div class="monitor-container-bottom">
                 <div class="section-box chart-box">
-                    <Echart :carriageId="fullCarriageId" />
+                    <Echart :carriageId="fullCarriageId" :isOffline="isOffline" />
                 </div>
             </div>
 
@@ -174,6 +174,13 @@ const getCarriageName = (no) => {
 }
 
 // 计算过滤后的报警（仅限当前车厢，排除寿命预测预警）
+watch(isOffline, (offline) => {
+    if (offline) {
+        ActualWarningData.value = []
+        StateWarningData.value = []
+    }
+})
+
 const filteredActualAlarms = computed(() => {
     return ActualWarningData.value.filter(item => String(item.carriage_no) == String(currentCarriageNo.value))
 })
@@ -1496,6 +1503,11 @@ const gotoPath = (name) => {
 
 async function getTrainApi() {
     if (!currentTrainNo.value) return;
+    if (isOffline.value) {
+        ActualWarningData.value = []
+        StateWarningData.value = []
+        return
+    }
 
     const tNo = [currentTrainNo.value]
     const proposeAdvice = propose.concat(proposeWarn)

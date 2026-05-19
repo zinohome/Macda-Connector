@@ -34,12 +34,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { getTrainSelection } from '@/api/api'
 
 const props = defineProps({
     trainId: { type: String, default: '' },
-    activeCarriage: { type: String, default: '' }
+    activeCarriage: { type: String, default: '' },
+    isOffline: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['select'])
@@ -63,8 +64,11 @@ const handleSelect = (carriageId) => {
     emit('select', carriageId)
 }
 
+import { MONITOR_CONFIG } from '@/config/monitorConfig.js'
+let refreshTimer = null
+
 const fetchData = () => {
-    if (!props.trainId) return
+    if (props.isOffline || !props.trainId) return
     getTrainSelection(props.trainId).then((res) => {
         const statuses = res.vw_carriage_status || []
         const predicts = res.vw_carriage_predict_status || []
@@ -86,7 +90,26 @@ const fetchData = () => {
 
 watch(() => props.trainId, fetchData)
 
-onMounted(fetchData)
+watch(() => props.isOffline, (offline) => {
+    if (offline) {
+        trainSelectionData.value.forEach(car => {
+            car.hasData = false
+            car.alarm_count = 0
+            car.warning_count = 0
+        })
+    } else {
+        fetchData()
+    }
+})
+
+onMounted(() => {
+    fetchData()
+    refreshTimer = setInterval(fetchData, MONITOR_CONFIG.refreshInterval)
+})
+
+onUnmounted(() => {
+    if (refreshTimer) clearInterval(refreshTimer)
+})
 </script>
 
 <style scoped lang="scss">

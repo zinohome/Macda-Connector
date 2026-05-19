@@ -85,7 +85,8 @@ import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { getHealthAssessment } from '@/api/api'
 
 const props = defineProps({
-    carriageId: { type: String, default: '' }
+    carriageId: { type: String, default: '' },
+    isOffline: { type: Boolean, default: false }
 })
 
 const assessmentData = ref([])
@@ -121,7 +122,7 @@ const getSuggestion = (status) => {
 }
 
 const fetchData = () => {
-    if (!props.carriageId) return
+    if (props.isOffline || !props.carriageId) return
     getHealthAssessment(props.carriageId).then(res => {
         assessmentData.value = res.data || res.vw_health_assessment || []
     })
@@ -130,6 +131,14 @@ const fetchData = () => {
 watch(() => props.carriageId, () => {
     assessmentData.value = []
     fetchData()
+})
+
+watch(() => props.isOffline, (offline) => {
+    if (offline) {
+        assessmentData.value = []
+    } else {
+        fetchData()
+    }
 })
 
 

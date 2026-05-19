@@ -47,7 +47,8 @@ import * as echarts from 'echarts'
 import { getThDataByDvcAddrApi, getTrendParamsApi } from '@/api/api.js'
 
 const props = defineProps({
-    carriageId: { type: String, default: '' }
+    carriageId: { type: String, default: '' },
+    isOffline: { type: Boolean, default: false }
 })
 
 const chartRef = ref(null)
@@ -156,7 +157,7 @@ const buildChartOptions = (timeAxis, seriesList) => ({
 })
 
 const fetchData = async () => {
-    if (!props.carriageId) return
+    if (props.isOffline || !props.carriageId) return
     const params = selectedParams.value.length > 0 ? selectedParams.value : ['ras_u1', 'fas_u1', 'tic']
     const requestedTab = currentTab.value  // 捕获请求时的 tab，防止异步竞态
     try {
@@ -199,6 +200,15 @@ const fetchData = async () => {
 }
 
 watch(() => props.carriageId, () => fetchData())
+
+watch(() => props.isOffline, (offline) => {
+    if (offline) {
+        hasData.value = false
+        if (myChart) myChart.clear()
+    } else {
+        fetchData()
+    }
+})
 
 import { MONITOR_CONFIG } from '@/config/monitorConfig.js'
 
