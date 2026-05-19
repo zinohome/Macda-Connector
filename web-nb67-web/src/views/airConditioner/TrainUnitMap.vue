@@ -44,11 +44,7 @@ const crewDetails = ref({})
 let refreshTimer = null
 
 const fetchData = () => {
-    if (!props.carriageId) return
-    
-    // 1. 先重置数据，防止无数据时残留上一节车厢的旧数据
-    // crewDetails.value = {} // 自动刷新时不需要重置，避免闪烁
-
+    if (props.isOffline || !props.carriageId) return
     gettemperature(props.carriageId).then(res => {
         if (res && res.vw_system_info && res.vw_system_info.length > 0) {
             const raw = res.vw_system_info[0]

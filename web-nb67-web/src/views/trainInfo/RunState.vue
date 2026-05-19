@@ -160,8 +160,7 @@ const getValClass = (carIdx, pos, row) => {
 }
 
 const fetchData = () => {
-    // rawData.value = [] // 自动刷新建议不直接置空，避免闪烁
-    if (!props.trainId) return
+    if (props.isOffline || !props.trainId) return
     getRunningState(props.trainId).then(res => {
         rawData.value = res.vw_running_state_info || []
         console.log('[RunState] Data Updated:', rawData.value.length)

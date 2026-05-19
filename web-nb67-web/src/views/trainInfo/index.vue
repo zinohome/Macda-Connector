@@ -27,12 +27,6 @@
             </div>
         </div>
 
-        <!-- 离线状态横幅 -->
-        <div v-if="isOffline" class="offline-banner">
-            <el-icon class="offline-icon"><WarningFilled /></el-icon>
-            列车离线 — 超过 5 分钟未收到数据，以下所有监测值已清除
-        </div>
-
         <div class="monitor-container">
             <!-- 2. 全车概览 (固定在顶部) -->
             <div class="section-box sticky-section">
@@ -1673,20 +1667,6 @@ onUnmounted(() => {
     }
 }
 
-.offline-banner {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 6px 15px 0;
-    padding: 8px 16px;
-    background: rgba(230, 83, 85, 0.15);
-    border: 1px solid #e65355;
-    border-radius: 6px;
-    color: #e65355;
-    font-size: 14px;
-    font-weight: 500;
-    .offline-icon { font-size: 16px; }
-}
 
 .monitor-container {
     padding: 0 15px 10px 15px; // 移除顶部 10px 填充，消除粘性闪跳
