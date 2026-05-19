@@ -50,9 +50,9 @@ output:
       ) ON CONFLICT (device_id, event_time, ingest_time) DO NOTHING;
     args_mapping: |
       root = [
-        this.event_time_text,
-        this.ingest_time,
-        this.process_time,
+        this.event_time_text + "+08:00",
+        this.ingest_time.split("%").index(0) | now().ts_format("2006-01-02T15:04:05-07:00", "Asia/Shanghai"),
+        this.process_time.split("%").index(0) | now().ts_format("2006-01-02T15:04:05-07:00", "Asia/Shanghai"),
         this.event_time_valid,
         this.line_id,
         this.train_id,
