@@ -1,0 +1,67 @@
+version: '3.8'
+
+# =============================================================
+# MACDA Connector 地面平台报送环境
+# 包含服务：
+#   - ground-reporter : 向地面健康管理平台报送预警/报警/心跳/寿命数据
+#   - mock-platform   : 本地接收服务器（测试用），格式化打印收到的 JSON
+# 注意：
+#   - 基础设施（Redpanda、TimescaleDB）由 docker-compose-Data.yml 提供
+#   - 联调时将三个 *_URL 改为真实平台地址并填写 PLATFORM_API_KEY
+# =============================================================
+
+services:
+
+  ground-reporter:
+    image: harbor.naivehero.top:8443/macda2/ground-reporter:v2.5.0
+    container_name: ground-reporter
+    hostname: ground-reporter
+    restart: unless-stopped
+    environment:
+      - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
+      # 各协议章节上报接口（联调时填写真实地址；本地测试指向 mock-platform）
+      - FAULT_RECORD_URL=https://clznyw7.nbmetro.com/gate/METRO-PHM/api/faultRecordsSubsystem/saveRecord
+      - SYS_STATUS_URL=https://clznyw7.nbmetro.com/gate/METRO-SELFCHECK-SUBSYSTEM/api/faultRecordsSubsystem/saveStatus
+      - LIFE_RECORD_URL=https://clznyw7.nbmetro.com/gate/METRO-PHM/api/devices/status/train/saveOrUpdate
+      - PLATFORM_API_KEY=
+      - PLATFORM_TIMEOUT_SEC=10
+      - PLATFORM_RETRY_MAX=3
+      - PLATFORM_RETRY_BACKOFF_MS=1000
+      # 空调子系统标识（固定）
+      - SUBSYSTEM_CODE=5
+      - TRAIN_TYPE=B
+      # 心跳周期（分钟）与每日批量报送时刻（小时，0=凌晨）
+      - HEARTBEAT_INTERVAL_MIN=10
+      - DAILY_BATCH_HOUR=0
+      - LOG_LEVEL=INFO
+    depends_on:
+      mock-platform:
+        condition: service_healthy
+    networks:
+      - macdanet
+
+  mock-platform:
+    image: golang:1.24-alpine
+    container_name: mock-platform
+    hostname: mock-platform
+    restart: unless-stopped
+    working_dir: /app
+    command: go run main.go -port 8188
+    volumes:
+      - ${DATA_DIR}/connect/tests/mock-platform:/app:ro
+    ports:
+      - "18188:8188"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8188/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    networks:
+      - macdanet
+
+networks:
+  macdanet:
+    external: true
+    name: macdanet
+    driver: bridge
