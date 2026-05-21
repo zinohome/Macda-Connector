@@ -1,203 +1,249 @@
 # MACDA-Connector
 
-> 地铁列车 HVAC 系统数据处理平台 - Redpanda Connect 技术研究与 Faust 迁移方案
+> 地铁列车 HVAC 系统遥测数据处理平台
+
+当前版本：**v2.5.12**（2026-05-21）
+
+---
 
 ## 项目概述
 
-本项目旨在研究和设计基于 **Redpanda Connect** 的现代化流处理架构，用于替代现有的 Faust-based 地铁 HVAC 遥测数据处理系统。
+MACDA-Connector 是一套用于地铁列车 HVAC（暖通空调）系统的实时遥测数据处理平台。系统基于 **Redpanda Connect（Go）** 构建流处理管道，将现场设备上报的 NB67 二进制协议帧解析、存储并生成运维事件，配合 Web 前后端提供实时监控、历史数据查询、预警管理等功能。
 
-### 核心目标
+**核心技术栈：**
 
-- 🔍 **技术评估**：研究 Redpanda Connect 在复杂二进制数据处理场景的可行性
-- 📊 **架构设计**：设计高性能、低成本的流处理架构
-- 🔄 **迁移策略**：制定从 Faust (Python) 到 Redpanda Connect (Go) 的完整迁移方案
-- 💰 **成本优化**：通过数据采样、存储优化实现 50-70% 成本降低
+| 层级 | 技术 |
+|------|------|
+| 消息队列 | Redpanda（Kafka 兼容，3 节点集群） |
+| 流处理 | Redpanda Connect + Go 自定义处理器 |
+| 数据库 | TimescaleDB（PostgreSQL 时序扩展） |
+| BFF | TypeScript / Fastify（REST + WebSocket） |
+| 前端 | Vue 3 / Vite / Element Plus / ECharts |
+| 容器化 | Docker Compose（开发 + 生产 + 离线部署） |
+
+---
 
 ## 系统架构
 
-### 当前系统 (Faust)
-- **技术栈**：Python + Faust + Kafka + TimescaleDB
-- **数据量**：560 设备 × 1 Hz = 560 msg/sec
-- **二进制格式**：NB67 (632 字节，200+ 字段)
-- **处理模式**：Parse → Store → Predict (3 个独立进程)
+```
+[ 现场设备 / Mock 信号源 ]
+         │  NB67 二进制帧 (462字节, 1Hz)
+         ▼
+   Redpanda 集群
+         │
+         ├─► connect-parser        ── NB67 解析 → signal-parsed (JSON, 180+字段)
+         │         │
+         │         ├─► connect-storage-writer ── 采样落盘 → signal-storage (10s间隔)
+         │         │         └─► connect-pg-writer ── 写入 TimescaleDB
+         │         │
+         │         └─► connect-event-builder  ── 告警/预测/寿命事件检测
+         │                   └─► connect-event-writer ── 写入 TimescaleDB
+         │
+   TimescaleDB
+         │
+   nb67-bff (Fastify REST + WebSocket)
+         │
+   nb67-web (Vue 3 前端)
+```
 
-### 目标系统 (Redpanda Connect)
-- **技术栈**：Go + Redpanda Connect + Redpanda + TimescaleDB
-- **预期性能**：5,000+ msg/sec (9x 提升)
-- **二进制解析**：Go 插件 + Kaitai Struct
-- **架构**：单二进制文件，多管道并行
+**双轨数据流：**
+- **全量轨**（`signal-parsed`）：用于实时告警检测，无采样
+- **采样轨**（`signal-storage`）：10 秒间隔采样，用于长期趋势存储，减少 90% 写入量
 
-## 项目结构
+---
+
+## 模块结构
 
 ```
 Macda-Connector/
-├── docs/                           # 研究文档
-│   ├── README.md                   # 文档导航
-│   ├── 01-redpanda-connect-overview.md              # Redpanda Connect 概述
-│   ├── 02-binary-data-processing-analysis.md        # 二进制数据处理分析
-│   ├── 03-timescaledb-integration.md                # TimescaleDB 集成方案
-│   ├── 04-architecture-feasibility-assessment.md    # 架构可行性评估
-│   ├── 05-simplified-go-plugin-architecture.md      # Go 插件架构（推荐）
-│   ├── 06-resource-estimation-capacity-planning.md  # 资源估算与容量规划
-│   ├── 07-optimized-sampling-strategy.md            # 数据采样优化策略
-│   ├── 08-storage-optimization-strategy.md          # 存储优化策略
-│   ├── 09-faust-implementation-analysis.md          # Faust 实现分析（英文）
-│   ├── 09-faust-implementation-analysis-cn.md       # Faust 实现分析（中文）
-│   ├── RESOURCE-QUICK-REF.md                        # 资源配置速查卡
-│   ├── SOLUTION-COMPARISON.md                       # 方案对比表
-│   └── FINAL-OPTIMIZED-CONFIG.md                    # 最终优化配置
-├── oldproj/                        # 旧版 Faust 实现（不包含在 Git）
-│   └── MACDA-NB67/                # 原 Python Faust 项目
-└── .gitignore                      # Git 忽略配置
+├── connect/                        # Go 流处理核心
+│   ├── cmd/connect-nb67/           # Redpanda Connect 自定义处理器（NB67解析、事件检测）
+│   ├── cmd/storage-adapter/        # Plan B 高性能直写方案（备用）
+│   ├── cmd/ground-reporter/        # 数据上报组件
+│   ├── codec/                      # NB67 协议定义（Kaitai Struct，SSOT）
+│   │   └── NB67.ksy                # ⚠️ 唯一真实来源，不可手工改生成文件
+│   ├── config/                     # Redpanda Connect 流水线 YAML 配置
+│   │   ├── nb67-parser.yaml
+│   │   ├── nb67-storage-writer.yaml
+│   │   ├── nb67-event-builder.yaml
+│   │   ├── nb67-event-writer.yaml
+│   │   └── nb67-pg-writer.yaml
+│   └── tests/                      # 测试脚本
+├── web-nb67-bff/                   # BFF 服务（TypeScript / Fastify）
+├── web-nb67-web/                   # 前端（Vue 3 / Element Plus / ECharts）
+│   └── src/views/                  # 页面：首页、列车详情、历史数据、历史告警/预警、预警配置等
+├── baseEnv/                        # 开发环境 Docker Compose 编排
+│   ├── docker-compose-mock.yml     # 网络创建 + Mock 数据源（必须首先启动）
+│   └── docker-compose-Dev.yml      # 完整全栈（基础设施 + 流水线 + Web）
+├── reportEnv/                      # 数据上报环境
+├── dist/                           # 离线部署包（客户生产环境）
+│   ├── install.sh                  # 初始化安装
+│   ├── start.sh                    # 一键启停
+│   ├── image-save.sh / image-load.sh  # 镜像打包/加载
+│   └── init-db/                    # SQL 初始化 + 历次迁移脚本
+├── deploy.sh                       # 快速部署脚本
+├── release.sh                      # 版本发布脚本
+├── build-and-push.sh               # 镜像构建推送（web/bff）
+└── docs/                           # 技术研究文档（架构评估、方案对比等）
 ```
 
-## 研究成果总结
+---
 
-### 📈 性能提升预期
+## 快速开始（开发环境）
 
-| 指标 | Faust (当前) | Redpanda Connect (预计) | 提升 |
-|------|--------------|------------------------|------|
-| **吞吐量** | 560 msg/sec | 5,000+ msg/sec | **9x** |
-| **延迟 (p99)** | ~500ms | ~100ms | **5x 更快** |
-| **内存用量** | ~500MB/实例 | ~150MB/实例 | **减少 70%** |
-| **CPU 用量** | 8-12 核 (3 进程) | 2-4 核 (1 进程) | **减少 60%** |
+### 前置依赖
 
-### 💰 成本优化策略
+- Docker + Docker Compose v2
+- Go 1.21+（仅 connect 模块本地构建时需要）
+- Node.js 18+（仅前端本地开发时需要）
 
-1. **数据采样优化** (07-optimized-sampling-strategy.md)
-   - 10 秒采样间隔 → 数据量减少 90%
-   - 混合管道：实时告警 + 采样存储
-   - **成本降低**：月成本从 $2,100 降至 $900 (云) / ¥14,000 降至 ¥6,500 (硬件)
+### 启动完整全栈
 
-2. **存储优化策略** (08-storage-optimization-strategy.md)
-   - Redpanda 保留期：7 天 → 24 小时
-   - TimescaleDB 保留期：永久 → 365 天 (原始数据)
-   - **存储减少**：91% (43.4 TB → 3.8 TB)
-   - **成本降低**：57% (云) / 54% (硬件)
+```bash
+cd baseEnv
 
-3. **最终优化配置** (FINAL-OPTIMIZED-CONFIG.md)
-   - **Redpanda**: 3 节点 × (2C4G + 50GB SSD)
-   - **Connect**: 2 实例 × (2C2G)
-   - **TimescaleDB**: 1 主节点 × (4C8G + 500GB SSD)
-   - **总成本**: $903/月 (云) / ¥6,520/月 (硬件)
+# 1. 创建 Docker 网络 + 启动 Mock 数据源
+docker compose -f docker-compose-mock.yml up -d
 
-### 🔑 关键技术决策
+# 2. 启动完整全栈（基础设施 + 流水线 + Web）
+docker compose -f docker-compose-Dev.yml up -d
+```
 
-1. **二进制解析方式** ✅ **Go 插件 + Kaitai Struct**
-   - 原因：NB67 格式复杂 (632 字节，200+ 字段)，Bloblang 不适合
-   - 优势：类型安全、高性能、单一 schema 来源
+启动后访问：
+- 前端：`http://localhost:3000`（或查看 Compose 文件中的具体端口）
+- BFF API：`http://localhost:3001`
 
-2. **故障预测逻辑位置** ✅ **分层实现**
-   - 简单阈值 → Bloblang (Connect 内)
-   - 多窗口聚合 → TimescaleDB 连续聚合
-   - 复杂规则 → PostgreSQL 存储过程
+### 动态扩容 connect-parser
 
-3. **有状态操作** ✅ **TimescaleDB 查询**
-   - 避免引入 Redis
-   - 利用现有 hypertable 索引
-   - 运维更简单
+```bash
+docker compose -f docker-compose-Dev.yml up -d --scale connect-parser=3
+```
 
-## 迁移计划
+### 仅更新 Web/BFF（不重启基础设施）
 
-### 时间线 (14 周 / ~3.5 个月)
-
-| 阶段 | 周数 | 关键交付 |
-|------|------|---------|
-| **阶段 1** | 2 周 | Go 插件开发 (NB67 解析器) |
-| **阶段 2** | 3 周 | 核心管道实现 (Parse, Store) |
-| **阶段 3** | 2 周 | 预测逻辑迁移 (26 种故障类型) |
-| **阶段 4** | 1 周 | 外部集成 (HTTP APIs) |
-| **阶段 5** | 4 周 | 并行测试 (影子模式) |
-| **阶段 6** | 2 周 | 逐步切换 + Faust 下线 |
-
-### 风险缓解
-
-- ✅ **二进制解析**：广泛单元测试
-- ✅ **预测准确性**：Faust/Connect 并排比较 1 个月
-- ✅ **性能验证**：2x 吞吐量负载测试 (1,000 msg/sec)
-- ✅ **外部 API**：重试逻辑 + 死信队列
-- ✅ **数据库连接**：连接池 + 熔断器
-
-## 快速开始
-
-### 阅读研究文档
-
-1. **入门**：从 [docs/README.md](docs/README.md) 开始
-2. **架构理解**：阅读 [05-simplified-go-plugin-architecture.md](docs/05-simplified-go-plugin-architecture.md)
-3. **Faust 对比**：阅读 [09-faust-implementation-analysis-cn.md](docs/09-faust-implementation-analysis-cn.md)
-4. **快速参考**：查看 [FINAL-OPTIMIZED-CONFIG.md](docs/FINAL-OPTIMIZED-CONFIG.md)
-
-### 核心文档导航
-
-- 🎯 **推荐方案**：[05-simplified-go-plugin-architecture.md](docs/05-simplified-go-plugin-architecture.md)
-- 💰 **成本优化**：[08-storage-optimization-strategy.md](docs/08-storage-optimization-strategy.md)
-- 📊 **容量规划**：[06-resource-estimation-capacity-planning.md](docs/06-resource-estimation-capacity-planning.md)
-- 🔄 **Faust 分析**：[09-faust-implementation-analysis-cn.md](docs/09-faust-implementation-analysis-cn.md)
-
-## 技术栈
-
-### 当前系统
-- **Stream Processing**: Faust (Python)
-- **Message Broker**: Apache Kafka
-- **Database**: TimescaleDB (PostgreSQL)
-- **Binary Parser**: Kaitai Struct (Python runtime)
-
-### 目标系统
-- **Stream Processing**: Redpanda Connect (Go)
-- **Message Broker**: Redpanda
-- **Database**: TimescaleDB (PostgreSQL)
-- **Binary Parser**: Kaitai Struct (Go plugin)
-- **Monitoring**: Prometheus + Grafana
-
-## 主要发现
-
-### ✅ 可行性确认
-
-Redpanda Connect **完全可行**用于此场景：
-- ✅ 支持复杂二进制解析 (通过 Go 插件)
-- ✅ 原生 TimescaleDB 集成 (`sql_insert` 输出)
-- ✅ 强大的批处理能力 (`batch_policy`)
-- ✅ 灵活的数据转换 (Bloblang DSL)
-- ✅ 内置监控 (Prometheus 指标)
-
-### 🎯 关键优势
-
-1. **性能**: 9x 吞吐量提升，5x 延迟降低
-2. **成本**: 50-70% 总成本降低
-3. **可维护性**: YAML 配置 vs 3,000+ 行 Python
-4. **可观测性**: 开箱即用的 Prometheus 指标
-5. **可扩展性**: 无状态设计，易于水平扩展
-
-### ⚠️ 挑战
-
-1. **Go 插件开发**: 需要 1-2 周开发 NB67 解析器
-2. **预测逻辑迁移**: 26 种规则需要转换为 Bloblang/SQL
-3. **测试验证**: 需要全面测试以匹配 Faust 行为
-4. **学习曲线**: 团队需要学习 Redpanda Connect YAML DSL
-
-## 贡献者
-
-- **研究与架构设计**: Google Deepmind Antigravity AI
-- **原 Faust 实现**: [MACDA-NB67 项目](oldproj/MACDA-NB67)
-- **业务场景**: 地铁列车 HVAC 系统监控
-
-## 许可证
-
-研究文档采用 MIT License。
-
-原 Faust 实现 (oldproj/) 版权归原作者所有。
+```bash
+docker stop nb67-web nb67-bff
+docker compose -f baseEnv/docker-compose-Prod.yml up -d
+```
 
 ---
 
-## 下一步行动
+## 本地开发
 
-1. ✅ 团队审查研究成果
-2. [ ] 原型 Go 插件 (NB67 解析器)
-3. [ ] 基准测试 Redpanda Connect
-4. [ ] 实现 POC 管道 (Parse 模式)
-5. [ ] 定义验收标准
-6. [ ] 启动阶段 1 迁移
+### connect-nb67（Go）
+
+```bash
+cd connect/cmd/connect-nb67
+
+# 构建（静态编译）
+CGO_ENABLED=0 go build -o connect-nb67 .
+
+# 运行
+./connect-nb67 -c ../../config/nb67-parser.yaml
+```
+
+### web-nb67-bff（TypeScript）
+
+```bash
+cd web-nb67-bff
+npm install
+npm run dev
+```
+
+### web-nb67-web（Vue 3）
+
+```bash
+cd web-nb67-web
+npm install
+npm run dev    # 开发服务器
+npm run build  # 生产构建
+```
+
+### 验证 NB67 解析
+
+```bash
+bash connect/tests/test-nb67-parsing.sh
+```
 
 ---
 
-*最后更新: 2026-02-17*
+## 镜像构建与发布
+
+```bash
+# 构建并推送 web + bff
+./build-and-push.sh v2.5.12
+
+# 仅构建 web 或 bff
+./build-and-push.sh v2.5.12 web
+./build-and-push.sh v2.5.12 bff
+
+# 构建 connect-nb67（linux/amd64）
+docker buildx build --platform linux/amd64 \
+  -f connect/Dockerfile.connect \
+  -t harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.x \
+  --push connect
+
+# 发版（更新 CHANGELOG + 打 tag）
+./release.sh prepare v2.5.13
+./release.sh publish
+```
+
+---
+
+## NB67 协议维护
+
+`connect/codec/NB67.ksy` 是协议定义的**唯一真实来源（SSOT）**。
+
+> ⚠️ `connect/cmd/connect-nb67/nb67.go` 和 `connect/codec/nb67.go` 均为 Kaitai 自动生成文件，**禁止手工修改**。
+
+修改协议字段时，按顺序执行：
+
+```bash
+# 修改 NB67.ksy 后重新生成 Go 代码
+kaitai-struct-compiler -t go codec/NB67.ksy -o connect/cmd/connect-nb67/
+```
+
+然后同步更新：`nb67_processor.go` → 存储映射 → API 契约 → 文档。
+
+---
+
+## 关键配置说明
+
+### RUNTIME（设备时钟策略）
+
+| 值 | 时间字段 | 适用场景 |
+|----|----------|----------|
+| `DEV` | `ingest_time`（服务器入库时间） | 现场设备时钟不可信（当前默认） |
+| `PRD` | `event_time`（设备上报时间） | 设备时钟已校准 |
+
+所有 Compose 文件默认设为 `DEV`，切换前需确认现场设备时钟精度。
+
+### Plan A / Plan B 存储方案
+
+- **Plan A（默认）**：`connect-pg-writer` 通过 Redpanda Connect SQL 插件直写 TimescaleDB
+- **Plan B（备用）**：`storage-adapter`（Go 原生），通过 `profiles: ["plan_b"]` 激活
+
+---
+
+## 生产部署（离线环境）
+
+详见 [dist/README.md](dist/README.md)。
+
+```bash
+# 有网络机器：拉取并打包镜像
+cd dist && bash image-save.sh
+
+# 离线服务器：加载镜像 + 初始化
+bash image-load.sh
+bash install.sh
+bash start.sh
+```
+
+---
+
+## 相关文档
+
+- [架构与研究文档](docs/README.md)
+- [Connect 模块说明](connect/README.md)
+- [部署手册](dist/README.md)
+- [Changelog](CHANGELOG.md)
