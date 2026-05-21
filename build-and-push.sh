@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # =============================================================
 # build-and-push.sh
-# MACDA Connector 前端镜像一键构建 & 推送脚本
+# MACDA Connector 镜像一键构建 & 推送脚本
 #
 # 用法:
 #   ./build-and-push.sh              # 构建并推送所有服务（使用默认版本）
 #   ./build-and-push.sh v1.2.0       # 构建并推送所有服务（指定版本）
 #   ./build-and-push.sh v1.2.0 web   # 只构建并推送 web 服务
 #   ./build-and-push.sh v1.2.0 bff   # 只构建并推送 bff 服务
+#   ./build-and-push.sh v1.2.0 reporter  # 只构建并推送 ground-reporter 服务
 # =============================================================
 
 set -euo pipefail  # 错误即退出，未定义变量报错，管道错误传递
@@ -24,10 +25,12 @@ PROJECT_ROOT="${SCRIPT_DIR}"
 # 各服务目录
 WEB_DIR="${PROJECT_ROOT}/web-nb67-web"
 BFF_DIR="${PROJECT_ROOT}/web-nb67-bff"
+CONNECT_DIR="${PROJECT_ROOT}/connect"
 
 # 镜像全名
 WEB_IMAGE="${REGISTRY}/nb67-web:${VERSION}"
 BFF_IMAGE="${REGISTRY}/nb67-bff:${VERSION}"
+REPORTER_IMAGE="${REGISTRY}/ground-reporter:${VERSION}"
 
 # ── 工具函数 ─────────────────────────────────────────────────
 log_info()  { echo -e "\033[0;32m[INFO]\033[0m  $*"; }
@@ -97,6 +100,27 @@ build_bff() {
     log_info "nb67-bff 构建完成 ✓"
 }
 
+# ── 构建 ground-reporter 镜像 ─────────────────────────────────
+build_reporter() {
+    log_step "构建 ground-reporter 镜像"
+
+    if [[ ! -d "${CONNECT_DIR}" ]]; then
+        log_error "目录不存在: ${CONNECT_DIR}"
+        exit 1
+    fi
+
+    log_info "镜像: ${REPORTER_IMAGE}"
+    log_info "构建上下文: ${CONNECT_DIR}"
+
+    docker build \
+        --platform linux/amd64 \
+        --tag "${REPORTER_IMAGE}" \
+        --file "${CONNECT_DIR}/Dockerfile.ground-reporter" \
+        "${CONNECT_DIR}"
+
+    log_info "ground-reporter 构建完成 ✓"
+}
+
 # ── 推送镜像到 Harbor ─────────────────────────────────────────
 push_image() {
     local image="$1"
@@ -121,6 +145,11 @@ print_summary() {
         echo "  BFF镜像:  ${BFF_IMAGE}"
         docker images "${BFF_IMAGE}" --format "           大小: {{.Size}}  创建: {{.CreatedAt}}" 2>/dev/null || true
     fi
+
+    if [[ "${TARGET}" == "all" || "${TARGET}" == "reporter" ]]; then
+        echo "  Reporter镜像: ${REPORTER_IMAGE}"
+        docker images "${REPORTER_IMAGE}" --format "           大小: {{.Size}}  创建: {{.CreatedAt}}" 2>/dev/null || true
+    fi
     
     echo ""
     echo "  部署命令:"
@@ -132,7 +161,7 @@ print_summary() {
 
 # ── 主流程 ───────────────────────────────────────────────────
 main() {
-    log_step "MACDA Connector 前端镜像构建"
+    log_step "MACDA Connector 镜像构建"
     
     check_prerequisites
     
@@ -140,8 +169,10 @@ main() {
         "all")
             build_web
             build_bff
+            build_reporter
             push_image "${WEB_IMAGE}"
             push_image "${BFF_IMAGE}"
+            push_image "${REPORTER_IMAGE}"
             ;;
         "web")
             build_web
@@ -151,8 +182,12 @@ main() {
             build_bff
             push_image "${BFF_IMAGE}"
             ;;
+        "reporter")
+            build_reporter
+            push_image "${REPORTER_IMAGE}"
+            ;;
         *)
-            log_error "未知构建目标: ${TARGET}，可选值: all | web | bff"
+            log_error "未知构建目标: ${TARGET}，可选值: all | web | bff | reporter"
             exit 1
             ;;
     esac
