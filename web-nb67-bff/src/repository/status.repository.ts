@@ -530,7 +530,9 @@ export class StatusRepository {
         };
     }
 
-    // B3: 历史预警查询 — LEFT JOIN warning_config 带出触发条件(strategy)
+    // B3: 历史预警查询 — 单独加载 warning_config 并在 JS 层映射触发条件
+    // 注意：不再使用 LEFT JOIN，因为 fact_event.fault_code（如 HVAC301）与
+    //       warning_config.warn_code（如 WARN_REFRIGERANT_LEAK）命名规范不同，JOIN 无法匹配
     static async getHistoricalWarnings(params: {
         trainId?: number;
         carriageIds?: number[];
@@ -547,7 +549,6 @@ export class StatusRepository {
         const buildBase = () => {
             let q = db
                 .selectFrom('hvac.fact_event as e')
-                .leftJoin('hvac.warning_config as wc', 'wc.warn_code', 'e.fault_code' as any)
                 .where('e.event_type' as any, '=', 'predict');
 
             if (params.startTime) {
@@ -571,16 +572,39 @@ export class StatusRepository {
             .executeTakeFirst();
         const total = Number((totalResult as any)?.count || 0);
 
-        let list = await buildBase()
-            .select([
-                'e.event_time', 'e.ingest_time', 'e.train_id', 'e.carriage_id',
-                'e.fault_code', 'e.fault_name', 'e.severity', 'e.status',
-                'e.recovery_time' as any,
-                'wc.strategy as trigger_condition' as any,
-            ])
-            .orderBy(`e.${this.timeCol}` as any, 'desc')
-            .limit(1000)   // 宽松拉取，JS 过滤后再分页
-            .execute();
+        // 并行拉取事件列表和预警配置（用于触发条件描述）
+        const [rawList, warnConfigs] = await Promise.all([
+            buildBase()
+                .select([
+                    'e.event_time', 'e.ingest_time', 'e.train_id', 'e.carriage_id',
+                    'e.fault_code', 'e.fault_name', 'e.severity', 'e.status',
+                    'e.recovery_time' as any,
+                ])
+                .orderBy(`e.${this.timeCol}` as any, 'desc')
+                .limit(1000)   // 宽松拉取，JS 过滤后再分页
+                .execute(),
+            // 同 getRealtimeWarnings 的已验证模式：selectAll() as any[]
+            (db.selectFrom('hvac.warning_config' as any).selectAll().execute() as Promise<any[]>),
+        ]);
+
+        // 构建 warn_code → strategy 查找表
+        const strategyByWarnCode: Record<string, string> = {};
+        warnConfigs.forEach((c: any) => {
+            if (c.warn_code && c.strategy) strategyByWarnCode[c.warn_code] = c.strategy;
+        });
+
+        // 将 HVAC 编码映射到 warn_code，再查出 strategy 作为 trigger_condition
+        let list = rawList.map((row: any) => {
+            const code = String(row.fault_code || '');
+            let trigger_condition: string | null = null;
+            if (code.toUpperCase().startsWith('HVAC')) {
+                const num = parseInt(code.replace(/[^0-9]/g, ''), 10);
+                const seq = isNaN(num) ? -1 : num % 100;
+                const warnCode = StatusRepository.hvacSeqToWarnCode(seq);
+                if (warnCode) trigger_condition = strategyByWarnCode[warnCode] ?? null;
+            }
+            return { ...row, trigger_condition };
+        });
 
         // JS 层机组过滤（sql raw 在此版本 Kysely where 中无法生效）
         if (params.unitNames && params.unitNames.length === 1) {

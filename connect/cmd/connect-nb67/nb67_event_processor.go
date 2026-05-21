@@ -323,7 +323,14 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 
 	// ================================================================
 	// 1. 冷媒泄漏预警 (HVAC_01 ~ HVAC_04)
+	// 阈值和持续时间从数据库热加载（WARN_REFRIGERANT_LEAK_COOLING / _VENT）
 	// ================================================================
+	// 预先读取可配置阈值（两个条件分别独立配置）
+	suckpThresh := csRawThreshold("WARN_REFRIGERANT_LEAK_COOLING", 20) // 2.0bar×10
+	coolingDur := csDuration("WARN_REFRIGERANT_LEAK_COOLING", 5*time.Minute)
+	highpThresh := csRawThreshold("WARN_REFRIGERANT_LEAK_VENT", 50) // 5.0bar×10
+	ventDur := csDuration("WARN_REFRIGERANT_LEAK_VENT", 15*time.Minute)
+
 	checkRefLeak := func(mode int64, hvacSeq int, name string) {
 		code := hvacCode(base, hvacSeq)
 		uIdx := (hvacSeq + 1) / 2
@@ -332,15 +339,15 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 		suckp := rawInt(raw, fmt.Sprintf("SuckpU%d%d", uIdx, sIdx))
 		highp := rawInt(raw, fmt.Sprintf("HighpressU%d%d", uIdx, sIdx))
 
-		// 条件1：制冷模式 + 频率>30Hz + 吸气<2.0bar -> 持续5分钟
-		isCoolingLeak := (mode == 2 || mode == 3) && fcp > 300 && suckp < 20
-		if p.checkRule(isCoolingLeak, 5*time.Minute, deviceID, code+"_c", currentTime) {
+		// 条件1：制冷模式 + 频率>30Hz + 吸气<suckpThresh -> 持续coolingDur
+		isCoolingLeak := (mode == 2 || mode == 3) && fcp > 300 && suckp < suckpThresh
+		if p.checkRule(isCoolingLeak, coolingDur, deviceID, code+"_c", currentTime) {
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
 			return
 		}
-		// 条件2：通风模式 + 高压<5bar -> 持续15分钟
-		isVentLeak := mode == 1 && highp < 50
-		if p.checkRule(isVentLeak, 15*time.Minute, deviceID, code+"_v", currentTime) {
+		// 条件2：通风模式 + 高压<highpThresh -> 持续ventDur
+		isVentLeak := mode == 1 && highp < highpThresh
+		if p.checkRule(isVentLeak, ventDur, deviceID, code+"_v", currentTime) {
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
 		}
 	}
@@ -351,7 +358,11 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 
 	// ================================================================
 	// 2. 制冷系统预警 (HVAC_05 ~ HVAC_06)
+	// 电流差阈值和持续时间从数据库热加载（WARN_COOLING_SYSTEM）
 	// ================================================================
+	cpSysCurrentDiffThresh := csRawThreshold("WARN_COOLING_SYSTEM", 20) // 2.0A×10
+	cpSysDur := csDuration("WARN_COOLING_SYSTEM", 3*time.Minute)
+
 	checkCpSys := func(uIdx int, name string) {
 		code := hvacCode(base, uIdx+4)
 		f1 := rawInt(raw, fmt.Sprintf("FCpU%d1", uIdx))
@@ -361,13 +372,13 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 		sp1 := rawInt(raw, fmt.Sprintf("SpU%d1", uIdx))
 		sp2 := rawInt(raw, fmt.Sprintf("SpU%d2", uIdx))
 
-		// 条件1：同频电流差 > 2A -> 持续3分钟
-		isCurrentDiff := f1 == f2 && f1 > 0 && (i1-i2 > 20 || i1-i2 < -20)
-		if p.checkRule(isCurrentDiff, 3*time.Minute, deviceID, code+"_i", currentTime) {
+		// 条件1：同频电流差 > cpSysCurrentDiffThresh -> 持续cpSysDur
+		isCurrentDiff := f1 == f2 && f1 > 0 && (i1-i2 > cpSysCurrentDiffThresh || i1-i2 < -cpSysCurrentDiffThresh)
+		if p.checkRule(isCurrentDiff, cpSysDur, deviceID, code+"_i", currentTime) {
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
 			return
 		}
-		// 条件2：运行 > 5min 后，过热度异常 -> 持续10分钟
+		// 条件2：运行 > 5min 后，过热度异常 -> 持续10分钟（阈值维持硬编码，PHM文档 ±20℃/±8℃）
 		isRunning := f1 > 0 || f2 > 0
 		hasBeenRunning := p.checkRule(isRunning, 5*time.Minute, deviceID, code+"_run", currentTime)
 		isSpErr := hasBeenRunning && (sp1 > 200 || sp1 < -80 || sp2 > 200 || sp2 < -80)

@@ -42,7 +42,8 @@
 
 > 快速检索用。格式：`[日期] #Issue编号 - 问题关键词 - 所属模块`
 
-<!-- 新记录追加到此处下方 -->
+[2026-05-21] #1 - mock-platform未收到推送/ground-reporter镜像缺失 - ground-reporter/docker-compose
+[2026-05-21] #2 - 预警触发配置/历史预警描述/冷媒泄露两条件分设 - nb67_event_processor/BFF
 
 ---
 
@@ -50,7 +51,56 @@
 
 > 最新记录在最前。每条记录包含：问题描述、根因、修复方法、测试验证、经验总结。
 
-<!-- 新记录追加到此处下方 -->
+### [2026-05-21] #2 - 预警设置相关问题
+
+**问题描述**：
+1. 预警触发是否会根据最新设置更新？
+2. 历史预警中"触发条件"描述没有更新
+3. 冷媒泄露预警的两个触发条件（制冷模式/通风模式）无法分别设置
+
+**根因**：
+- **根因①**: `checkRefLeak`（冷媒泄露）和 `checkCpSys`（制冷系统）使用硬编码阈值，没有调用 `csRawThreshold`/`csDuration` 从数据库热加载。其他预警（如 WARN_TEMP_SENSOR）已正确使用配置热加载。
+- **根因②**: `getHistoricalWarnings()` 的 LEFT JOIN 条件错误：`wc.warn_code = e.fault_code`，但 `fact_event.fault_code` 存的是 HVAC 编码（如 `HVAC301`），`warning_config.warn_code` 存的是语义编码（如 `WARN_REFRIGERANT_LEAK`），两者命名规范完全不同，JOIN 永远不匹配，`trigger_condition` 始终为 NULL，回退到硬编码的 `HVAC_SEQ_STRATEGY`。
+- **根因③**: `WARN_REFRIGERANT_LEAK` 在数据库中是单行，两个条件用 `params.condition1/condition2` 存储但未分别提供独立的可配置阈值条目。
+
+**修复方法**：
+1. `connect/cmd/connect-nb67/nb67_event_processor.go`：在 `checkRefLeak` 闭包外预读 `csRawThreshold("WARN_REFRIGERANT_LEAK_COOLING")` / `csDuration(...)` / `csRawThreshold("WARN_REFRIGERANT_LEAK_VENT")` / `csDuration(...)`；`checkCpSys` 同理读 `WARN_COOLING_SYSTEM`。
+2. `web-nb67-bff/src/repository/status.repository.ts`：移除错误的 LEFT JOIN；改为单独加载 `warning_config`，在 JS 层通过 `hvacSeqToWarnCode(seq)` 映射后查找 `strategy`。
+3. `baseEnv/init-db/06-migration-20260521.sql` + `dist/init-db/06-migration-20260521.sql`：新增 `WARN_REFRIGERANT_LEAK_COOLING`（制冷模式，trigger_value=2.0bar, duration=300s）和 `WARN_REFRIGERANT_LEAK_VENT`（通风模式，trigger_value=5.0bar, duration=900s）；为 `WARN_COOLING_SYSTEM` 补充 `raw_scale=10`。
+
+**测试验证**：
+- `CGO_ENABLED=0 go build` 在 `connect/cmd/connect-nb67/` 和 `connect/cmd/ground-reporter/` 均通过，无编译错误
+- `tsc --noEmit` 检查确认无新增 TypeScript 错误（已有预存在错误不在修复范围）
+- 端到端测试需在完整 Docker 环境中验证（此工作空间无 Docker）
+
+**经验总结**：
+- `fact_event.fault_code` 与 `warning_config.warn_code` 是两套命名体系，不能直接 JOIN
+- 新增预警触发条件时，必须同时在 Go 代码中添加 `csRawThreshold` 调用，否则设置不生效
+- 数据库 `params.raw_scale` 字段是 Go 代码读取阈值的关键，缺失会导致 trigger_value 无法转换为原始单位
+
+---
+
+### [2026-05-21] #1 - mock-platform 未收到数据推送
+
+**问题描述**：配置了 FAULT_RECORD_URL / SYS_STATUS_URL / LIFE_RECORD_URL，但 mock-platform 没有收到任何推送信息。
+
+**根因**：
+1. **核心根因**：`build-and-push.sh` 脚本只构建 web/bff 镜像，没有包含 `ground-reporter` 镜像的构建逻辑。镜像 `harbor.naivehero.top:8443/macda2/ground-reporter:v2.5.0` 从未构建推送，导致 `dist/docker-compose-report.yml` 启动时 ground-reporter 容器无法拉取镜像而失败，mock-platform 在等待一个永远不会连接的 reporter。
+2. **配置问题**：`HEARTBEAT_INTERVAL_MIN=10`（10分钟），而需求是每1分钟发送心跳，即使 reporter 启动了也10分钟内看不到心跳数据。
+3. **开发环境缺失**：`baseEnv/` 目录没有 `docker-compose-report.yml`，注释说"已移至独立管理"但文件不存在。
+
+**修复方法**：
+1. `build-and-push.sh`：新增 `build_reporter()` 函数和 `"reporter"` 构建目标；`all` 目标同时构建 web/bff/reporter。**首次修复后必须执行 `./build-and-push.sh <version> reporter` 推送镜像**。
+2. `dist/docker-compose-report.yml`：`HEARTBEAT_INTERVAL_MIN=10` → `HEARTBEAT_INTERVAL_MIN=1`。
+3. `baseEnv/docker-compose-report.yml`（新建）：开发环境专用，使用 `build: context` 从本地 Dockerfile 构建 ground-reporter，无需预先推送到 registry；mock-platform 挂载仓库源码 `../connect/tests/mock-platform`。
+
+**测试验证**：
+- 需执行 `./build-and-push.sh v2.5.1 reporter` 构建推送镜像后，在部署环境重启 report 服务验证
+- 验证命令：`docker logs ground-reporter | grep "6.6 heartbeat sent"` 每分钟应有一条
+
+**经验总结**：
+- ground-reporter 有 `Dockerfile.ground-reporter`，但被遗漏在构建脚本外，每次发布版本必须同步构建
+- 心跳间隔配置在 `HEARTBEAT_INTERVAL_MIN` 环境变量，默认10分钟，开发调试时建议设为1
 
 ---
 

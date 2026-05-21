@@ -1,14 +1,26 @@
-name: report
+# docker-compose-report.yml（开发环境）
+# 用途：在 baseEnv 开发环境中启动 ground-reporter + mock-platform
+#
+# 启动前提：
+#   1. docker compose -f docker-compose-mock.yml up -d   # 建立 macdanet 网络
+#   2. docker compose -f docker-compose-Dev.yml up -d    # 启动全栈
+# 然后：
+#   3. docker compose -f docker-compose-report.yml up -d  # 启动报送层
+#
+# 注意：ground-reporter 从源码构建（开发环境），生产环境使用 dist/docker-compose-report.yml
 
 services:
   ground-reporter:
-    image: harbor.naivehero.top:8443/macda2/ground-reporter:v2.5.0
+    # 开发环境从本地 Dockerfile 构建，无需预先推送到 registry
+    build:
+      context: ../connect
+      dockerfile: Dockerfile.ground-reporter
     container_name: ground-reporter
     hostname: ground-reporter
     restart: unless-stopped
     environment:
       - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
-      # 各协议章节上报接口（本地测试指向 mock-platform；联调时改为真实地址）
+      # 各协议章节上报接口（开发环境指向 mock-platform）
       - FAULT_RECORD_URL=http://mock-platform:8188/gate/METRO-PHM/api/faultRecordsSubsystem/saveRecord
       - SYS_STATUS_URL=http://mock-platform:8188/gate/METRO-SELFCHECK-SUBSYSTEM/api/faultRecordsSubsystem/saveStatus
       - LIFE_RECORD_URL=http://mock-platform:8188/gate/METRO-PHM/api/devices/status/train/saveOrUpdate
@@ -19,7 +31,7 @@ services:
       # 空调子系统标识（固定）
       - SUBSYSTEM_CODE=5
       - TRAIN_TYPE=B
-      # 心跳周期（分钟）与每日批量报送时刻（小时，0=凌晨）
+      # 心跳周期1分钟（Issue #1 修复：需求要求每1分钟发送运行状态心跳）
       - HEARTBEAT_INTERVAL_MIN=1
       - DAILY_BATCH_HOUR=0
       - LOG_LEVEL=INFO
@@ -37,7 +49,9 @@ services:
     working_dir: /app
     command: go run main.go -port 8188
     volumes:
-      - /data/MACDA2/connect/tests/mock-platform:/app:ro
+      # 开发环境直接挂载仓库源码，无需安装步骤
+      - ../connect/tests/mock-platform:/app:ro
+      - mock_platform_pkg:/root/go/pkg
     ports:
       - "18188:8188"
     healthcheck:
@@ -45,9 +59,12 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
-      start_period: 30s
+      start_period: 60s
     networks:
       - macdanet
+
+volumes:
+  mock_platform_pkg:
 
 networks:
   macdanet:
