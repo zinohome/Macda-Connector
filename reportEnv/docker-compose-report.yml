@@ -1,4 +1,24 @@
-name: report
+name: reportenv
+
+# =============================================================
+# reportEnv/docker-compose-report.yml
+# 用途：报送层验证环境（独立于 dist 主栈运行）
+#
+# 启动前提：
+#   dist/ 主栈已启动（macdanet 网络已存在）：
+#     cd dist && ./start.sh mock
+#
+# 启动报送层：
+#   cd reportEnv
+#   docker compose -f docker-compose-report.yml up -d
+#
+# 验证心跳：
+#   docker logs ground-reporter | grep "6.6 heartbeat sent"
+#
+# 区别说明：
+#   dist/docker-compose-report.yml   — 生产部署，FAULT_RECORD_URL 等指向真实平台
+#   reportEnv/docker-compose-report.yml — 验证环境，URL 指向 mock-platform（本地测试）
+# =============================================================
 
 services:
   ground-reporter:
@@ -8,7 +28,7 @@ services:
     restart: unless-stopped
     environment:
       - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
-      # 各协议章节上报接口（本地测试指向 mock-platform；联调时改为真实地址）
+      # 各协议章节上报接口（验证环境指向 mock-platform）
       - FAULT_RECORD_URL=http://mock-platform:8188/gate/METRO-PHM/api/faultRecordsSubsystem/saveRecord
       - SYS_STATUS_URL=http://mock-platform:8188/gate/METRO-SELFCHECK-SUBSYSTEM/api/faultRecordsSubsystem/saveStatus
       - LIFE_RECORD_URL=http://mock-platform:8188/gate/METRO-PHM/api/devices/status/train/saveOrUpdate
@@ -19,7 +39,7 @@ services:
       # 空调子系统标识（固定）
       - SUBSYSTEM_CODE=5
       - TRAIN_TYPE=B
-      # 心跳周期（分钟）与每日批量报送时刻（小时，0=凌晨）
+      # 心跳周期1分钟（Issue #1 修复：需求要求每1分钟发送运行状态心跳）
       - HEARTBEAT_INTERVAL_MIN=1
       - DAILY_BATCH_HOUR=0
       - LOG_LEVEL=INFO
