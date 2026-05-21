@@ -2,6 +2,34 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Issue 处理知识库（必读）
+
+每次处理 GitHub Issue 修复任务时，**Step 0 的第一件事**是读取知识库：
+
+```bash
+cat docs/ISSUE_KNOWLEDGE_BASE.md
+```
+
+完成修复并通过验证后，**发布前必须更新知识库**，在 `docs/ISSUE_KNOWLEDGE_BASE.md` 第三节顶部追加本次记录：
+
+```markdown
+### [YYYY-MM-DD] #Issue编号 - 标题摘要
+
+**问题描述**：用户反馈的现象
+
+**根因**：代码/配置/数据的根本原因
+
+**修复方法**：
+- 修改了哪些文件，做了什么改动
+
+**测试验证**：
+- 执行了哪些命令，输出结果是什么
+
+**经验总结**：下次遇到类似问题的参考要点
+```
+
+同时在第二节索引追加一行：`[YYYY-MM-DD] #N - 问题关键词 - 所属模块`
+
 ## Superpowers 开发方法论
 
 本项目使用 **superpowers plugin**（`claude-plugins-official/superpowers`）作为主要开发方法。处理任何需求时必须按以下流程执行，禁止跳步直接写代码。
