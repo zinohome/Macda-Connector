@@ -1,8 +1,8 @@
 ---
 name: 其他
-about: 文档、配置、或其他不属于以上类型的问题
-title: "[其他] "
-labels: question
+about: 文档、配置或其他不属于以上类型的问题
+title: "【其他】"
+labels: 其他
 assignees: ''
 ---
 

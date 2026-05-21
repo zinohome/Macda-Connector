@@ -1,8 +1,8 @@
 ---
 name: 增强请求
 about: 对现有功能提出改进建议
-title: "[增强] "
-labels: enhancement
+title: "【增强】"
+labels: 增强
 assignees: ''
 ---
 

@@ -1,14 +1,14 @@
 ---
-name: Bug 报告
+name: 缺陷报告
 about: 报告一个功能异常或显示错误
-title: "[BUG] "
-labels: bug
+title: "【缺陷】"
+labels: 缺陷
 assignees: ''
 ---
 
 ## 问题类型
 
-- [x] Bug（功能异常）
+- [x] 缺陷（功能异常）
 
 ---
 
