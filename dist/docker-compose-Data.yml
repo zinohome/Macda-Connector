@@ -278,6 +278,7 @@ services:
     command: [ "-c", "/etc/connect/nb67-event-builder.yaml" ]
     environment:
       - RUNTIME=DEV
+      - PG_DSN=postgres://postgres:passw0rd@timescaledb:5432/postgres?sslmode=disable
     volumes:
       - "${DATA_DIR}/connect/config/nb67-event-builder.yaml:/etc/connect/nb67-event-builder.yaml:ro"
     healthcheck:
