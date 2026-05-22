@@ -136,9 +136,13 @@ export class StatusRepository {
     /**
      * 获取实时预警详情 (适配前端 Object.entries 逻辑)
      */
-    // HVAC 预警序号 → warning_config.warn_code 映射
-    private static hvacSeqToWarnCode(seq: number): string | null {
-        if (seq >= 1  && seq <= 4)  return 'WARN_REFRIGERANT_LEAK';
+    // HVAC fault_code → warning_config.warn_code 映射
+    // 冷媒泄露预警通过 _c（制冷模式）/_v（通风模式）后缀区分两个独立配置条目
+    private static hvacSeqToWarnCode(seq: number, faultCode?: string): string | null {
+        if (seq >= 1  && seq <= 4) {
+            if (faultCode && faultCode.endsWith('_v')) return 'WARN_REFRIGERANT_LEAK_VENT';
+            return 'WARN_REFRIGERANT_LEAK_COOLING';
+        }
         if (seq >= 5  && seq <= 6)  return 'WARN_COOLING_SYSTEM';
         if (seq >= 7  && seq <= 8)  return 'WARN_TEMP_SENSOR';
         if (seq === 9)               return 'WARN_CABIN_OVERHEAT';
@@ -183,10 +187,10 @@ export class StatusRepository {
         data.forEach(row => {
             const code = row.fault_code;
             if (code) {
-                // 从 HVAC 编码提取序号：HVAC307 → 307 % 100 = 7
+                // 从 HVAC 编码提取序号：HVAC307 → 307 % 100 = 7；传入完整 code 用于识别 _c/_v 后缀
                 const num = parseInt(code.replace(/[^0-9]/g, ''), 10);
                 const seq = isNaN(num) ? -1 : num % 100;
-                const warnCode = this.hvacSeqToWarnCode(seq);
+                const warnCode = this.hvacSeqToWarnCode(seq, code);
                 const strategy = warnCode ? (strategyMap[warnCode] || '') : '';
 
                 if (!grouped[code]) grouped[code] = [];
@@ -600,7 +604,7 @@ export class StatusRepository {
             if (code.toUpperCase().startsWith('HVAC')) {
                 const num = parseInt(code.replace(/[^0-9]/g, ''), 10);
                 const seq = isNaN(num) ? -1 : num % 100;
-                const warnCode = StatusRepository.hvacSeqToWarnCode(seq);
+                const warnCode = StatusRepository.hvacSeqToWarnCode(seq, code);
                 if (warnCode) trigger_condition = strategyByWarnCode[warnCode] ?? null;
             }
             return { ...row, trigger_condition };
