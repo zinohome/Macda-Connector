@@ -12,6 +12,7 @@ import (
 
 type PlatformClient struct {
 	apiKey     string // X-Api-Key header value; empty = omit header
+	xToken     string // x-token header value; empty = omit header
 	httpClient *http.Client
 	retryMax   int
 	backoffMs  int
@@ -20,6 +21,7 @@ type PlatformClient struct {
 func newPlatformClient(cfg Config) *PlatformClient {
 	return &PlatformClient{
 		apiKey: cfg.PlatformApiKey,
+		xToken: cfg.PlatformXToken,
 		httpClient: &http.Client{
 			Timeout: time.Duration(cfg.PlatformTimeoutSec) * time.Second,
 		},
@@ -63,6 +65,9 @@ func (c *PlatformClient) doPost(ctx context.Context, url string, data []byte) er
 	req.Header.Set("Content-Type", "application/json")
 	if c.apiKey != "" {
 		req.Header.Set("X-Api-Key", c.apiKey)
+	}
+	if c.xToken != "" {
+		req.Header.Set("x-token", c.xToken)
 	}
 
 	resp, err := c.httpClient.Do(req)

@@ -13,6 +13,7 @@ services:
       - SYS_STATUS_URL=http://mock-platform:8188/gate/METRO-SELFCHECK-SUBSYSTEM/api/faultRecordsSubsystem/saveStatus
       - LIFE_RECORD_URL=http://mock-platform:8188/gate/METRO-PHM/api/devices/status/train/saveOrUpdate
       - PLATFORM_API_KEY=
+      - PLATFORM_X_TOKEN=ap2jQ/2AVR4mHCHBXBlVkewphcPAMumty7czzXrPnWfWqLTOliDnG
       - PLATFORM_TIMEOUT_SEC=10
       - PLATFORM_RETRY_MAX=3
       - PLATFORM_RETRY_BACKOFF_MS=1000

@@ -14,6 +14,7 @@ type Config struct {
 
 	// Common HTTP settings
 	PlatformApiKey         string // X-Api-Key header; empty = no auth
+	PlatformXToken         string // x-token header; empty = no auth
 	PlatformTimeoutSec     int
 	PlatformRetryMax       int
 	PlatformRetryBackoffMs int
@@ -39,6 +40,7 @@ func loadConfig() Config {
 		LifeRecordURL:  getEnv("LIFE_RECORD_URL", "https://clznyw7.nbmetro.com/gate/METRO-PHM/api/devices/status/train/saveOrUpdate"),
 
 		PlatformApiKey:         getEnv("PLATFORM_API_KEY", ""),
+		PlatformXToken:         getEnv("PLATFORM_X_TOKEN", ""),
 		PlatformTimeoutSec:     getEnvInt("PLATFORM_TIMEOUT_SEC", 10),
 		PlatformRetryMax:       getEnvInt("PLATFORM_RETRY_MAX", 3),
 		PlatformRetryBackoffMs: getEnvInt("PLATFORM_RETRY_BACKOFF_MS", 1000),
