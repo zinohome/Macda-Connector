@@ -31,13 +31,18 @@ func newPlatformClient(cfg Config) *PlatformClient {
 }
 
 // PostJSON marshals body as JSON and POSTs to the given full URL, retrying on transient failures.
+// SetEscapeHTML(false) prevents & from being encoded as & in location strings like "空调机组1&2".
 func (c *PlatformClient) PostJSON(ctx context.Context, url string, body any) error {
-	data, err := json.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("marshal: %w", err)
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if encErr := enc.Encode(body); encErr != nil {
+		return fmt.Errorf("marshal: %w", encErr)
 	}
+	data := bytes.TrimRight(buf.Bytes(), "\n")
 
 	backoff := time.Duration(c.backoffMs) * time.Millisecond
+	var err error
 
 	for attempt := 0; attempt <= c.retryMax; attempt++ {
 		if attempt > 0 {
