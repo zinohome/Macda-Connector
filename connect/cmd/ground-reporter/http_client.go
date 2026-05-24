@@ -31,13 +31,23 @@ func newPlatformClient(cfg Config) *PlatformClient {
 }
 
 // PostJSON marshals body as JSON and POSTs to the given full URL, retrying on transient failures.
+// SetEscapeHTML(false) prevents & < > from being escaped to & etc., so platform receives
+// location values like "空调机组1&2" verbatim instead of "空调机组1&2".
 func (c *PlatformClient) PostJSON(ctx context.Context, url string, body any) error {
-	data, err := json.Marshal(body)
-	if err != nil {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(body); err != nil {
 		return fmt.Errorf("marshal: %w", err)
+	}
+	data := buf.Bytes()
+	// json.Encoder.Encode appends a trailing newline; trim it so the body is compact JSON.
+	if len(data) > 0 && data[len(data)-1] == '\n' {
+		data = data[:len(data)-1]
 	}
 
 	backoff := time.Duration(c.backoffMs) * time.Millisecond
+	var lastErr error
 
 	for attempt := 0; attempt <= c.retryMax; attempt++ {
 		if attempt > 0 {
@@ -49,12 +59,12 @@ func (c *PlatformClient) PostJSON(ctx context.Context, url string, body any) err
 			backoff *= 2
 		}
 
-		if err = c.doPost(ctx, url, data); err == nil {
+		if lastErr = c.doPost(ctx, url, data); lastErr == nil {
 			return nil
 		}
-		log.Printf("[WARN] POST %s attempt %d/%d failed: %v", url, attempt+1, c.retryMax+1, err)
+		log.Printf("[WARN] POST %s attempt %d/%d failed: %v", url, attempt+1, c.retryMax+1, lastErr)
 	}
-	return fmt.Errorf("POST %s: all %d attempts failed, last error: %w", url, c.retryMax+1, err)
+	return fmt.Errorf("POST %s: all %d attempts failed, last error: %w", url, c.retryMax+1, lastErr)
 }
 
 func (c *PlatformClient) doPost(ctx context.Context, url string, data []byte) error {
