@@ -62,6 +62,7 @@ type Record61 struct {
 	Coach       string `json:"coach"`
 	Location    string `json:"location"`
 	Code        string `json:"code"`
+	FaultName   string `json:"fault_name"`
 	Station1    string `json:"station1"`
 	Station2    string `json:"station2"`
 	StartTime   string `json:"starttime"`

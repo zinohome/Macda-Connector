@@ -131,6 +131,7 @@ func buildRecord61(cfg Config, meta EventMeta, si StationInfo, msgType, code str
 		Coach:       coachName(meta.CarriageID),
 		Location:    locationByCode(baseCode),
 		Code:        baseCode,
+		FaultName:   faultNameByCode(baseCode),
 		Station1:    strconv.Itoa(int(si.CurStation)),
 		Station2:    strconv.Itoa(int(si.NextStation)),
 		StartTime:   strconv.FormatInt(startMs, 10),
