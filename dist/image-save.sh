@@ -47,7 +47,7 @@ IMAGES=(
     "harbor.naivehero.top:8443/macda2/nb67-web:v2.5.12"
 
     # ── 地面平台报送服务 ──────────────────────────────────────
-    "harbor.naivehero.top:8443/macda2/ground-reporter:v2.5.2"
+    "harbor.naivehero.top:8443/macda2/ground-reporter:v2.5.3"
 
     # ── mock-platform 运行时（report 环境用）─────────────────
     "golang:1.24-alpine"
