@@ -591,13 +591,26 @@ export class StatusRepository {
             (db.selectFrom('hvac.warning_config' as any).selectAll().execute() as Promise<any[]>),
         ]);
 
-        // 构建 warn_code → strategy 查找表
-        const strategyByWarnCode: Record<string, string> = {};
+        // 构建 warn_code → trigger_condition（由设置页可见的 threshold_bad + duration_seconds 动态生成）
+        // 与设置页保持一致：用户修改阈值后，历史页触发条件自动更新
+        const triggerCondByWarnCode: Record<string, string> = {};
         warnConfigs.forEach((c: any) => {
-            if (c.warn_code && c.strategy) strategyByWarnCode[c.warn_code] = c.strategy;
+            if (c.warn_code) {
+                const parts: string[] = [];
+                if (c.threshold_bad) parts.push(String(c.threshold_bad));
+                const secs = Number(c.duration_seconds);
+                if (secs > 0) {
+                    if (secs >= 60 && secs % 60 === 0) {
+                        parts.push(`持续${secs / 60}分钟`);
+                    } else {
+                        parts.push(`持续${secs}秒`);
+                    }
+                }
+                if (parts.length) triggerCondByWarnCode[c.warn_code] = parts.join(' ');
+            }
         });
 
-        // 将 HVAC 编码映射到 warn_code，再查出 strategy 作为 trigger_condition
+        // 将 HVAC 编码映射到 warn_code，再查出 trigger_condition
         let list = rawList.map((row: any) => {
             const code = String(row.fault_code || '');
             let trigger_condition: string | null = null;
@@ -605,7 +618,7 @@ export class StatusRepository {
                 const num = parseInt(code.replace(/[^0-9]/g, ''), 10);
                 const seq = isNaN(num) ? -1 : num % 100;
                 const warnCode = StatusRepository.hvacSeqToWarnCode(seq, code);
-                if (warnCode) trigger_condition = strategyByWarnCode[warnCode] ?? null;
+                if (warnCode) trigger_condition = triggerCondByWarnCode[warnCode] ?? null;
             }
             return { ...row, trigger_condition };
         });

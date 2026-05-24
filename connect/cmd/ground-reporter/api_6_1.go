@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"strconv"
+	"strings"
 )
 
 // carriageNames maps carriage ID (1-6) to the physical coach designation.
@@ -104,22 +105,32 @@ func Handle61Predict(ctx context.Context, client *PlatformClient, tracker *Alarm
 	}
 }
 
+// normalizeCode strips event-processor mode suffixes (_c = cooling, _v = ventilation)
+// so the base HVAC code can be matched against alertcodeLocationMap and sent to the platform.
+func normalizeCode(code string) string {
+	if strings.HasSuffix(code, "_c") || strings.HasSuffix(code, "_v") {
+		return code[:len(code)-2]
+	}
+	return code
+}
+
 // buildRecord61 constructs a single 6.1 record.
 // endTimeMs == 0 means alarm is still open (endtime = "").
-// location is looked up from the alertcode table by code; code itself is passed through unchanged.
+// code is normalized (mode suffixes stripped) before location lookup and before sending to platform.
 func buildRecord61(cfg Config, meta EventMeta, si StationInfo, msgType, code string, startMs, endMs int64) Record61 {
 	endTime := ""
 	if endMs > 0 {
 		endTime = strconv.FormatInt(endMs, 10)
 	}
 
+	baseCode := normalizeCode(code)
 	return Record61{
 		MessageType: msgType,
 		TrainType:   cfg.TrainType,
 		TrainNo:     padTrainNo(meta.TrainID),
 		Coach:       coachName(meta.CarriageID),
-		Location:    locationByCode(code),
-		Code:        code,
+		Location:    locationByCode(baseCode),
+		Code:        baseCode,
 		Station1:    strconv.Itoa(int(si.CurStation)),
 		Station2:    strconv.Itoa(int(si.NextStation)),
 		StartTime:   strconv.FormatInt(startMs, 10),

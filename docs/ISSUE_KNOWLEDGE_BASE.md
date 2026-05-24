@@ -44,12 +44,40 @@
 
 [2026-05-21] #1 - mock-platform未收到推送/ground-reporter镜像缺失 - ground-reporter/docker-compose
 [2026-05-21] #2 - 预警触发配置/历史预警描述/冷媒泄露两条件分设 - nb67_event_processor/BFF
+[2026-05-24] #3 - 预警报文location/code与alertcode文件不对应/_c/_v后缀未归一化 - ground-reporter/alertcode_map
+[2026-05-24] #5 - 预警历史页面触发条件显示与设置页不一致/strategy误当触发条件 - BFF/status.repository
 
 ---
 
 ## 三、历史 Issue 处理记录
 
 > 最新记录在最前。每条记录包含：问题描述、根因、修复方法、测试验证、经验总结。
+
+### [2026-05-24] #3 & #5 - 预警报文字段错误 & 历史预警触发条件显示不对
+
+**问题描述**：
+- **#3**：预警报文（6.1平台接口）中 location 和 code 字段内容与 alertcode 文件不对应
+- **#5**：预警历史页面显示的"触发条件"内容不正确，应与预警设置页"触发条件"一致
+
+**根因**：
+- **根因#3**：Issue #2 修复冷媒泄露两模式分设时，事件处理器（`nb67_event_processor.go`）生成了带 `_c`（制冷）和 `_v`（通风）后缀的故障码（如 "HVAC301_c"）。这些带后缀的码被原样传入 `ground-reporter` 的 `buildRecord61` 函数，而 `alertcodeLocationMap` 只有基础码（"HVAC301"），导致 `locationByCode("HVAC301_c")` 找不到映射，回退为直接返回原始码作为 location，和 alertcode 文件内容不对应。
+- **根因#5**：`warning_config.strategy` 字段存储的是"维修指导意见"文本（如"请采用手持式卤素仪检测漏点"），而 `status.repository.ts` 的 `getHistoricalWarnings()` 将其作为 `trigger_condition` 返回给前端。设置页展示的触发条件是 `threshold_bad`（如 ">1.8A"）+ `duration_seconds`，两者来源不同，因此显示不一致。
+
+**修复方法**：
+- **#3**：在 `connect/cmd/ground-reporter/api_6_1.go` 添加 `normalizeCode()` 函数，发送给平台前剥去 `_c`/`_v` 后缀，`Location` 和 `Code` 字段均使用归一化后的基础码。同时在 import 中添加 "strings"。
+- **#5**：在 `web-nb67-bff/src/repository/status.repository.ts` 的 `getHistoricalWarnings()` 中，将原来用 `strategy` 构建触发条件的逻辑改为用 `threshold_bad`（阈值描述文字）+ `duration_seconds`（持续时间，自动转分钟/秒）动态拼接，使历史页与设置页展示保持一致。
+
+**测试验证**：
+- `CGO_ENABLED=0 go build` 在 `connect/cmd/ground-reporter/` 编译通过，无错误
+- `tsc --noEmit` 检查无新增 TypeScript 错误（预存在错误不在修复范围）
+- 端到端验证逻辑：
+  - #3：发送 "HVAC301_c" 故障码，platform 应收到 Code="HVAC301", Location="空调机组1"
+  - #5：修改 warning_config 的 threshold_bad 为 ">2.0A"、duration_seconds=900，历史页触发条件应显示 ">2.0A 持续15分钟"
+
+**经验总结**：
+- 事件处理器给冷媒泄露代码添加了 `_c`/`_v` 后缀区分模式，任何需要做代码→名称映射的地方都必须先归一化（剥去后缀）
+- `warning_config.strategy` 是维修建议文字，不是触发条件描述。触发条件应从 `threshold_bad` + `duration_seconds` 动态构建
+- 新增后缀约定时必须同步更新 ground-reporter 和 BFF 所有依赖该代码的映射逻辑
 
 ### [2026-05-21] #2 - 预警设置相关问题
 
