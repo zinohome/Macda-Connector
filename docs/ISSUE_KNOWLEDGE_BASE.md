@@ -46,12 +46,46 @@
 [2026-05-21] #2 - 预警触发配置/历史预警描述/冷媒泄露两条件分设 - nb67_event_processor/BFF
 [2026-05-24] #3 - 预警报文location/code与alertcode文件不对应/_c/_v后缀未归一化 - ground-reporter/alertcode_map
 [2026-05-24] #5 - 预警历史页面触发条件显示与设置页不一致/strategy误当触发条件 - BFF/status.repository
+[2026-05-26] #7 - 预警报文code不随车厢变化/fault_name多余/完整预警描述未显示 - ground-reporter/BFF/前端
 
 ---
 
 ## 三、历史 Issue 处理记录
 
 > 最新记录在最前。每条记录包含：问题描述、根因、修复方法、测试验证、经验总结。
+
+### [2026-05-26] #7 - 预警报文 code 错误 & 完整预警描述未显示 & alertcode_v2.xlsx 更新
+
+**问题描述**：
+- **code不变**：不同车厢相同预警报文的 code 字段相同（如 HVAC109），应该随车厢变化
+- **fault_name多余**：6.1 平台报文中有 `fault_name` 字段，平台不需要
+- **完整预警描述**：历史预警详情弹窗缺少"完整预警描述"字段
+- **名称有误**：冷媒泄漏预警名称写成"泄露"，应为"泄漏"
+
+**根因**：
+- event processor 生成 HVAC{carriage*100+seq} 格式（如 HVAC313 = 车厢3，seq=13），但 ground-reporter 只做了 normalizeCode 剥掉 `_c`/`_v` 后缀，没有将内部格式转换为平台期望的 alertcode_v2.xlsx 格式（HVAC101-HVAC115）
+- 旧方案有26个seq（机组1/机组2各自的预警），新方案按预警类型合并为15个code，需要建立 oldSeq → newCode 映射
+- `Record61` 结构体包含 `FaultName` 字段，但平台不需要此字段
+- 历史预警 BFF API 和前端未暴露/显示 fault_desc（完整预警描述）
+
+**修复方法**：
+- **ground-reporter/alertcode_map.go**：新增 `oldSeqToNewCode` 映射表（old seq 1-26 → HVAC101-115），新增 `platformHvacCode()` 函数；location 查找仍基于原始内部码（保留机组信息）
+- **ground-reporter/api_6_1.go**：`buildRecord61` 中 Code 改用 `platformHvacCode(baseCode)` 转换；注释说明 location 和 code 分别使用不同的code
+- **ground-reporter/types.go**：从 `Record61` 移除 `FaultName string`
+- **connect-nb67/nb67_event_processor.go**：将冷媒泄漏预警 Name 中的"泄露"改为"泄漏"（4处）
+- **web-nb67-bff/src/index.ts**：HistoryWarning API 响应新增 `fault_desc: row.fault_name` 字段
+- **historyWarning/index.vue**：详情弹窗 (#header 下方) 新增"完整预警描述"蓝色标注区块
+
+**测试验证**：
+- `CGO_ENABLED=0 go build ./...` 在 ground-reporter 和 connect-nb67 均通过，无编译错误
+- `npm run build` 在 web-nb67-web 通过（vue-tsc + vite build）
+- `tsc --noEmit` 在 web-nb67-bff 通过，无新增错误
+
+**经验总结**：
+- 内部 HVAC 编码方案（26 seq/carriage）与平台期望的 alertcode_v2 方案（15 type codes）不同，转换时需维护 oldSeqToNewCode 映射
+- Location 应基于原始内部码查询（保留机组/系统信息），而 Code 才是需要转换的字段
+- 不同格式的代码（如 HVAC313）在 normalizeCode 剥suffix 后，仍需经过 platformHvacCode 转换才能发给平台
+- 历史预警 `fault_name`（存于 DB）即是"完整预警描述"，直接映射到 `fault_desc` 字段暴露给前端即可
 
 ### [2026-05-24] #3 & #5 - 预警报文字段错误 & 历史预警触发条件显示不对
 
