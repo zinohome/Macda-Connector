@@ -351,10 +351,10 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3})
 		}
 	}
-	checkRefLeak(wModeU1, 1, "机组1系统1冷媒泄露预警")
-	checkRefLeak(wModeU1, 2, "机组1系统2冷媒泄露预警")
-	checkRefLeak(wModeU2, 3, "机组2系统1冷媒泄露预警")
-	checkRefLeak(wModeU2, 4, "机组2系统2冷媒泄露预警")
+	checkRefLeak(wModeU1, 1, "机组1系统1冷媒泄漏预警")
+	checkRefLeak(wModeU1, 2, "机组1系统2冷媒泄漏预警")
+	checkRefLeak(wModeU2, 3, "机组2系统1冷媒泄漏预警")
+	checkRefLeak(wModeU2, 4, "机组2系统2冷媒泄漏预警")
 
 	// ================================================================
 	// 2. 制冷系统预警 (HVAC_05 ~ HVAC_06)

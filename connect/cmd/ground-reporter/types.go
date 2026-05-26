@@ -55,6 +55,7 @@ type ParsedMsg struct {
 
 // Record61 is the JSON body for 6.1 (fault/predict write).
 // Per platform spec, id is not transmitted (stored server-side only).
+// fault_name is omitted per alertcode_v2.xlsx platform spec (issue #7).
 type Record61 struct {
 	MessageType string `json:"message_type"` // "0"=fault "1"=predict
 	TrainType   string `json:"train_type"`
@@ -62,7 +63,6 @@ type Record61 struct {
 	Coach       string `json:"coach"`
 	Location    string `json:"location"`
 	Code        string `json:"code"`
-	FaultName   string `json:"fault_name"`
 	Station1    string `json:"station1"`
 	Station2    string `json:"station2"`
 	StartTime   string `json:"starttime"`

@@ -93,6 +93,11 @@
                     </span>
                 </div>
             </template>
+            <!-- 完整预警描述 -->
+            <div v-if="currentRow && currentRow.fault_desc" class="detail-desc-box">
+                <span class="detail-desc-label">完整预警描述：</span>
+                <span class="detail-desc-text">{{ currentRow.fault_desc }}</span>
+            </div>
             <div v-loading="detailLoading" style="height:360px;position:relative">
                 <div ref="detailChartRef" style="width:100%;height:100%"></div>
                 <div v-if="!detailHasData" style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#676e82">
@@ -302,6 +307,12 @@ onMounted(() => fetchData())
 .dialog-header { display:flex; flex-direction:column; gap:4px;
     .dialog-title { font-size:15px; font-weight:bold; color:#fff; }
     .dialog-sub   { font-size:12px; color:#676e82; }
+}
+.detail-desc-box {
+    padding: 8px 12px; margin-bottom: 10px;
+    background: rgba(33,134,207,0.08); border-left: 3px solid #2186cf; border-radius: 4px;
+    .detail-desc-label { color: #2186cf; font-size: 13px; font-weight: bold; }
+    .detail-desc-text  { color: #d1d9e7; font-size: 13px; }
 }
 :deep(.el-table) {
     background:transparent!important; color:#d1d9e7;

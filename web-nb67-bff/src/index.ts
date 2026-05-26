@@ -640,6 +640,7 @@ async function bootstrap() {
                     severity: '轻微',  // 预警严重级别固定为"轻微"
                     warn_name: row.fault_name,
                     fault_code: row.fault_code,
+                    fault_desc: row.fault_name,  // 完整预警描述（来自 alertcode_v2 fault_desc）
                     trigger_condition: getTriggerCondition(row),
                     start_time: formatTime(row.occurrence_start ?? row[config.runtime === 'DEV' ? 'ingest_time' : 'event_time']),
                     end_time: row.recovery_time ? formatTime(row.recovery_time) : null,

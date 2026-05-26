@@ -3,10 +3,51 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
+// oldSeqToNewCode maps the old internal seq (1-26) to the new platform HVAC code
+// as defined in alertcode_v2.xlsx (HVAC101-HVAC115). Multiple old seqs collapse to
+// the same platform code because the new scheme uses 15 codes covering both machines.
+var oldSeqToNewCode = map[int]string{
+	1: "HVAC101", 2: "HVAC102", 3: "HVAC101", 4: "HVAC102",
+	5: "HVAC103", 6: "HVAC103",
+	7: "HVAC104", 8: "HVAC105", 9: "HVAC106",
+	10: "HVAC107", 11: "HVAC107",
+	12: "HVAC108", 13: "HVAC109", 14: "HVAC108", 15: "HVAC109",
+	16: "HVAC110", 17: "HVAC111", 18: "HVAC110", 19: "HVAC111",
+	20: "HVAC112",
+	21: "HVAC113", 22: "HVAC114", 23: "HVAC113", 24: "HVAC114",
+	25: "HVAC115", 26: "HVAC115",
+}
+
+// platformHvacCode converts an internal HVAC code (HVAC{carriage*100+seq}) to
+// the platform-facing code (HVAC101-HVAC115) per alertcode_v2.xlsx.
+// Non-HVAC codes are returned unchanged.
+func platformHvacCode(code string) string {
+	upper := strings.ToUpper(code)
+	if !strings.HasPrefix(upper, "HVAC") {
+		return code
+	}
+	n, err := strconv.Atoi(code[4:])
+	if err != nil {
+		return code
+	}
+	seq := n % 100
+	if seq == 0 {
+		return code
+	}
+	if newCode, ok := oldSeqToNewCode[seq]; ok {
+		return newCode
+	}
+	// fallback: strip carriage multiplier
+	return fmt.Sprintf("HVAC%d", 100+seq)
+}
+
 // alertcodeLocationMap maps HVAC alert code to the fault_type (location) field
-// required by the 6.1 platform API. Source: NB6&7-空调预警码表20240802(2).xlsx
+// required by the 6.1 platform API. Source: NB6&7-空调预警码表20240802(2).xlsx.
+// Keys use the INTERNAL format (HVAC{carriage*100+seq}) so location can be
+// determined from the original event code before seq remapping.
 var alertcodeLocationMap = map[string]string{
 	"HVAC101": "空调机组1",
 	"HVAC102": "空调机组1",
@@ -166,8 +207,8 @@ var alertcodeLocationMap = map[string]string{
 	"HVAC626": "空调机组2",
 }
 
-// alertcodeFaultNameMap maps HVAC alert code to the fault_name field
-// required by the platform API. Source: NB6&7-空调预警码表20240802(2).xlsx, fault_name column.
+// alertcodeFaultNameMap is retained for reference but no longer sent to the platform.
+// fault_name was removed from Record61 per alertcode_v2.xlsx platform spec.
 var alertcodeFaultNameMap = map[string]string{
 	"HVAC101": "机组1系统1冷媒泄露预警",
 	"HVAC102": "机组1系统2冷媒泄露预警",

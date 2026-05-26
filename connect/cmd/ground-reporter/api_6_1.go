@@ -116,7 +116,9 @@ func normalizeCode(code string) string {
 
 // buildRecord61 constructs a single 6.1 record.
 // endTimeMs == 0 means alarm is still open (endtime = "").
-// code is normalized (mode suffixes stripped) before location lookup and before sending to platform.
+// code is normalized (mode suffixes stripped), then:
+//   - Location is looked up using the original internal code (preserves machine info)
+//   - Code sent to platform is remapped to alertcode_v2.xlsx scheme (HVAC101-HVAC115)
 func buildRecord61(cfg Config, meta EventMeta, si StationInfo, msgType, code string, startMs, endMs int64) Record61 {
 	endTime := ""
 	if endMs > 0 {
@@ -130,8 +132,7 @@ func buildRecord61(cfg Config, meta EventMeta, si StationInfo, msgType, code str
 		TrainNo:     padTrainNo(meta.TrainID),
 		Coach:       coachName(meta.CarriageID),
 		Location:    locationByCode(baseCode),
-		Code:        baseCode,
-		FaultName:   faultNameByCode(baseCode),
+		Code:        platformHvacCode(baseCode),
 		Station1:    strconv.Itoa(int(si.CurStation)),
 		Station2:    strconv.Itoa(int(si.NextStation)),
 		StartTime:   strconv.FormatInt(startMs, 10),
