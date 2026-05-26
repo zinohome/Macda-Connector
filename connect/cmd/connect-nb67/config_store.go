@@ -18,7 +18,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,6 +38,7 @@ type warnEntry struct {
 	RawScale             float64 // params.raw_scale，默认 1.0
 	TargetTemp           float64 // params.target_temp（℃），0=未配置；超温类专用
 	MinCoolingRuntimeS   int     // params.min_cooling_runtime_s（秒），-1=未配置
+	ThresholdBad         string  // 用于显示的触发阈值文本（与设置页一致），用于生成快照
 }
 
 type configMap map[string]warnEntry
@@ -95,7 +98,7 @@ func (cs *ConfigStore) startPolling(ctx context.Context, interval time.Duration)
 
 func (cs *ConfigStore) load() error {
 	rows, err := cs.db.Query(
-		`SELECT warn_code, trigger_value, duration_seconds, enabled, params
+		`SELECT warn_code, trigger_value, duration_seconds, enabled, params, COALESCE(threshold_bad, '')
 		 FROM hvac.warning_config`)
 	if err != nil {
 		return err
@@ -109,7 +112,8 @@ func (cs *ConfigStore) load() error {
 		var dur int
 		var enabled bool
 		var paramsJSON sql.NullString
-		if err := rows.Scan(&code, &tv, &dur, &enabled, &paramsJSON); err != nil {
+		var threshBad string
+		if err := rows.Scan(&code, &tv, &dur, &enabled, &paramsJSON, &threshBad); err != nil {
 			cs.logger.Warnf("ConfigStore: 行扫描失败，跳过: %v", err)
 			continue
 		}
@@ -137,6 +141,7 @@ func (cs *ConfigStore) load() error {
 			RawScale:           rawScale,
 			TargetTemp:         targetTemp,
 			MinCoolingRuntimeS: minCoolingRuntimeS,
+			ThresholdBad:       threshBad,
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -220,6 +225,37 @@ func csCoolingPreconditionDur(warnCode string, defaultDur time.Duration) time.Du
 		return defaultDur
 	}
 	return time.Duration(e.MinCoolingRuntimeS) * time.Second
+}
+
+// csTriggerConditionText 返回触发时刻的配置快照文本（与设置页/BFF 展示逻辑一致）。
+// 格式："{threshold_bad} 持续N分钟" 或 "{threshold_bad} 持续Ns"，空字符串表示无快照。
+// 用于写入 PredictHit.TriggerConditionSnapshot，确保历史预警展示的触发条件不随配置变更而改变。
+func csTriggerConditionText(warnCode string) string {
+	cs := globalConfigStore
+	if cs == nil {
+		return ""
+	}
+	p := cs.val.Load()
+	if p == nil {
+		return ""
+	}
+	m := *p.(*configMap)
+	e, ok := m[warnCode]
+	if !ok || !e.Enabled {
+		return ""
+	}
+	parts := []string{}
+	if e.ThresholdBad != "" {
+		parts = append(parts, e.ThresholdBad)
+	}
+	if e.DurationSeconds > 0 {
+		if e.DurationSeconds >= 60 && e.DurationSeconds%60 == 0 {
+			parts = append(parts, fmt.Sprintf("持续%d分钟", e.DurationSeconds/60))
+		} else {
+			parts = append(parts, fmt.Sprintf("持续%d秒", e.DurationSeconds))
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 // csOvertempAbsThreshold 返回车厢超温的绝对阈值（原始传感器单位）。

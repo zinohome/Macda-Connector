@@ -601,6 +601,7 @@ export class StatusRepository {
                     'e.event_time', 'e.ingest_time', 'e.train_id', 'e.carriage_id',
                     'e.fault_code', 'e.fault_name', 'e.severity', 'e.status',
                     'e.recovery_time' as any,
+                    'e.payload_json' as any,
                 ])
                 .orderBy(`e.${this.timeCol}` as any, 'desc')
                 .limit(1000)   // 宽松拉取，JS 过滤后再分页
@@ -628,11 +629,26 @@ export class StatusRepository {
             }
         });
 
-        // 将 HVAC 编码映射到 warn_code，再查出 trigger_condition
+        // 将 HVAC 编码映射到触发条件：优先读 payload_json 中的快照（触发时刻记录），
+        // 快照缺失时降级到当前配置（向后兼容旧数据）
         let list = rawList.map((row: any) => {
             const code = String(row.fault_code || '');
             let trigger_condition: string | null = null;
-            if (code.toUpperCase().startsWith('HVAC')) {
+
+            // 1. 尝试从 payload_json 读取快照（新数据路径）
+            try {
+                const payload = typeof row.payload_json === 'string'
+                    ? JSON.parse(row.payload_json)
+                    : (row.payload_json || {});
+                if (payload.trigger_condition_snapshot) {
+                    trigger_condition = String(payload.trigger_condition_snapshot);
+                }
+            } catch {
+                // JSON 解析失败时忽略，继续走降级逻辑
+            }
+
+            // 2. 降级：从当前配置动态生成（旧数据无快照时的兼容路径）
+            if (!trigger_condition && code.toUpperCase().startsWith('HVAC')) {
                 const num = parseInt(code.replace(/[^0-9]/g, ''), 10);
                 const seq = isNaN(num) ? -1 : num % 100;
                 const warnCode = StatusRepository.hvacSeqToWarnCode(seq, code);
