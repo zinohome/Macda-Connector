@@ -181,7 +181,7 @@ services:
       - macdanet
 
   connect-topic-in:
-    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.2
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.3
     container_name: connect-topic-in
     restart: unless-stopped
     entrypoint: /bin/sh
@@ -232,7 +232,7 @@ services:
   # ── NB67 三段流水线 ──────────────────────────────────────────
   # Pipeline Stage 1: 解析NB67二进制 → signal-parsed
   connect-parser:
-    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.2
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.3
     container_name: connect-parser
     restart: unless-stopped
     command: [ "-c", "/etc/connect/nb67-parser.yaml" ]
@@ -251,7 +251,7 @@ services:
 
   # Pipeline Stage 2: 写入存储 (signal-parsed → TimescaleDB)
   connect-storage-writer:
-    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.2
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.3
     container_name: connect-storage-writer
     restart: unless-stopped
     command: [ "-c", "/etc/connect/nb67-storage-writer.yaml" ]
@@ -272,7 +272,7 @@ services:
 
   # Pipeline Stage 3: 事件检测 (signal-parsed → signal-predict/signal-alarm/signal-life)
   connect-event-builder:
-    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.2
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.3
     container_name: connect-event-builder
     restart: unless-stopped
     command: [ "-c", "/etc/connect/nb67-event-builder.yaml" ]
@@ -297,7 +297,7 @@ services:
   # Pipeline Stage 4: 数据落盘持久化 (signal-storage → TimescaleDB)
   # Pipeline Stage 4 (Plan A): 使用 Redpanda Connect SQL 插件直接落盘 (主流方案)
   connect-pg-writer:
-    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.2
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.3
     container_name: connect-pg-writer
     restart: unless-stopped
     command: [ "-c", "/etc/connect/nb67-pg-writer.yaml" ]
@@ -319,7 +319,7 @@ services:
 
   # Pipeline Stage 5: 事件历史持久化 (signal-alarm/predict/life → TimescaleDB)
   connect-event-writer:
-    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.2
+    image: harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.3
     container_name: connect-event-writer
     restart: unless-stopped
     command: [ "-c", "/etc/connect/nb67-event-writer.yaml" ]
