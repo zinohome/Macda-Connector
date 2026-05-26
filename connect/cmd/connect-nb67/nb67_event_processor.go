@@ -135,6 +135,12 @@ type NB67EventProcessor struct {
 	states  sync.Map
 	logger  *service.Logger
 	runtime string // ENV "RUNTIME": "DEV" | "PRD"
+	// prevPredictHadHits tracks whether the previous predict message for a device
+	// contained any hits. When hits transition from non-empty to empty, we must
+	// still emit one message with an empty list so the ground-reporter can clear
+	// any active alarms via AlarmTracker.Diff.
+	// key: deviceID (string) → bool
+	prevPredictHadHits sync.Map
 }
 
 // checkRule 判定规则是否满足持续时间要求，使用消息中的 currentTime。
@@ -236,8 +242,20 @@ func (p *NB67EventProcessor) Process(ctx context.Context, msg *service.Message) 
 	alarmHits := buildAlarmHits(input.Raw)
 	lifeHits := buildLifeHits(input.Raw, cidInt)
 
-	// 如果三类命中均为空，直接拦截，不向下游输出任何内容
-	if len(predictHits) == 0 && len(alarmHits) == 0 && len(lifeHits) == 0 {
+	// 判断 predict 是否需要透传：若上一帧有 predict 命中而本帧清空，需要保留一帧空列表
+	// 以便 ground-reporter 的 AlarmTracker.Diff 能够发出"预警结束"事件。
+	prevHad, _ := p.prevPredictHadHits.Load(input.DeviceID)
+	prevHadHits := prevHad != nil && prevHad.(bool)
+	if len(predictHits) > 0 {
+		p.prevPredictHadHits.Store(input.DeviceID, true)
+	} else if prevHadHits {
+		// 本帧清空且上帧有命中：发送一次空列表后重置标志
+		p.prevPredictHadHits.Store(input.DeviceID, false)
+	}
+	needPredict := len(predictHits) > 0 || prevHadHits
+
+	// 如果三类命中均无需输出，直接拦截
+	if !needPredict && len(alarmHits) == 0 && len(lifeHits) == 0 {
 		return service.MessageBatch{}, nil
 	}
 
@@ -395,11 +413,15 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 	// HVAC_07/08: 温差 > 8℃ -> 持续 5 分钟 (WARN_TEMP_SENSOR)
 	tempThresh := csRawThreshold("WARN_TEMP_SENSOR", 80)
 	tempDur := csDuration("WARN_TEMP_SENSOR", 5*time.Minute)
-	fasCondition := rawInt(raw, "FasU1")-rawInt(raw, "FasU2") > tempThresh || rawInt(raw, "FasU1")-rawInt(raw, "FasU2") < -tempThresh
+	fasU1, fasU2 := rawInt(raw, "FasU1"), rawInt(raw, "FasU2")
+	fasValid := fasU1 != 32767 && fasU2 != 32767
+	fasCondition := fasValid && (fasU1-fasU2 > tempThresh || fasU1-fasU2 < -tempThresh)
 	if p.checkRule(fasCondition, tempDur, deviceID, hvacCode(base, 7), currentTime) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 7), Name: "新风温度传感器预警", Severity: 3})
 	}
-	rasCondition := rawInt(raw, "RasU1")-rawInt(raw, "RasU2") > tempThresh || rawInt(raw, "RasU1")-rawInt(raw, "RasU2") < -tempThresh
+	rasU1, rasU2 := rawInt(raw, "RasU1"), rawInt(raw, "RasU2")
+	rasValid := rasU1 != 32767 && rasU2 != 32767
+	rasCondition := rasValid && (rasU1-rasU2 > tempThresh || rasU1-rasU2 < -tempThresh)
 	if p.checkRule(rasCondition, tempDur, deviceID, hvacCode(base, 8), currentTime) {
 		hits = append(hits, PredictHit{Code: hvacCode(base, 8), Name: "回风温度传感器预警", Severity: 3})
 	}

@@ -102,7 +102,7 @@ let router = useRouter()
 
 // 筛选状态与 URL 参数初始化 (保持 String 类型以匹配 el-option)
 const filterForm = reactive({
-    trainNo: String(route.query.trainNo || '7001'),
+    trainNo: String(parseInt(String(route.query.trainNo || '7001')) || 7001),
     carriageNo: String(route.query.trainCoach || '1')
 })
 
@@ -1484,11 +1484,11 @@ const handleQuery = () => {
     currentTrainNo.value = String(filterForm.trainNo)
     currentCarriageNo.value = String(filterForm.carriageNo)
     
-    // 手动点击查询时更新 URL
+    // 手动点击查询时更新 URL（trainNo 补零到 5 位）
     router.push({
         query: {
             ...route.query,
-            trainNo: currentTrainNo.value,
+            trainNo: String(currentTrainNo.value).padStart(5, '0'),
             trainCoach: currentCarriageNo.value
         }
     })
@@ -1503,7 +1503,7 @@ const handleCarSelect = (carriageId) => {
 const gotoPath = (name) => {
     router.push({
         name,
-        query: { trainNo: currentTrainNo.value, trainCoach: currentCarriageNo.value }
+        query: { trainNo: String(currentTrainNo.value).padStart(5, '0'), trainCoach: currentCarriageNo.value }
     })
 }
 
@@ -1598,8 +1598,9 @@ async function getTrainApi() {
 watch(() => route.query, (newQuery) => {
     // 仅当 URL 参数变化时（如点击查询按钮后或地址栏回车），同步回选择框
     if (newQuery.trainNo) {
-        filterForm.trainNo = String(newQuery.trainNo)
-        currentTrainNo.value = String(newQuery.trainNo)
+        const normalizedNo = String(parseInt(String(newQuery.trainNo)) || 7001)
+        filterForm.trainNo = normalizedNo
+        currentTrainNo.value = normalizedNo
     }
     if (newQuery.trainCoach) {
         filterForm.carriageNo = String(newQuery.trainCoach)

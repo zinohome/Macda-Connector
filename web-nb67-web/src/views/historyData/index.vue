@@ -150,7 +150,7 @@ const route = useRoute()
 const CARRIAGE_MAP = { '1':'TC1','2':'MP1','3':'M1','4':'M2','5':'MP2','6':'TC2' }
 
 const filterForm = reactive({
-    trainNo: String(route.query.trainNo || '7001'),
+    trainNo: String(parseInt(String(route.query.trainNo || '7001')) || 7001),
     carriageNo: String(route.query.trainCoach || '1'),
     unitName: '',
     timeRange: [
@@ -160,7 +160,7 @@ const filterForm = reactive({
 })
 
 watch(() => route.query, (newQuery) => {
-    if (newQuery.trainNo) filterForm.trainNo = String(newQuery.trainNo)
+    if (newQuery.trainNo) filterForm.trainNo = String(parseInt(String(newQuery.trainNo)) || 7001)
     if (newQuery.trainCoach) filterForm.carriageNo = String(newQuery.trainCoach)
     handleQuery()
 }, { deep: true })
@@ -317,7 +317,7 @@ const handleDownload = async () => {
 }
 
 const goBack = () => {
-    router.push({ name: 'trainInfo', query: { trainNo: filterForm.trainNo, trainCoach: filterForm.carriageNo } })
+    router.push({ name: 'trainInfo', query: { trainNo: String(filterForm.trainNo).padStart(5, '0'), trainCoach: filterForm.carriageNo } })
 }
 
 onMounted(() => {

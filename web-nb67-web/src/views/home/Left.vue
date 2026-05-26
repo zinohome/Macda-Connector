@@ -139,7 +139,7 @@ const gotoPath = (trainId) => {
   router.push({
     name: 'trainInfo',
     query: {
-      trainNo:trainId
+      trainNo: String(trainId).padStart(5, '0')
     }
     // params: {
     //   trainId

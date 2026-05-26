@@ -74,9 +74,12 @@ func Handle61Predict(ctx context.Context, client *PlatformClient, tracker *Alarm
 	}
 
 	var hits []PredictHit
-	if err := json.Unmarshal(msg.Hits, &hits); err != nil || len(hits) == 0 {
+	if err := json.Unmarshal(msg.Hits, &hits); err != nil {
+		log.Printf("[WARN] 6.1 predict: bad hits json: %v", err)
 		return
 	}
+	// Note: hits may be empty — this is intentional when all alarms have cleared.
+	// We must still call tracker.Diff so active codes are removed and "end" events fire.
 
 	// Prefix device key with "predict:" to keep alarm and predict state tables separate.
 	deviceKey := "predict:" + msg.EventMeta.DeviceID
