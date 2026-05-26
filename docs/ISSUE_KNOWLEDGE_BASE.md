@@ -48,12 +48,36 @@
 [2026-05-24] #5 - 预警历史页面触发条件显示与设置页不一致/strategy误当触发条件 - BFF/status.repository
 [2026-05-26] #8 - 新风/回风传感器32767误报/trainNo未补零/冷凝风机预警不消除 - nb67_event_processor/ground-reporter/前端
 [2026-05-26] #7 - 预警报文code不随车厢变化/fault_name多余/完整预警描述未显示 - ground-reporter/BFF/前端
+[2026-05-26] #11 - 历史预警触发条件随配置变更而变/缺少触发时刻快照 - config_store/nb67_event_processor/BFF
 
 ---
 
 ## 三、历史 Issue 处理记录
 
 > 最新记录在最前。每条记录包含：问题描述、根因、修复方法、测试验证、经验总结。
+
+### [2026-05-26] #11 - 历史预警触发条件随配置变更而改变
+
+**问题描述**：已触发的历史预警记录中的"触发条件"字段，会随着用户在设置页修改预警配置后自动更新，应该显示触发时刻的设置。例如原先以 2.3A 电流触发的预警，修改为 2.9A 后，历史记录也显示 2.9A。
+
+**根因**：预警事件写入 `fact_event.payload_json` 时只存储了命中码（code/name/severity），未保存触发时刻的配置快照。BFF `getHistoricalWarnings` 每次查询都从当前 `hvac.warning_config` 表动态生成 `trigger_condition`，导致所有历史记录跟随当前配置变化。
+
+**修复方法**：
+- **`config_store.go`**：`warnEntry` 增加 `ThresholdBad string` 字段，`load()` 查询新增 `threshold_bad` 列；添加 `csTriggerConditionText(warnCode)` 帮助函数，按与 BFF 相同逻辑生成快照文本（threshold_bad + 持续N分钟）
+- **`nb67_event_processor.go`**：`PredictHit` 增加 `TriggerConditionSnapshot string`（omitempty），`buildPredictHits` 中所有配置驱动的命中位置调用 `csTriggerConditionText()` 填充快照；硬编码阈值的条件（如制冷系统过热度条件2）不填快照；YAML 层无需修改（`payload_json = this.string()` 自动包含新字段）
+- **`status.repository.ts`**：select 新增 `e.payload_json`；map 逻辑改为优先读 `payload_json.trigger_condition_snapshot`（新数据路径），找不到时降级为当前配置（旧数据向后兼容）
+
+**测试验证**：
+- `CGO_ENABLED=0 go build ./...` — connect-nb67 ✓
+- TypeScript 类型检查无新增错误（存量错误为预存问题）
+- 镜像构建推送：nb-parse-connect:v2.5.3 ✓，nb67-bff:v2.5.19 ✓
+- 容器重启：connect-event-builder、connect-event-writer、nb67-bff 均健康启动
+
+**经验总结**：
+1. **快照 vs 引用**：任何"历史记录需要反映创建时状态"的字段都应在写入时快照，而非引用当前配置。本项目中 `payload_json` 是扩展历史记录的合适位置。
+2. **向后兼容降级**：新增快照字段后，旧数据无该字段，读取层必须降级处理（`|| fallback`），不能假设字段一定存在。
+3. **BFF 构建 `trigger_condition` 的逻辑**：取 `threshold_bad`（显示字符串）+ `duration_seconds`（格式化为"持续N分钟"）。Go 层和 BFF 层共享相同逻辑，确保快照与设置页展示完全一致。
+4. **config_store 已有 threshold_bad**：修复前 config_store 只加载 `trigger_value`（数值），修复后额外加载 `threshold_bad`（展示字符串），两者用途不同不可互替。
 
 ### [2026-05-26] #8 #9 #10 - 传感器误报 / trainNo 补零 / 预警无法自动消除
 
