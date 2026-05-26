@@ -46,6 +46,7 @@
 [2026-05-21] #2 - 预警触发配置/历史预警描述/冷媒泄露两条件分设 - nb67_event_processor/BFF
 [2026-05-24] #3 - 预警报文location/code与alertcode文件不对应/_c/_v后缀未归一化 - ground-reporter/alertcode_map
 [2026-05-24] #5 - 预警历史页面触发条件显示与设置页不一致/strategy误当触发条件 - BFF/status.repository
+[2026-05-26] #8 - 新风/回风传感器32767误报/trainNo未补零/冷凝风机预警不消除 - nb67_event_processor/ground-reporter/前端
 [2026-05-26] #7 - 预警报文code不随车厢变化/fault_name多余/完整预警描述未显示 - ground-reporter/BFF/前端
 
 ---
@@ -53,6 +54,36 @@
 ## 三、历史 Issue 处理记录
 
 > 最新记录在最前。每条记录包含：问题描述、根因、修复方法、测试验证、经验总结。
+
+### [2026-05-26] #8 #9 #10 - 传感器误报 / trainNo 补零 / 预警无法自动消除
+
+**问题描述**：
+- #8：新风温度传感器预警和回风温度传感器预警被误触发，实际条件未满足
+- #9：web 页面地址栏 trainNo 显示为 4 位（如 7002），应补零到 5 位（如 07002）
+- #10：冷凝风机电流预警满足消除条件后，预警无法自动消除
+
+**根因**：
+- #8：`nb67_event_processor.go` 中计算 FasU1-FasU2 / RasU1-RasU2 温差时未过滤 32767（INT16_MAX，传感器故障/未连接的无效值标记）。一旦某个传感器返回 32767，差值极大，超过阈值 80，误触发 5 分钟计时器，随后报警。
+- #9：前端 trainList 中 train_id 存储 4 位字符串（"7001"），router.push 直接使用，URL 显示为 4 位。
+- #10：**根本原因**：`nb67_event_processor.go` 在 predictHits 为空时直接丢弃消息（`return service.MessageBatch{}, nil`）。当预警条件清除后，事件处理器不再产生任何消息，ground-reporter 的 AlarmTracker.Diff 从未被以空集合调用，永远无法发出"预警结束"事件给平台。
+
+**修复方法**：
+- #8：`nb67_event_processor.go`：计算温差前先读取两个传感器值，加 `!= 32767` 有效性检查（fasValid / rasValid），无效时 condition=false，checkRule 清除计时器状态。
+- #9：前端三处修改：① router.push 时 `padStart(5, '0')` 补零；② 从 URL 读取时 `parseInt(...) || 7001` 去前缀零以保持内部 4 位表示；③ 涉及文件：`trainInfo/index.vue`、`historyData/index.vue`、`home/Left.vue`。
+- #10：两处修改：
+  1. `nb67_event_processor.go` 增加 `prevPredictHadHits sync.Map`，当检测到设备从"有命中"→"无命中"时，保留这一帧（不丢弃），让 ground-reporter 可以用空集合调用 Diff；之后恢复正常（不再额外发送）。
+  2. `ground-reporter/api_6_1.go` Handle61Predict：移除 `|| len(hits) == 0` 提前返回，允许空命中列表流入 tracker.Diff 触发清除逻辑。
+
+**测试验证**：
+- `CGO_ENABLED=0 go build ./...` — connect-nb67 ✓，ground-reporter ✓
+- `npm run build` — web ✓（15s）
+- 镜像构建并推送：nb67-web:v2.5.17 / nb67-bff:v2.5.17 / ground-reporter:v2.5.17
+- 容器重启后状态：nb67-web healthy / nb67-bff healthy / ground-reporter up
+
+**经验总结**：
+1. NB67 协议中 32767（0x7FFF）是传感器无效值标记，凡是差值类计算都需要先过滤掉该值，参考 PresdiffU 的 `< 32767` 模式。
+2. 预警清除的生命周期依赖"事件处理器能产出空命中消息"→"AlarmTracker 看到代码消失"→"平台收到 endtime"。如果任一环节早退，预警会永久悬挂。修复后，每当一个设备的 predict 命中从非空变为空时，会精确地额外发送一帧空消息，之后停止，无额外流量。
+3. URL 中的 trainNo 只需在 router.push 时补零，内部始终保持 4 位整数字符串，避免影响 state 拼接（"700101"格式）和 BFF 的 `parseInt(state.slice(0, 4))`。
 
 ### [2026-05-26] #7 - 预警报文 code 错误 & 完整预警描述未显示 & alertcode_v2.xlsx 更新
 
