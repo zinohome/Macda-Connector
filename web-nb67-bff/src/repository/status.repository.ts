@@ -440,12 +440,30 @@ export class StatusRepository {
             if (params.eventType) {
                 q = q.where('event_type', '=', params.eventType);
             }
-            // 机组筛选：通过 fault_code 包含 U1/U2 判断机组
+            // 机组筛选：告警码已改为 HVAC{carriage*100+seq} 格式（alertcode_v2.xlsx）
+            // seq 1-26：预警码（predict），seq 27-46：机组1告警，seq 47-66：机组2告警，seq 67-75：公共告警
+            // 通过提取 seq = fault_code数字部分 % 100 判断所属机组
             if (params.unitNames && params.unitNames.length > 0 && params.unitNames.length < 2) {
                 if (params.unitNames.includes('机组一')) {
-                    q = q.where(sql`lower(fault_code) like '%u1%'` as any);
+                    // seq 1-26（预警，含机组1部分）+ seq 27-46（机组1告警）
+                    q = q.where(sql`
+                        fault_code ~ '^HVAC[0-9]+$' AND (
+                            (CAST(substring(fault_code from 5) AS INT) % 100 BETWEEN 1 AND 26
+                             AND lower(fault_name) LIKE '%u1%' OR lower(fault_name) LIKE '%1%')
+                            OR
+                            (CAST(substring(fault_code from 5) AS INT) % 100 BETWEEN 27 AND 46)
+                        )
+                    ` as any);
                 } else if (params.unitNames.includes('机组二')) {
-                    q = q.where(sql`lower(fault_code) like '%u2%'` as any);
+                    // seq 3-6,11,14-15,18-19,23-24,26（预警，机组2部分）+ seq 47-66（机组2告警）
+                    q = q.where(sql`
+                        fault_code ~ '^HVAC[0-9]+$' AND (
+                            (CAST(substring(fault_code from 5) AS INT) % 100 BETWEEN 1 AND 26
+                             AND (lower(fault_name) LIKE '%u2%' OR lower(fault_name) LIKE '%机组2%'))
+                            OR
+                            (CAST(substring(fault_code from 5) AS INT) % 100 BETWEEN 47 AND 66)
+                        )
+                    ` as any);
                 }
             }
             return q;

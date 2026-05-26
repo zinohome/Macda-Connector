@@ -239,7 +239,7 @@ func (p *NB67EventProcessor) Process(ctx context.Context, msg *service.Message) 
 	// 构建三类事件命中列表
 	cidInt := func() int { n, _ := input.CarriageID.Int64(); return int(n) }()
 	predictHits := p.buildPredictHits(input.Raw, cidInt, input.DeviceID, currentTime)
-	alarmHits := buildAlarmHits(input.Raw)
+	alarmHits := buildAlarmHits(input.Raw, cidInt)
 	lifeHits := buildLifeHits(input.Raw, cidInt)
 
 	// 判断 predict 是否需要透传：若上一帧有 predict 命中而本帧清空，需要保留一帧空列表
@@ -542,139 +542,106 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 }
 
 // ============================================================
-// buildAlarmHits：原生故障位告警（直接映射 binary 故障位字段）
+// buildAlarmHits：原生故障位告警
+// 按 alertcode_v2.xlsx（PHM v2）规范上报 HVAC127-HVAC175 平台码。
+// 内部码格式：HVAC{carriageID*100+seq}，seq 27-75。
 // ============================================================
 
-func buildAlarmHits(raw map[string]any) []AlarmHit {
-	// 初始化为空 slice（非 nil），序列化时输出 [] 而非 null
+func buildAlarmHits(raw map[string]any, carriageID int) []AlarmHit {
 	hits := make([]AlarmHit, 0)
-	// raw 为空时直接返回，避免误判断
 	if len(raw) == 0 {
 		return hits
 	}
+	base := carriageID * 100
 
-	// 辅助函数：批量检查故障位
-	check := func(field, code, name string, level int) {
+	// 辅助：单信号 → HVAC 码
+	check := func(field string, seq int, name string, level int) {
 		if rawBool(raw, field) {
-			hits = append(hits, AlarmHit{Code: code, Name: name, Level: level})
+			hits = append(hits, AlarmHit{
+				Code:  fmt.Sprintf("HVAC%d", base+seq),
+				Name:  name,
+				Level: level,
+			})
+		}
+	}
+	// 辅助：OR 双信号 → 同一 HVAC 码（PHM 合并为单码）
+	checkOr := func(f1, f2 string, seq int, name string, level int) {
+		if rawBool(raw, f1) || rawBool(raw, f2) {
+			hits = append(hits, AlarmHit{
+				Code:  fmt.Sprintf("HVAC%d", base+seq),
+				Name:  name,
+				Level: level,
+			})
 		}
 	}
 
 	// ================================================================
-	// 1. 核心系统与环境告警 (Level 1)
+	// 机组1（U1）告警 — HVAC{base+27} ~ HVAC{base+46}
 	// ================================================================
-	check("BfltPowersupplyU1", "bflt_powersupply_u1", "机组1供电故障", 1)
-	check("BfltPowersupplyU2", "bflt_powersupply_u2", "机组2供电故障", 1)
-	check("BfltTempover", "bflt_tempover", "车厢温度超温", 1)
-	check("BfltEmergivt", "bflt_emergivt", "紧急通风故障", 1)
+	check("BocfltEfU11", 27, "通风机1-1过流故障", 1)
+	check("BocfltEfU12", 28, "通风机1-2过流故障", 1)
+	check("BocfltCfU11", 29, "冷凝风机1-1过流故障", 2)
+	check("BocfltCfU12", 30, "冷凝风机1-2过流故障", 2)
+	check("BfltVfdU11", 31, "变频器1-1故障", 2)
+	check("BlpfltCompU11", 32, "压缩机1-1低压故障", 2)
+	check("BscfltCompU11", 33, "压缩机1-1高压连锁故障", 2)
+	check("BfltVfdU12", 34, "变频器1-2故障", 2)
+	check("BlpfltCompU12", 35, "压缩机1-2低压故障", 2)
+	check("BscfltCompU12", 36, "压缩机1-2高压连锁故障", 2)
+	// PHM HVAC137: bFlt_FAD_U1（U11或U12任一故障均触发）
+	checkOr("BfltFadU11", "BfltFadU12", 37, "新风阀U1故障", 3)
+	// PHM HVAC138: bFlt_RAD_U1
+	checkOr("BfltRadU11", "BfltRadU12", 38, "回风阀U1故障", 3)
+	check("BfltApU11", 39, "空气净化U1故障", 3)
+	check("BfltExpboardU1", 40, "扩展模块U1故障", 2)
+	check("BfltFrstempU1", 41, "新风温度传感器U1故障", 3)
+	check("BfltSplytempU11", 42, "送风温度传感器1-1故障", 3)
+	check("BfltSplytempU12", 43, "送风温度传感器1-2故障", 3)
+	check("BfltRnttempU1", 44, "回风温度传感器U1故障", 3)
+	// PHM HVAC145/146: bFlt_DFSTemp（融霜传感器 = 盘管温度传感器 coiltemp）
+	check("BfltCoiltempU11", 45, "融霜温度传感器1-1故障", 3)
+	check("BfltCoiltempU12", 46, "融霜温度传感器1-2故障", 3)
 
 	// ================================================================
-	// 2. 压缩机与压力系统 (Level 2)
+	// 机组2（U2）告警 — HVAC{base+47} ~ HVAC{base+66}
 	// ================================================================
-	// 高低压故障 (Blpflt/Bscflt)
-	check("BlpfltCompU11", "blpflt_comp_u11", "低压故障U1-1", 2)
-	check("BlpfltCompU12", "blpflt_comp_u12", "低压故障U1-2", 2)
-	check("BlpfltCompU21", "blpflt_comp_u21", "低压故障U2-1", 2)
-	check("BlpfltCompU22", "blpflt_comp_u22", "低压故障U2-2", 2)
-	check("BscfltCompU11", "bscflt_comp_u11", "高压故障U1-1", 2)
-	check("BscfltCompU12", "bscflt_comp_u12", "高压故障U1-2", 2)
-	check("BscfltCompU21", "bscflt_comp_u21", "高压故障U2-1", 2)
-	check("BscfltCompU22", "bscflt_comp_u22", "高压故障U2-2", 2)
-
-	// 单系统保护位 (BfltHigh/Lowpres)
-	check("BfltHighpresU11", "bflt_highpres_u11", "高压保护U1-1", 2)
-	check("BfltHighpresU12", "bflt_highpres_u12", "高压保护U1-2", 2)
-	check("BfltHighpresU21", "bflt_highpres_u21", "高压保护U2-1", 2)
-	check("BfltHighpresU22", "bflt_highpres_u22", "高压保护U2-2", 2)
-	check("BfltLowpresU11", "bflt_lowpres_u11", "低压保护U1-1", 2)
-	check("BfltLowpresU12", "bflt_lowpres_u12", "低压保护U1-2", 2)
-	check("BfltLowpresU21", "bflt_lowpres_u21", "低压保护U2-1", 2)
-	check("BfltLowpresU22", "bflt_lowpres_u22", "低压保护U2-2", 2)
-
-	// ================================================================
-	// 3. 变频器与风机系统 (Level 2)
-	// ================================================================
-	// 变频器故障
-	check("BfltVfdU11", "bflt_vfd_u11", "变频器故障U1-1", 2)
-	check("BfltVfdU12", "bflt_vfd_u12", "变频器故障U1-2", 2)
-	check("BfltVfdU21", "bflt_vfd_u21", "变频器故障U2-1", 2)
-	check("BfltVfdU22", "bflt_vfd_u22", "变频器故障U2-2", 2)
-	check("BfltVfdComU11", "bflt_vfd_com_u11", "变频器通信故障U1-1", 2)
-	check("BfltVfdComU12", "bflt_vfd_com_u12", "变频器通信故障U1-2", 2)
-	check("BfltVfdComU21", "bflt_vfd_com_u21", "变频器通信故障U2-1", 2)
-	check("BfltVfdComU22", "bflt_vfd_com_u22", "变频器通信故障U2-2", 2)
-
-	// 通风机过流
-	check("BocfltEfU11", "bocflt_ef_u11", "通风机过流U1-1", 2)
-	check("BocfltEfU12", "bocflt_ef_u12", "通风机过流U1-2", 2)
-	check("BocfltEfU21", "bocflt_ef_u21", "通风机过流U2-1", 2)
-	check("BocfltEfU22", "bocflt_ef_u22", "通风机过流U2-2", 2)
-
-	// 冷凝风机过流与通风故障
-	check("BocfltCfU11", "bocflt_cf_u11", "冷凝风机过流U1-1", 2)
-	check("BocfltCfU12", "bocflt_cf_u12", "冷凝风机过流U1-2", 2)
-	check("BocfltCfU21", "bocflt_cf_u21", "冷凝风机过流U2-1", 2)
-	check("BocfltCfU22", "bocflt_cf_u22", "冷凝风机过流U2-2", 2)
-	check("BscfltVentU11", "bscflt_vent_u11", "通风故障U1-1", 2)
-	check("BscfltVentU12", "bscflt_vent_u12", "通风故障U1-2", 2)
-	check("BscfltVentU21", "bscflt_vent_u21", "通风故障U2-1", 2)
-	check("BscfltVentU22", "bscflt_vent_u22", "通风故障U2-2", 2)
-
-	// 废排风机
-	check("BfltExhaustfan", "bflt_exhaustfan", "废排风机故障", 2)
+	check("BocfltEfU21", 47, "通风机2-1过流故障", 1)
+	check("BocfltEfU22", 48, "通风机2-2过流故障", 1)
+	check("BocfltCfU21", 49, "冷凝风机2-1过流故障", 2)
+	check("BocfltCfU22", 50, "冷凝风机2-2过流故障", 2)
+	check("BfltVfdU21", 51, "变频器2-1故障", 2)
+	check("BlpfltCompU21", 52, "压缩机2-1低压故障", 2)
+	check("BscfltCompU21", 53, "压缩机2-1高压连锁故障", 2)
+	check("BfltVfdU22", 54, "变频器2-2故障", 2)
+	check("BlpfltCompU22", 55, "压缩机2-2低压故障", 2)
+	check("BscfltCompU22", 56, "压缩机2-2高压连锁故障", 2)
+	checkOr("BfltFadU21", "BfltFadU22", 57, "新风阀U2故障", 3)
+	checkOr("BfltRadU21", "BfltRadU22", 58, "回风阀U2故障", 3)
+	check("BfltApU21", 59, "空气净化U2故障", 3)
+	check("BfltExpboardU2", 60, "扩展模块U2故障", 2)
+	check("BfltFrstempU2", 61, "新风温度传感器U2故障", 3)
+	check("BfltSplytempU21", 62, "送风温度传感器2-1故障", 3)
+	check("BfltSplytempU22", 63, "送风温度传感器2-2故障", 3)
+	check("BfltRnttempU2", 64, "回风温度传感器U2故障", 3)
+	check("BfltCoiltempU21", 65, "融霜温度传感器2-1故障", 3)
+	check("BfltCoiltempU22", 66, "融霜温度传感器2-2故障", 3)
 
 	// ================================================================
-	// 4. 阀门与执行器 (Level 2)
+	// 公共告警 — HVAC{base+67} ~ HVAC{base+75}
 	// ================================================================
-	check("BfltFadU11", "bflt_fad_u11", "新风阀故障U1-1", 2)
-	check("BfltFadU12", "bflt_fad_u12", "新风阀故障U1-2", 2)
-	check("BfltFadU21", "bflt_fad_u21", "新风阀故障U2-1", 2)
-	check("BfltFadU22", "bflt_fad_u22", "新风阀故障U2-2", 2)
-	check("BfltRadU11", "bflt_rad_u11", "回风阀故障U1-1", 2)
-	check("BfltRadU12", "bflt_rad_u12", "回风阀故障U1-2", 2)
-	check("BfltRadU21", "bflt_rad_u21", "回风阀故障U2-1", 2)
-	check("BfltRadU22", "bflt_rad_u22", "回风阀故障U2-2", 2)
-	check("BfltExhaustval", "bflt_exhaustval", "废排风阀故障", 2)
-
-	// ================================================================
-	// 5. 传感器系统 (Level 2)
-	// ================================================================
-	check("BfltDiffpresU1", "bflt_diffpres_u1", "压差传感器故障U1", 2)
-	check("BfltDiffpresU2", "bflt_diffpres_u2", "压差传感器故障U2", 2)
-	check("BfltAirmonU1", "bflt_airmon_u1", "空气质量传感器故障U1", 2)
-	check("BfltAirmonU2", "bflt_airmon_u2", "空气质量传感器故障U2", 2)
-	check("BfltCurrentmon", "bflt_currentmon", "电流监测故障", 2)
-
-	// 温度/盘管传感器
-	check("BfltVehtempU1", "bflt_vehtemp_u1", "车厢温度传感器故障U1", 2)
-	check("BfltVehtempU2", "bflt_vehtemp_u2", "车厢温度传感器故障U2", 2)
-	check("BfltRnttempU1", "bflt_rnttemp_u1", "回风温度传感器故障U1", 2)
-	check("BfltRnttempU2", "bflt_rnttemp_u2", "回风温度传感器故障U2", 2)
-	check("BfltFrstempU1", "bflt_frstemp_u1", "冰霜温度传感器故障U1", 2)
-	check("BfltFrstempU2", "bflt_frstemp_u2", "冰霜温度传感器故障U2", 2)
-	check("BfltCoiltempU11", "bflt_coiltemp_u11", "盘管温度传感器故障U1-1", 2)
-	check("BfltCoiltempU12", "bflt_coiltemp_u12", "盘管温度传感器故障U1-2", 2)
-	check("BfltCoiltempU21", "bflt_coiltemp_u21", "盘管温度传感器故障U2-1", 2)
-	check("BfltCoiltempU22", "bflt_coiltemp_u22", "盘管温度传感器故障U2-2", 2)
-
-	// 送风/吸气传感器
-	check("BfltSplytempU11", "bflt_splytemp_u11", "送风温度传感器故障U1-1", 2)
-	check("BfltSplytempU12", "bflt_splytemp_u12", "送风温度传感器故障U1-2", 2)
-	check("BfltSplytempU21", "bflt_splytemp_u21", "送风温度传感器故障U2-1", 2)
-	check("BfltSplytempU22", "bflt_splytemp_u22", "送风温度传感器故障U2-2", 2)
-	check("BfltInsptempU11", "bflt_insptemp_u11", "吸气温度传感器故障U1-1", 2)
-	check("BfltInsptempU12", "bflt_insptemp_u12", "吸气温度传感器故障U1-2", 2)
-	check("BfltInsptempU21", "bflt_insptemp_u21", "吸气温度传感器故障U2-1", 2)
-	check("BfltInsptempU22", "bflt_insptemp_u22", "吸气温度传感器故障U2-2", 2)
-
-	// ================================================================
-	// 6. 通信与其他组件 (Level 2)
-	// ================================================================
-	check("BfltTcms", "bflt_tcms", "TCMS通信故障", 2)
-	check("BfltExpboardU1", "bflt_expboard_u1", "扩展板通信故障U1", 2)
-	check("BfltExpboardU2", "bflt_expboard_u2", "扩展板通信故障U2", 2)
-	check("BfltApU11", "bflt_ap_u11", "空气净化器故障U1-1", 2)
-	check("BfltApU21", "bflt_ap_u21", "空气净化器故障U2-1", 2)
+	// PHM HVAC167: bFlt_VehTemp → 车厢温度传感器1（KSY: bflt_vehtemp_u1）
+	check("BfltVehtempU1", 67, "车厢温度传感器1故障", 3)
+	// PHM HVAC168: bFlt_SeatTemp → 车厢温度传感器2（KSY: bflt_vehtemp_u2）
+	check("BfltVehtempU2", 68, "车厢温度传感器2故障", 3)
+	// PHM HVAC169: bFlt_EmergIVT → 紧急逆变器
+	check("BfltEmergivt", 69, "紧急逆变器故障", 1)
+	check("BfltVfdComU11", 70, "变频器1-1通讯故障", 2)
+	check("BfltVfdComU12", 71, "变频器1-2通讯故障", 2)
+	check("BfltVfdComU21", 72, "变频器2-1通讯故障", 2)
+	check("BfltVfdComU22", 73, "变频器2-2通讯故障", 2)
+	// PHM HVAC174/175: bMCBFlt_Pwr_U1/U2（KSY: BfltPowersupplyU1/U2）
+	check("BfltPowersupplyU1", 74, "机组1供电故障", 1)
+	check("BfltPowersupplyU2", 75, "机组2供电故障", 1)
 
 	return hits
 }
