@@ -127,6 +127,7 @@ type parsedInput struct {
 
 type ruleState struct {
 	firstSeen time.Time
+	triggered bool // true 表示已达到持续时间要求，进入"已激活"状态
 }
 
 // NB67EventProcessor 增加了状态表，用于判断规则持续时间。
@@ -161,6 +162,50 @@ func (p *NB67EventProcessor) checkRule(condition bool, duration time.Duration, d
 
 	// 计算消息间的时间差，而不是系统运行时间差
 	return currentTime.Sub(state.firstSeen) >= duration
+}
+
+// checkRuleWithClear 支持滞回（hysteresis）的规则判定：
+//   - triggerCondition=true 且持续 duration 后激活（与 checkRule 相同）
+//   - 激活后，只要 keepCondition=true（通常 value > clear_value）就保持激活
+//   - keepCondition=false 时立即清除（value ≤ clear_value）
+//
+// 当 clearThreshold == triggerThreshold 时，keepCondition = triggerCondition，退化为 checkRule 的原有行为。
+func (p *NB67EventProcessor) checkRuleWithClear(triggerCondition bool, keepCondition bool, duration time.Duration, deviceID string, ruleCode string, currentTime time.Time) bool {
+	key := deviceID + ":" + ruleCode
+
+	valRaw, exists := p.states.Load(key)
+	if exists {
+		state := valRaw.(*ruleState)
+		if state.triggered {
+			// 已激活：keepCondition 决定是否保持
+			if !keepCondition {
+				p.states.Delete(key)
+				return false
+			}
+			return true
+		}
+		// 计时中但未激活
+		if !triggerCondition {
+			p.states.Delete(key)
+			return false
+		}
+		fired := currentTime.Sub(state.firstSeen) >= duration
+		if fired {
+			state.triggered = true
+		}
+		return fired
+	}
+
+	// 无既有状态
+	if !triggerCondition {
+		return false
+	}
+	newState := &ruleState{firstSeen: currentTime, triggered: false}
+	if duration <= 0 {
+		newState.triggered = true
+	}
+	p.states.Store(key, newState)
+	return duration <= 0
 }
 
 // init 在程序启动时自动注册处理器。
@@ -481,35 +526,42 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 	cfThresh := csRawThreshold("WARN_CF_CURRENT", 23)     // 冷凝风机 PHM 3.7
 	exufThresh := csRawThreshold("WARN_EXUF_CURRENT", 23) // 废排风机 PHM 3.8
 	fanDur := csDuration("WARN_EF_CURRENT", 10*time.Minute)
+	efClearThresh := csClearThreshold("WARN_EF_CURRENT", efThresh)
+	cfClearThresh := csClearThreshold("WARN_CF_CURRENT", cfThresh)
+	exufClearThresh := csClearThreshold("WARN_EXUF_CURRENT", exufThresh)
 
-	checkFanI := func(cfbkField, iField string, threshold int64, seq int, name, warnCode string) {
+	checkFanI := func(cfbkField, iField string, threshold, clearThreshold int64, seq int, name, warnCode string) {
 		code := hvacCode(base, seq)
 		isOverI := rawBool(raw, cfbkField) && rawInt(raw, iField) > threshold
-		if p.checkRule(isOverI, fanDur, deviceID, code, currentTime) {
+		// 保持激活：电流仍高于消除阈值（滞回区间内不反复触发/消除）
+		keepI := rawBool(raw, cfbkField) && rawInt(raw, iField) > clearThreshold
+		if p.checkRuleWithClear(isOverI, keepI, fanDur, deviceID, code, currentTime) {
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3,
 				TriggerConditionSnapshot: csTriggerConditionText(warnCode)})
 		}
 	}
-	checkFanI("CfbkEfU11", "IEfU11", efThresh, 12, "机组1通风机1电流预警", "WARN_EF_CURRENT")
-	checkFanI("CfbkEfU11", "IEfU12", efThresh, 13, "机组1通风机2电流预警", "WARN_EF_CURRENT")
-	checkFanI("CfbkEfU21", "IEfU21", efThresh, 14, "机组2通风机1电流预警", "WARN_EF_CURRENT")
-	checkFanI("CfbkEfU21", "IEfU22", efThresh, 15, "机组2通风机2电流预警", "WARN_EF_CURRENT")
-	checkFanI("CfbkCfU11", "ICfU11", cfThresh, 16, "机组1冷凝风机1电流预警", "WARN_CF_CURRENT")
-	checkFanI("CfbkCfU11", "ICfU12", cfThresh, 17, "机组1冷凝风机2电流预警", "WARN_CF_CURRENT")
-	checkFanI("CfbkCfU21", "ICfU21", cfThresh, 18, "机组2冷凝风机1电流预警", "WARN_CF_CURRENT")
-	checkFanI("CfbkCfU21", "ICfU22", cfThresh, 19, "机组2冷凝风机2电流预警", "WARN_CF_CURRENT")
-	checkFanI("CfbkExufan", "IExufan", exufThresh, 20, "废排风机电流预警", "WARN_EXUF_CURRENT")
+	checkFanI("CfbkEfU11", "IEfU11", efThresh, efClearThresh, 12, "机组1通风机1电流预警", "WARN_EF_CURRENT")
+	checkFanI("CfbkEfU11", "IEfU12", efThresh, efClearThresh, 13, "机组1通风机2电流预警", "WARN_EF_CURRENT")
+	checkFanI("CfbkEfU21", "IEfU21", efThresh, efClearThresh, 14, "机组2通风机1电流预警", "WARN_EF_CURRENT")
+	checkFanI("CfbkEfU21", "IEfU22", efThresh, efClearThresh, 15, "机组2通风机2电流预警", "WARN_EF_CURRENT")
+	checkFanI("CfbkCfU11", "ICfU11", cfThresh, cfClearThresh, 16, "机组1冷凝风机1电流预警", "WARN_CF_CURRENT")
+	checkFanI("CfbkCfU11", "ICfU12", cfThresh, cfClearThresh, 17, "机组1冷凝风机2电流预警", "WARN_CF_CURRENT")
+	checkFanI("CfbkCfU21", "ICfU21", cfThresh, cfClearThresh, 18, "机组2冷凝风机1电流预警", "WARN_CF_CURRENT")
+	checkFanI("CfbkCfU21", "ICfU22", cfThresh, cfClearThresh, 19, "机组2冷凝风机2电流预警", "WARN_CF_CURRENT")
+	checkFanI("CfbkExufan", "IExufan", exufThresh, exufClearThresh, 20, "废排风机电流预警", "WARN_EXUF_CURRENT")
 
 	// ================================================================
 	// 5. 压缩机电流预警 (HVAC_21 ~ HVAC_24) -> 新风 < 35℃ 且 I 超阈值 -> 持续时间由 DB 配置
 	// ================================================================
 	cpThresh := csRawThreshold("WARN_CP_CURRENT", 180) // 18A × 10
 	cpDur := csDuration("WARN_CP_CURRENT", 10*time.Minute)
+	cpClearThresh := csClearThreshold("WARN_CP_CURRENT", cpThresh)
 
 	checkCpI := func(fasField, iField string, seq int, name string) {
 		code := hvacCode(base, seq)
 		isOverI := rawInt(raw, fasField) < 350 && rawInt(raw, iField) > cpThresh
-		if p.checkRule(isOverI, cpDur, deviceID, code, currentTime) {
+		keepI := rawInt(raw, fasField) < 350 && rawInt(raw, iField) > cpClearThresh
+		if p.checkRuleWithClear(isOverI, keepI, cpDur, deviceID, code, currentTime) {
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3,
 				TriggerConditionSnapshot: csTriggerConditionText("WARN_CP_CURRENT")})
 		}

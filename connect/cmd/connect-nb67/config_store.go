@@ -33,6 +33,7 @@ import (
 // warnEntry 单条预警配置的运行时表示。
 type warnEntry struct {
 	TriggerValue         float64 // UI 显示单位阈值（超温类为超出量，单位℃）
+	ClearValue           float64 // 消除阈值（与 trigger_value 同单位）；0 表示与 trigger_value 相同（立即消除）
 	DurationSeconds      int     // 持续时间门控（秒），0 表示立即触发
 	Enabled              bool
 	RawScale             float64 // params.raw_scale，默认 1.0
@@ -98,7 +99,7 @@ func (cs *ConfigStore) startPolling(ctx context.Context, interval time.Duration)
 
 func (cs *ConfigStore) load() error {
 	rows, err := cs.db.Query(
-		`SELECT warn_code, trigger_value, duration_seconds, enabled, params, COALESCE(threshold_bad, '')
+		`SELECT warn_code, trigger_value, COALESCE(clear_value, 0), duration_seconds, enabled, params, COALESCE(threshold_bad, '')
 		 FROM hvac.warning_config`)
 	if err != nil {
 		return err
@@ -109,11 +110,12 @@ func (cs *ConfigStore) load() error {
 	for rows.Next() {
 		var code string
 		var tv float64
+		var cv float64
 		var dur int
 		var enabled bool
 		var paramsJSON sql.NullString
 		var threshBad string
-		if err := rows.Scan(&code, &tv, &dur, &enabled, &paramsJSON, &threshBad); err != nil {
+		if err := rows.Scan(&code, &tv, &cv, &dur, &enabled, &paramsJSON, &threshBad); err != nil {
 			cs.logger.Warnf("ConfigStore: 行扫描失败，跳过: %v", err)
 			continue
 		}
@@ -136,6 +138,7 @@ func (cs *ConfigStore) load() error {
 		}
 		m[code] = warnEntry{
 			TriggerValue:       tv,
+			ClearValue:         cv,
 			DurationSeconds:    dur,
 			Enabled:            enabled,
 			RawScale:           rawScale,
@@ -256,6 +259,32 @@ func csTriggerConditionText(warnCode string) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// csClearThreshold 返回原始传感器单位的消除阈值。
+// clear_value = 0（或未设置）时，返回 defaultVal（即与触发阈值相同，立即消除，保持原有行为）。
+// 消除阈值必须小于触发阈值，否则退回 defaultVal。
+func csClearThreshold(warnCode string, defaultVal int64) int64 {
+	cs := globalConfigStore
+	if cs == nil {
+		return defaultVal
+	}
+	p := cs.val.Load()
+	if p == nil {
+		return defaultVal
+	}
+	m := *p.(*configMap)
+	e, ok := m[warnCode]
+	if !ok || !e.Enabled || e.ClearValue <= 0 {
+		return defaultVal
+	}
+	cv := int64(e.ClearValue * e.RawScale)
+	// 消除阈值必须严格小于触发阈值，防止逻辑错误
+	triggerRaw := int64(e.TriggerValue * e.RawScale)
+	if cv >= triggerRaw {
+		return defaultVal
+	}
+	return cv
 }
 
 // csOvertempAbsThreshold 返回车厢超温的绝对阈值（原始传感器单位）。
