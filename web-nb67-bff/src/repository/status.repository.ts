@@ -105,13 +105,13 @@ export class StatusRepository {
         let query = db
             .selectFrom('hvac.fact_event')
             .selectAll()
-            // 实时故障去重：同一车厢同一编码只保留最早触发的（升序取第一条）
+            // 实时故障去重：同一车厢同一编码只保留最新触发的一条（降序取第一条）
             .distinctOn(['train_id', 'carriage_id' as any, 'fault_code'])
             .where('event_type', '=', 'alarm')
             .orderBy('train_id')
             .orderBy('carriage_id' as any)
             .orderBy('fault_code')
-            .orderBy(this.timeCol as any, 'asc')
+            .orderBy(this.timeCol as any, 'desc')
             .limit(200);
 
         if (trainIds && trainIds.length > 0 && !isNaN(Number(trainIds[0]))) {
@@ -159,13 +159,13 @@ export class StatusRepository {
         let query = db
             .selectFrom('hvac.fact_event')
             .selectAll()
-            // 按列车、车厢、故障码去重，只保留最早触发的一条（升序取第一条）
+            // 按列车、车厢、故障码去重，只保留最新触发的一条（降序取第一条）
             .distinctOn(['train_id', 'carriage_id' as any, 'fault_code'])
             .where('event_type', '=', 'predict')
             .orderBy('train_id')
             .orderBy('carriage_id' as any)
             .orderBy('fault_code')
-            .orderBy(this.timeCol as any, 'asc')
+            .orderBy(this.timeCol as any, 'desc')
             .limit(200);
 
         if (trainId && !isNaN(trainId)) {
