@@ -52,6 +52,7 @@
 [2026-05-27] #12 - 5位trainNo数据不显示/BFF state解析硬编码4位 - BFF/前端
 [2026-05-27] #13 - 历史报警页面缺少机组信息/unit_name未在select中 - BFF/status.repository
 [2026-05-27] #14 - 预警无法消除/clear_value未加载/无滞回逻辑 - config_store/nb67_event_processor
+[2026-05-27] #32 - dist镜像版本同步/从零重部署 - dist/部署
 
 ---
 
@@ -91,6 +92,26 @@
 3. **clear_value 与 trigger_value 分开管理**：DB 有两个字段不代表代码都使用了——务必检查 SQL SELECT 列表是否包含所有业务字段。
 4. **滞回（hysteresis）防振荡**：预警系统中触发阈值和消除阈值应分开，防止数值在边界附近时预警反复触发/消除；实现时需引入"已激活"状态标记（`triggered bool`）。
 5. **Docker volume 挂载缺失**：若宿主机文件不存在而 Docker 尝试挂载，会自动创建空目录，后续读取报"is a directory"。修复方法：先删目录，复制真实文件，再删除旧容器并重新 up。
+
+### [2026-05-27] #32 - dist镜像版本同步/从零重部署
+
+**问题描述**：
+- 用户要求把 `dist/` 中的镜像版本、打包清单和部署说明同步到当前可用版本，并重新从零部署后用浏览器截图确认页面状态。
+
+**根因**：
+- `dist/image-save.sh` 仍引用旧版 `nb67-web` / `nb67-bff` / `nb-parse-connect` 镜像标签，`dist/README.md` 的镜像表也未对齐当前 compose 文件，容易导致离线打包和部署说明与实际运行版本不一致。
+
+**修复方法**：
+- `dist/image-save.sh`：将 `nb-parse-connect`、`nb67-web`、`nb67-bff` 的镜像 tag 同步到当前部署版本。
+- `dist/README.md`：更新文档版本号、更新时间和镜像表。
+- `docs/ISSUE_KNOWLEDGE_BASE.md`：新增本条记录，便于后续追踪 dist 同步历史。
+
+**测试验证**：
+- 重新读取并核对 `dist/README.md` 与 `dist/docker-compose-*.yml` 的镜像 tag 是否一致。
+- 后续将执行镜像构建、从零启动和浏览器截图验证。
+
+**经验总结**：
+- dist 离线包里的 `README`、`image-save.sh` 和 `docker-compose` 必须视为一个整体一起更新，否则离线打包、在线部署和文档会出现版本漂移。
 
 ### [2026-05-26] #11 - 历史预警触发条件随配置变更而改变
 
