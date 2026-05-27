@@ -600,7 +600,6 @@ export class StatusRepository {
                 .select([
                     'e.event_time', 'e.ingest_time', 'e.train_id', 'e.carriage_id',
                     'e.fault_code', 'e.fault_name', 'e.severity', 'e.status',
-                    'e.unit_name' as any,
                     'e.recovery_time' as any,
                     'e.payload_json' as any,
                 ])

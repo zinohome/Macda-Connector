@@ -277,6 +277,12 @@ async function bootstrap() {
                 const formatUnit = (faultCode: string) => {
                     if (!faultCode) return '-';
                     const c = faultCode.toLowerCase();
+                    if (c.startsWith('hvac')) {
+                        const seq = parseInt(faultCode.replace(/[^0-9]/g, '')) % 100;
+                        if (seq >= 27 && seq <= 46) return '机组一';
+                        if (seq >= 47 && seq <= 66) return '机组二';
+                        if (seq >= 67 && seq <= 75) return '公共';
+                    }
                     if (c.includes('u1')) return '机组一';
                     if (c.includes('u2')) return '机组二';
                     return '-';
