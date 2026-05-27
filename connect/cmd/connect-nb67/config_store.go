@@ -18,7 +18,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,11 +33,13 @@ import (
 // warnEntry 单条预警配置的运行时表示。
 type warnEntry struct {
 	TriggerValue         float64 // UI 显示单位阈值（超温类为超出量，单位℃）
+	ClearValue           float64 // 消除阈值（与 trigger_value 同单位）；0 表示与 trigger_value 相同（立即消除）
 	DurationSeconds      int     // 持续时间门控（秒），0 表示立即触发
 	Enabled              bool
 	RawScale             float64 // params.raw_scale，默认 1.0
 	TargetTemp           float64 // params.target_temp（℃），0=未配置；超温类专用
 	MinCoolingRuntimeS   int     // params.min_cooling_runtime_s（秒），-1=未配置
+	ThresholdBad         string  // 用于显示的触发阈值文本（与设置页一致），用于生成快照
 }
 
 type configMap map[string]warnEntry
@@ -95,7 +99,7 @@ func (cs *ConfigStore) startPolling(ctx context.Context, interval time.Duration)
 
 func (cs *ConfigStore) load() error {
 	rows, err := cs.db.Query(
-		`SELECT warn_code, trigger_value, duration_seconds, enabled, params
+		`SELECT warn_code, trigger_value, COALESCE(clear_value, 0), duration_seconds, enabled, params, COALESCE(threshold_bad, '')
 		 FROM hvac.warning_config`)
 	if err != nil {
 		return err
@@ -106,10 +110,12 @@ func (cs *ConfigStore) load() error {
 	for rows.Next() {
 		var code string
 		var tv float64
+		var cv float64
 		var dur int
 		var enabled bool
 		var paramsJSON sql.NullString
-		if err := rows.Scan(&code, &tv, &dur, &enabled, &paramsJSON); err != nil {
+		var threshBad string
+		if err := rows.Scan(&code, &tv, &cv, &dur, &enabled, &paramsJSON, &threshBad); err != nil {
 			cs.logger.Warnf("ConfigStore: 行扫描失败，跳过: %v", err)
 			continue
 		}
@@ -132,11 +138,13 @@ func (cs *ConfigStore) load() error {
 		}
 		m[code] = warnEntry{
 			TriggerValue:       tv,
+			ClearValue:         cv,
 			DurationSeconds:    dur,
 			Enabled:            enabled,
 			RawScale:           rawScale,
 			TargetTemp:         targetTemp,
 			MinCoolingRuntimeS: minCoolingRuntimeS,
+			ThresholdBad:       threshBad,
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -220,6 +228,63 @@ func csCoolingPreconditionDur(warnCode string, defaultDur time.Duration) time.Du
 		return defaultDur
 	}
 	return time.Duration(e.MinCoolingRuntimeS) * time.Second
+}
+
+// csTriggerConditionText 返回触发时刻的配置快照文本（与设置页/BFF 展示逻辑一致）。
+// 格式："{threshold_bad} 持续N分钟" 或 "{threshold_bad} 持续Ns"，空字符串表示无快照。
+// 用于写入 PredictHit.TriggerConditionSnapshot，确保历史预警展示的触发条件不随配置变更而改变。
+func csTriggerConditionText(warnCode string) string {
+	cs := globalConfigStore
+	if cs == nil {
+		return ""
+	}
+	p := cs.val.Load()
+	if p == nil {
+		return ""
+	}
+	m := *p.(*configMap)
+	e, ok := m[warnCode]
+	if !ok || !e.Enabled {
+		return ""
+	}
+	parts := []string{}
+	if e.ThresholdBad != "" {
+		parts = append(parts, e.ThresholdBad)
+	}
+	if e.DurationSeconds > 0 {
+		if e.DurationSeconds >= 60 && e.DurationSeconds%60 == 0 {
+			parts = append(parts, fmt.Sprintf("持续%d分钟", e.DurationSeconds/60))
+		} else {
+			parts = append(parts, fmt.Sprintf("持续%d秒", e.DurationSeconds))
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+// csClearThreshold 返回原始传感器单位的消除阈值。
+// clear_value = 0（或未设置）时，返回 defaultVal（即与触发阈值相同，立即消除，保持原有行为）。
+// 消除阈值必须小于触发阈值，否则退回 defaultVal。
+func csClearThreshold(warnCode string, defaultVal int64) int64 {
+	cs := globalConfigStore
+	if cs == nil {
+		return defaultVal
+	}
+	p := cs.val.Load()
+	if p == nil {
+		return defaultVal
+	}
+	m := *p.(*configMap)
+	e, ok := m[warnCode]
+	if !ok || !e.Enabled || e.ClearValue <= 0 {
+		return defaultVal
+	}
+	cv := int64(e.ClearValue * e.RawScale)
+	// 消除阈值必须严格小于触发阈值，防止逻辑错误
+	triggerRaw := int64(e.TriggerValue * e.RawScale)
+	if cv >= triggerRaw {
+		return defaultVal
+	}
+	return cv
 }
 
 // csOvertempAbsThreshold 返回车厢超温的绝对阈值（原始传感器单位）。

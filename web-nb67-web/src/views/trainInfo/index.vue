@@ -1430,7 +1430,7 @@ async function listData (){
     AlarmInfoData.value = []
     for (let i=1;i<7;i++){
         const params = {
-            state: route.query.trainNo + String(i).padStart(2, '0'),
+            state: filterForm.trainNo + String(i).padStart(2, '0'),
             startTime: startTime.value,
             endTime: endTime.value
         }

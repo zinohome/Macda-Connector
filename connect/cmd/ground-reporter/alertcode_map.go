@@ -44,10 +44,85 @@ func platformHvacCode(code string) string {
 	return fmt.Sprintf("HVAC%d", 100+seq)
 }
 
-// alertcodeLocationMap maps HVAC alert code to the fault_type (location) field
-// required by the 6.1 platform API. Source: NB6&7-空调预警码表20240802(2).xlsx.
-// Keys use the INTERNAL format (HVAC{carriage*100+seq}) so location can be
-// determined from the original event code before seq remapping.
+// predictSeqToLocation maps internal predict seq (1-26) to location string.
+// Source: alertcode_v2.xlsx (PHM v2). Used for per-carriage prediction codes
+// HVAC{carriage*100+seq}, looked up before seq remapping to platform code.
+var predictSeqToLocation = map[int]string{
+	1: "空调机组1", 2: "空调机组1",
+	3: "空调机组2", 4: "空调机组2",
+	5: "空调机组1", 6: "空调机组2",
+	7: "空调机组1&2", 8: "空调机组1&2",
+	9: "空调机组1&2", // 车厢超温 — PHM v2 HVAC106 location
+	10: "空调机组1", 11: "空调机组2",
+	12: "空调机组1", 13: "空调机组1",
+	14: "空调机组2", 15: "空调机组2",
+	16: "空调机组1", 17: "空调机组1",
+	18: "空调机组2", 19: "空调机组2",
+	20: "废排单元",
+	21: "空调机组1", 22: "空调机组1",
+	23: "空调机组2", 24: "空调机组2",
+	25: "空调机组1", 26: "空调机组2",
+}
+
+// alarmSeqToLocation maps alarm seq (27-75) to location string.
+// Source: alertcode_v2.xlsx (PHM v2), HVAC127-HVAC175.
+var alarmSeqToLocation = map[int]string{
+	27: "通风机1-1过流", 28: "通风机1-2过流",
+	29: "冷凝风机1-1过流", 30: "冷凝风机1-2过流",
+	31: "变频器1-1", 32: "压缩机1-1低压", 33: "压缩机1-1高压连锁",
+	34: "变频器1-2", 35: "压缩机1-2低压", 36: "压缩机1-2高压连锁",
+	37: "新风阀U1", 38: "回风阀U1", 39: "空气净化U1",
+	40: "扩展模块U1", 41: "新风温度传感器U1",
+	42: "送风温度传感器1-1", 43: "送风温度传感器1-2",
+	44: "回风温度传感器U1",
+	45: "融霜温度传感器1-1", 46: "融霜温度传感器1-2",
+	47: "通风机2-1过流", 48: "通风机2-2过流",
+	49: "冷凝风机2-1过流", 50: "冷凝风机2-2过流",
+	51: "变频器2-1", 52: "压缩机2-1低压", 53: "压缩机2-1高压连锁",
+	54: "变频器2-2", 55: "压缩机2-2低压", 56: "压缩机2-2高压连锁",
+	57: "新风阀U2", 58: "回风阀U2", 59: "空气净化U2",
+	60: "扩展模块U2", 61: "新风温度传感器U2",
+	62: "送风温度传感器2-1", 63: "送风温度传感器2-2",
+	64: "回风温度传感器U2",
+	65: "融霜温度传感器2-1", 66: "融霜温度传感器2-2",
+	67: "车厢温度传感器1", 68: "车厢温度传感器2",
+	69: "紧急逆变器",
+	70: "变频器1-1通讯", 71: "变频器1-2通讯",
+	72: "变频器2-1通讯", 73: "变频器2-2通讯",
+	74: "机组1供电", 75: "机组2供电",
+}
+
+// alarmSeqToFaultName maps alarm seq (27-75) to fault_name string.
+// Source: alertcode_v2.xlsx (PHM v2), HVAC127-HVAC175.
+var alarmSeqToFaultName = map[int]string{
+	27: "通风机1-1过流故障", 28: "通风机1-2过流故障",
+	29: "冷凝风机1-1过流故障", 30: "冷凝风机1-2过流故障",
+	31: "变频器1-1故障", 32: "压缩机1-1低压故障", 33: "压缩机1-1高压连锁故障",
+	34: "变频器1-2故障", 35: "压缩机1-2低压故障", 36: "压缩机1-2高压连锁故障",
+	37: "新风阀U1故障", 38: "回风阀U1故障", 39: "空气净化U1故障",
+	40: "扩展模块U1故障", 41: "新风温度传感器U1故障",
+	42: "送风温度传感器1-1故障", 43: "送风温度传感器1-2故障",
+	44: "回风温度传感器U1故障",
+	45: "融霜温度传感器1-1故障", 46: "融霜温度传感器1-2故障",
+	47: "通风机2-1过流故障", 48: "通风机2-2过流故障",
+	49: "冷凝风机2-1过流故障", 50: "冷凝风机2-2过流故障",
+	51: "变频器2-1故障", 52: "压缩机2-1低压故障", 53: "压缩机2-1高压连锁故障",
+	54: "变频器2-2故障", 55: "压缩机2-2低压故障", 56: "压缩机2-2高压连锁故障",
+	57: "新风阀U2故障", 58: "回风阀U2故障", 59: "空气净化U2故障",
+	60: "扩展模块U2故障", 61: "新风温度传感器U2故障",
+	62: "送风温度传感器2-1故障", 63: "送风温度传感器2-2故障",
+	64: "回风温度传感器U2故障",
+	65: "融霜温度传感器2-1故障", 66: "融霜温度传感器2-2故障",
+	67: "车厢温度传感器1故障", 68: "车厢温度传感器2故障",
+	69: "紧急逆变器故障",
+	70: "变频器1-1通讯故障", 71: "变频器1-2通讯故障",
+	72: "变频器2-1通讯故障", 73: "变频器2-2通讯故障",
+	74: "机组1供电故障", 75: "机组2供电故障",
+}
+
+// alertcodeLocationMap retains full entries for all carriages for predict codes (seq 1-26).
+// For alarm codes (seq 27-75), use alarmSeqToLocation via locationByCode.
+// Source: alertcode_v2.xlsx (PHM v2).
 var alertcodeLocationMap = map[string]string{
 	"HVAC101": "空调机组1",
 	"HVAC102": "空调机组1",
@@ -57,7 +132,7 @@ var alertcodeLocationMap = map[string]string{
 	"HVAC106": "空调机组2",
 	"HVAC107": "空调机组1&2",
 	"HVAC108": "空调机组1&2",
-	"HVAC109": "空调系统",
+	"HVAC109": "空调机组1&2",
 	"HVAC110": "空调机组1",
 	"HVAC111": "空调机组2",
 	"HVAC112": "空调机组1",
@@ -83,7 +158,7 @@ var alertcodeLocationMap = map[string]string{
 	"HVAC206": "空调机组2",
 	"HVAC207": "空调机组1&2",
 	"HVAC208": "空调机组1&2",
-	"HVAC209": "空调系统",
+	"HVAC209": "空调机组1&2",
 	"HVAC210": "空调机组1",
 	"HVAC211": "空调机组2",
 	"HVAC212": "空调机组1",
@@ -109,7 +184,7 @@ var alertcodeLocationMap = map[string]string{
 	"HVAC306": "空调机组2",
 	"HVAC307": "空调机组1&2",
 	"HVAC308": "空调机组1&2",
-	"HVAC309": "空调系统",
+	"HVAC309": "空调机组1&2",
 	"HVAC310": "空调机组1",
 	"HVAC311": "空调机组2",
 	"HVAC312": "空调机组1",
@@ -135,7 +210,7 @@ var alertcodeLocationMap = map[string]string{
 	"HVAC406": "空调机组2",
 	"HVAC407": "空调机组1&2",
 	"HVAC408": "空调机组1&2",
-	"HVAC409": "空调系统",
+	"HVAC409": "空调机组1&2",
 	"HVAC410": "空调机组1",
 	"HVAC411": "空调机组2",
 	"HVAC412": "空调机组1",
@@ -161,7 +236,7 @@ var alertcodeLocationMap = map[string]string{
 	"HVAC506": "空调机组2",
 	"HVAC507": "空调机组1&2",
 	"HVAC508": "空调机组1&2",
-	"HVAC509": "空调系统",
+	"HVAC509": "空调机组1&2",
 	"HVAC510": "空调机组1",
 	"HVAC511": "空调机组2",
 	"HVAC512": "空调机组1",
@@ -187,7 +262,7 @@ var alertcodeLocationMap = map[string]string{
 	"HVAC606": "空调机组2",
 	"HVAC607": "空调机组1&2",
 	"HVAC608": "空调机组1&2",
-	"HVAC609": "空调系统",
+	"HVAC609": "空调机组1&2",
 	"HVAC610": "空调机组1",
 	"HVAC611": "空调机组2",
 	"HVAC612": "空调机组1",
@@ -369,18 +444,46 @@ var alertcodeFaultNameMap = map[string]string{
 }
 
 // locationByCode returns the location string for a given HVAC code.
-// Falls back to the code itself if not found in the table.
+// Supports both predict codes (seq 1-26, flat map) and alarm codes (seq 27-75, seq map).
+// Falls back to the code itself if not found.
 func locationByCode(code string) string {
 	if loc, ok := alertcodeLocationMap[code]; ok {
 		return loc
+	}
+	// Alarm codes: HVAC{carriage*100+seq}, seq 27-75
+	upper := strings.ToUpper(code)
+	if strings.HasPrefix(upper, "HVAC") {
+		n, err := strconv.Atoi(code[4:])
+		if err == nil {
+			seq := n % 100
+			if seq >= 27 && seq <= 75 {
+				if loc, ok := alarmSeqToLocation[seq]; ok {
+					return loc
+				}
+			}
+		}
 	}
 	return code
 }
 
 // faultNameByCode returns the fault_name string for a given HVAC code.
-// Falls back to empty string if not found in the table.
+// Supports both predict codes (seq 1-26) and alarm codes (seq 27-75).
+// Falls back to empty string if not found.
 func faultNameByCode(code string) string {
-	return alertcodeFaultNameMap[code]
+	if name, ok := alertcodeFaultNameMap[code]; ok {
+		return name
+	}
+	upper := strings.ToUpper(code)
+	if strings.HasPrefix(upper, "HVAC") {
+		n, err := strconv.Atoi(code[4:])
+		if err == nil {
+			seq := n % 100
+			if seq >= 27 && seq <= 75 {
+				return alarmSeqToFaultName[seq]
+			}
+		}
+	}
+	return ""
 }
 
 // padTrainNo formats a train number string as a 5-digit zero-padded string.

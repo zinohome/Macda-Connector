@@ -440,12 +440,30 @@ export class StatusRepository {
             if (params.eventType) {
                 q = q.where('event_type', '=', params.eventType);
             }
-            // 机组筛选：通过 fault_code 包含 U1/U2 判断机组
+            // 机组筛选：告警码已改为 HVAC{carriage*100+seq} 格式（alertcode_v2.xlsx）
+            // seq 1-26：预警码（predict），seq 27-46：机组1告警，seq 47-66：机组2告警，seq 67-75：公共告警
+            // 通过提取 seq = fault_code数字部分 % 100 判断所属机组
             if (params.unitNames && params.unitNames.length > 0 && params.unitNames.length < 2) {
                 if (params.unitNames.includes('机组一')) {
-                    q = q.where(sql`lower(fault_code) like '%u1%'` as any);
+                    // seq 1-26（预警，含机组1部分）+ seq 27-46（机组1告警）
+                    q = q.where(sql`
+                        fault_code ~ '^HVAC[0-9]+$' AND (
+                            (CAST(substring(fault_code from 5) AS INT) % 100 BETWEEN 1 AND 26
+                             AND lower(fault_name) LIKE '%u1%' OR lower(fault_name) LIKE '%1%')
+                            OR
+                            (CAST(substring(fault_code from 5) AS INT) % 100 BETWEEN 27 AND 46)
+                        )
+                    ` as any);
                 } else if (params.unitNames.includes('机组二')) {
-                    q = q.where(sql`lower(fault_code) like '%u2%'` as any);
+                    // seq 3-6,11,14-15,18-19,23-24,26（预警，机组2部分）+ seq 47-66（机组2告警）
+                    q = q.where(sql`
+                        fault_code ~ '^HVAC[0-9]+$' AND (
+                            (CAST(substring(fault_code from 5) AS INT) % 100 BETWEEN 1 AND 26
+                             AND (lower(fault_name) LIKE '%u2%' OR lower(fault_name) LIKE '%机组2%'))
+                            OR
+                            (CAST(substring(fault_code from 5) AS INT) % 100 BETWEEN 47 AND 66)
+                        )
+                    ` as any);
                 }
             }
             return q;
@@ -583,6 +601,7 @@ export class StatusRepository {
                     'e.event_time', 'e.ingest_time', 'e.train_id', 'e.carriage_id',
                     'e.fault_code', 'e.fault_name', 'e.severity', 'e.status',
                     'e.recovery_time' as any,
+                    'e.payload_json' as any,
                 ])
                 .orderBy(`e.${this.timeCol}` as any, 'desc')
                 .limit(1000)   // 宽松拉取，JS 过滤后再分页
@@ -610,11 +629,26 @@ export class StatusRepository {
             }
         });
 
-        // 将 HVAC 编码映射到 warn_code，再查出 trigger_condition
+        // 将 HVAC 编码映射到触发条件：优先读 payload_json 中的快照（触发时刻记录），
+        // 快照缺失时降级到当前配置（向后兼容旧数据）
         let list = rawList.map((row: any) => {
             const code = String(row.fault_code || '');
             let trigger_condition: string | null = null;
-            if (code.toUpperCase().startsWith('HVAC')) {
+
+            // 1. 尝试从 payload_json 读取快照（新数据路径）
+            try {
+                const payload = typeof row.payload_json === 'string'
+                    ? JSON.parse(row.payload_json)
+                    : (row.payload_json || {});
+                if (payload.trigger_condition_snapshot) {
+                    trigger_condition = String(payload.trigger_condition_snapshot);
+                }
+            } catch {
+                // JSON 解析失败时忽略，继续走降级逻辑
+            }
+
+            // 2. 降级：从当前配置动态生成（旧数据无快照时的兼容路径）
+            if (!trigger_condition && code.toUpperCase().startsWith('HVAC')) {
                 const num = parseInt(code.replace(/[^0-9]/g, ''), 10);
                 const seq = isNaN(num) ? -1 : num % 100;
                 const warnCode = StatusRepository.hvacSeqToWarnCode(seq, code);

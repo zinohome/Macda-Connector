@@ -48,12 +48,72 @@
 [2026-05-24] #5 - 预警历史页面触发条件显示与设置页不一致/strategy误当触发条件 - BFF/status.repository
 [2026-05-26] #8 - 新风/回风传感器32767误报/trainNo未补零/冷凝风机预警不消除 - nb67_event_processor/ground-reporter/前端
 [2026-05-26] #7 - 预警报文code不随车厢变化/fault_name多余/完整预警描述未显示 - ground-reporter/BFF/前端
+[2026-05-26] #11 - 历史预警触发条件随配置变更而变/缺少触发时刻快照 - config_store/nb67_event_processor/BFF
+[2026-05-27] #12 - 5位trainNo数据不显示/BFF state解析硬编码4位 - BFF/前端
+[2026-05-27] #13 - 历史报警页面缺少机组信息/unit_name未在select中 - BFF/status.repository
+[2026-05-27] #14 - 预警无法消除/clear_value未加载/无滞回逻辑 - config_store/nb67_event_processor
 
 ---
 
 ## 三、历史 Issue 处理记录
 
 > 最新记录在最前。每条记录包含：问题描述、根因、修复方法、测试验证、经验总结。
+
+### [2026-05-27] #12 #13 #14 - trainNo 5位/历史预警机组信息/预警无法消除
+
+**问题描述**：
+- #12：web 页面地址栏 trainNo 改成五位数后，有些数据不能显示（如历史报警页）
+- #13：历史报警页面的报警条目中缺少机组信息，但实时报警中有
+- #14：修改了预警消除阈值后，预警仍无法自动消除
+
+**根因**：
+- #12：双重 bug：① `trainInfo/index.vue` 的 `listData()` 直接拼接 `route.query.trainNo`（URL 带前导零，如 "07001"），导致 state 多一位字符（"0700101" vs "700101"），BFF 解析出错；② BFF `index.ts` 的 state 解析用 `slice(0,4)` 硬编码4位 trainId，5 位列车号（如 "10551"）时截取 trainId 错误
+- #13：`getHistoricalWarnings` select 列表手动列举字段，漏掉了 `e.unit_name`；而 `getRealtimeWarnings` 用 `selectAll()` 所以有 unit_name
+- #14：`config_store.go` 的 SQL 查询只加载 `trigger_value`，从未加载 `clear_value`；`warnEntry` 结构体也无 `ClearValue` 字段；`nb67_event_processor.go` 隐式用 trigger_value 作为消除条件，用户在 UI 修改 clear_value 对 Go 处理器完全无效
+
+**修复方法**：
+- **`web-nb67-web/src/views/trainInfo/index.vue:1433`**：`listData()` 中 `route.query.trainNo` → `filterForm.trainNo`（已 parseInt 去前导零）
+- **`web-nb67-bff/src/index.ts`**：三处 state 解析从 `slice(0,4)` / `slice(4,6)` 改为 `slice(0,-2)` / `slice(-2)`，自动适配 4/5 位 trainId
+- **`web-nb67-bff/src/repository/status.repository.ts`**：`getHistoricalWarnings` select 列表加入 `'e.unit_name' as any`
+- **`connect/cmd/connect-nb67/config_store.go`**：`warnEntry` 增 `ClearValue float64`，SQL 补 `clear_value`，新增 `csClearThreshold()` 函数
+- **`connect/cmd/connect-nb67/nb67_event_processor.go`**：`ruleState` 增 `triggered bool`，新增 `checkRuleWithClear()` 实现滞回逻辑（已激活后只有低于 clear_value 才消除），`checkFanI` / `checkCpI` 改用滞回版本
+
+**测试验证**：
+- `CGO_ENABLED=0 go build ./...` — connect-nb67 编译 ✓
+- TypeScript 类型检查无新增错误
+- 镜像构建推送：nb67-web:v2.5.20 ✓，nb67-bff:v2.5.20 ✓，nb-parse-connect:v2.5.4 ✓
+- 容器全部健康运行：nb67-web、nb67-bff、connect-parser、connect-event-builder、connect-event-writer ✓
+- 同步修复了 `/data/MACDA2/connect/config/` 目录下 YAML 配置文件缺失的预存部署问题
+
+**经验总结**：
+1. **精确 select vs selectAll**：手动列举字段时必须与 schema 核对，极易遗漏新增列。重要实时接口和历史接口应保持字段一致。
+2. **state 字符串解析与车号位数**：依赖 `slice(0,4)` 这类固定偏移的字符串解析是脆弱的；改用 `slice(0,-2)` 从末尾取固定2位 carriageId，其余为 trainId，自动适配任意位数。
+3. **clear_value 与 trigger_value 分开管理**：DB 有两个字段不代表代码都使用了——务必检查 SQL SELECT 列表是否包含所有业务字段。
+4. **滞回（hysteresis）防振荡**：预警系统中触发阈值和消除阈值应分开，防止数值在边界附近时预警反复触发/消除；实现时需引入"已激活"状态标记（`triggered bool`）。
+5. **Docker volume 挂载缺失**：若宿主机文件不存在而 Docker 尝试挂载，会自动创建空目录，后续读取报"is a directory"。修复方法：先删目录，复制真实文件，再删除旧容器并重新 up。
+
+### [2026-05-26] #11 - 历史预警触发条件随配置变更而改变
+
+**问题描述**：已触发的历史预警记录中的"触发条件"字段，会随着用户在设置页修改预警配置后自动更新，应该显示触发时刻的设置。例如原先以 2.3A 电流触发的预警，修改为 2.9A 后，历史记录也显示 2.9A。
+
+**根因**：预警事件写入 `fact_event.payload_json` 时只存储了命中码（code/name/severity），未保存触发时刻的配置快照。BFF `getHistoricalWarnings` 每次查询都从当前 `hvac.warning_config` 表动态生成 `trigger_condition`，导致所有历史记录跟随当前配置变化。
+
+**修复方法**：
+- **`config_store.go`**：`warnEntry` 增加 `ThresholdBad string` 字段，`load()` 查询新增 `threshold_bad` 列；添加 `csTriggerConditionText(warnCode)` 帮助函数，按与 BFF 相同逻辑生成快照文本（threshold_bad + 持续N分钟）
+- **`nb67_event_processor.go`**：`PredictHit` 增加 `TriggerConditionSnapshot string`（omitempty），`buildPredictHits` 中所有配置驱动的命中位置调用 `csTriggerConditionText()` 填充快照；硬编码阈值的条件（如制冷系统过热度条件2）不填快照；YAML 层无需修改（`payload_json = this.string()` 自动包含新字段）
+- **`status.repository.ts`**：select 新增 `e.payload_json`；map 逻辑改为优先读 `payload_json.trigger_condition_snapshot`（新数据路径），找不到时降级为当前配置（旧数据向后兼容）
+
+**测试验证**：
+- `CGO_ENABLED=0 go build ./...` — connect-nb67 ✓
+- TypeScript 类型检查无新增错误（存量错误为预存问题）
+- 镜像构建推送：nb-parse-connect:v2.5.3 ✓，nb67-bff:v2.5.19 ✓
+- 容器重启：connect-event-builder、connect-event-writer、nb67-bff 均健康启动
+
+**经验总结**：
+1. **快照 vs 引用**：任何"历史记录需要反映创建时状态"的字段都应在写入时快照，而非引用当前配置。本项目中 `payload_json` 是扩展历史记录的合适位置。
+2. **向后兼容降级**：新增快照字段后，旧数据无该字段，读取层必须降级处理（`|| fallback`），不能假设字段一定存在。
+3. **BFF 构建 `trigger_condition` 的逻辑**：取 `threshold_bad`（显示字符串）+ `duration_seconds`（格式化为"持续N分钟"）。Go 层和 BFF 层共享相同逻辑，确保快照与设置页展示完全一致。
+4. **config_store 已有 threshold_bad**：修复前 config_store 只加载 `trigger_value`（数值），修复后额外加载 `threshold_bad`（展示字符串），两者用途不同不可互替。
 
 ### [2026-05-26] #8 #9 #10 - 传感器误报 / trainNo 补零 / 预警无法自动消除
 

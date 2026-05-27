@@ -246,8 +246,10 @@ async function bootstrap() {
             let trainId: number | undefined;
             let carriageIds: number[] | undefined;
             if (state) {
-                trainId = parseInt(String(state).slice(0, 4));
-                const cid = parseInt(String(state).slice(4, 6));
+                // state 格式：{trainId}{carriageNo(2位)}，trainId 可能是 4 或 5 位
+                const s = String(state);
+                trainId = parseInt(s.slice(0, -2));
+                const cid = parseInt(s.slice(-2));
                 if (!isNaN(cid)) carriageIds = [cid];
             }
             if (trainNo) trainId = parseInt(String(trainNo));
@@ -275,6 +277,12 @@ async function bootstrap() {
                 const formatUnit = (faultCode: string) => {
                     if (!faultCode) return '-';
                     const c = faultCode.toLowerCase();
+                    if (c.startsWith('hvac')) {
+                        const seq = parseInt(faultCode.replace(/[^0-9]/g, '')) % 100;
+                        if (seq >= 27 && seq <= 46) return '机组一';
+                        if (seq >= 47 && seq <= 66) return '机组二';
+                        if (seq >= 67 && seq <= 75) return '公共';
+                    }
                     if (c.includes('u1')) return '机组一';
                     if (c.includes('u2')) return '机组二';
                     return '-';
@@ -331,8 +339,8 @@ async function bootstrap() {
         // 历史数据接口 (适配 HistoryData 页面提取存在数据的日期)
         fastify.get('/api/getTrainDataDates', async (request: any) => {
             const { state, startTime, endTime } = request.query;
-            const trainId = state ? parseInt(String(state).slice(0, 4)) : undefined;
-            const carriageId = state ? parseInt(String(state).slice(4, 6)) : undefined;
+            const trainId = state ? parseInt(String(state).slice(0, -2)) : undefined;
+            const carriageId = state ? parseInt(String(state).slice(-2)) : undefined;
 
             try {
                 const queryStartTime = new Date(String(startTime || ''));
@@ -361,8 +369,8 @@ async function bootstrap() {
         // 每条 DB 记录按机组一/机组二拆成两行输出
         fastify.get('/api/getTrainData', async (request: any) => {
             const { state, startTime, endTime, page = 1, limit = 50, unitName = '' } = request.query;
-            const trainId = state ? parseInt(String(state).slice(0, 4)) : undefined;
-            const carriageId = state ? parseInt(String(state).slice(4, 6)) : undefined;
+            const trainId = state ? parseInt(String(state).slice(0, -2)) : undefined;
+            const carriageId = state ? parseInt(String(state).slice(-2)) : undefined;
 
             const result = await StatusRepository.getRawHistory({
                 trainId,
