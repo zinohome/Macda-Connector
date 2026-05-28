@@ -152,6 +152,16 @@ func (cs *ConfigStore) load() error {
 	}
 	cs.val.Store(&m)
 	cs.logger.Debugf("ConfigStore: 已加载 %d 条预警配置", len(m))
+	
+	// 输出关键预警的持续时间配置（便于调试）
+	if e, ok := m["WARN_EF_CURRENT"]; ok {
+		cs.logger.Infof("ConfigStore[WARN_EF_CURRENT]: enabled=%v, duration=%ds, threshold=%f, clear=%f", 
+			e.Enabled, e.DurationSeconds, e.TriggerValue, e.ClearValue)
+	}
+	if e, ok := m["WARN_CF_CURRENT"]; ok {
+		cs.logger.Infof("ConfigStore[WARN_CF_CURRENT]: enabled=%v, duration=%ds, threshold=%f, clear=%f", 
+			e.Enabled, e.DurationSeconds, e.TriggerValue, e.ClearValue)
+	}
 	return nil
 }
 
@@ -187,10 +197,18 @@ func csDuration(warnCode string, defaultDur time.Duration) time.Duration {
 	}
 	m := *p.(*configMap)
 	e, ok := m[warnCode]
-	if !ok || e.DurationSeconds <= 0 {
+	if !ok {
 		return defaultDur
 	}
-	return time.Duration(e.DurationSeconds) * time.Second
+	// 若 enabled=false，返回默认值（等同于未配置）
+	if !e.Enabled {
+		return defaultDur
+	}
+	// 若 duration_seconds > 0，返回 DB 配置值；否则返回默认值
+	if e.DurationSeconds > 0 {
+		return time.Duration(e.DurationSeconds) * time.Second
+	}
+	return defaultDur
 }
 
 // csIsEnabled 返回预警项是否启用，找不到时默认启用。
