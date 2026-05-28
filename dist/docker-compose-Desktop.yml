@@ -1,3 +1,5 @@
+name: desktop
+
 services:
   macdatop:
     image: harbor.naivehero.top:8443/macda2/webtop:zino-xfce
@@ -24,5 +26,5 @@ services:
 networks:
   macdanet:
     external: true
-    name: macdanet
+    name: 1panel-network
     driver: bridge

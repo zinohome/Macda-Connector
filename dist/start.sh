@@ -32,8 +32,8 @@ if [[ -f "${SCRIPT_DIR}/.env" ]]; then
     set -a; source "${SCRIPT_DIR}/.env"; set +a
 else
     echo -e "\033[0;33m[WARN]\033[0m  未找到 .env 文件，请先运行 sudo ./install.sh"
-    echo -e "         使用默认数据目录: /data/MACDA2"
-    export DATA_DIR="/data/MACDA2"
+    echo -e "         使用默认数据目录: /data/Macda2"
+    export DATA_DIR="/data/Macda2"
 fi
 
 
@@ -136,7 +136,7 @@ stop() {
 status() {
     echo ""
     docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" \
-        --filter "network=macdanet" 2>/dev/null || docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+        --filter "network=1panel-network" 2>/dev/null || docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
     echo ""
 }
 

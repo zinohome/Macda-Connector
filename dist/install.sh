@@ -13,7 +13,7 @@ set -euo pipefail
 
 # ── 参数解析 ─────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_DATA_DIR="/data/MACDA2"
+BASE_DATA_DIR="/data/Macda2"
 UPDATE_ONLY=false
 USE_1PANEL=false
 ENV_FILE="${SCRIPT_DIR}/.env"
@@ -81,7 +81,7 @@ if [[ -f "${ENV_FILE}" ]] && [[ "${UPDATE_ONLY}" == "false" ]]; then
     # 已经存在时，读取已有的 DATA_DIR（除非用户显式指定了 --data-dir）
     existing_dir=$(grep "^DATA_DIR=" "${ENV_FILE}" 2>/dev/null | cut -d= -f2 || echo "")
     if [[ -n "${existing_dir}" && "${existing_dir}" != "${BASE_DATA_DIR}" \
-          && "${BASE_DATA_DIR}" == "/data/MACDA2" ]]; then
+          && "${BASE_DATA_DIR}" == "/data/Macda2" ]]; then
         # 没有显式指定 --data-dir，沿用已有配置
         BASE_DATA_DIR="${existing_dir}"
         log_info ".env 已存在，沿用数据目录: ${BASE_DATA_DIR}"
@@ -207,8 +207,7 @@ if [[ "${USE_1PANEL}" == "true" ]]; then
         src_file="${SCRIPT_DIR}/${PANEL_ENVS[$env_name]}"
         env_dir="${PANEL_ROOT}/${env_name}"
         mkdir -p "${env_dir}"
-        # 注入 name: 字段，1panel 以此作为应用名称（而非目录名）
-        { echo "name: ${env_name}"; echo ""; cat "${src_file}"; } > "${env_dir}/docker-compose.yml"
+        cp "${src_file}" "${env_dir}/docker-compose.yml"
         echo "DATA_DIR=${BASE_DATA_DIR}" > "${env_dir}/.env"
         log_success "1panel/${env_name}/  (name: ${env_name})"
     done
