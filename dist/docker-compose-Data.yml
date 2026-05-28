@@ -408,7 +408,6 @@ services:
 
 networks:
   macdanet:
+    external: true
     name: 1panel-network
     driver: bridge
-    # 注意：此网络由本文件负责创建（Data 层最先启动）
-    # docker-compose-Web.yml 和 docker-compose-mock.yml 使用 external: true 引用此网络
