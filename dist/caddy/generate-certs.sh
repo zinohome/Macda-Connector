@@ -3,7 +3,7 @@
 # generate-certs.sh — 为 MACDA Connector Caddy 生成自签名证书
 #
 # 用法：
-#   ./generate-certs.sh                       # 使用默认数据目录 /data/MACDA2
+#   ./generate-certs.sh                       # 使用默认数据目录 /data/Macda2
 #   DATA_DIR=/opt/macda ./generate-certs.sh   # 自定义数据目录
 #   ./generate-certs.sh --force               # 强制覆盖已有证书
 #
@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-DATA_DIR="${DATA_DIR:-/data/MACDA2}"
+DATA_DIR="${DATA_DIR:-/data/Macda2}"
 CERT_DIR="${DATA_DIR}/caddy/certs"
 FORCE=false
 

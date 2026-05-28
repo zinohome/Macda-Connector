@@ -1,3 +1,5 @@
+name: mock
+
 services:
   mock-init:
     image: harbor.naivehero.top:8443/macda2/alpine:3.20
@@ -150,5 +152,5 @@ services:
 networks:
   macdanet:
     external: true
-    name: macdanet
+    name: 1panel-network
     driver: bridge

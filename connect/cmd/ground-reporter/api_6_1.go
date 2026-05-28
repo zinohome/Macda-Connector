@@ -49,6 +49,19 @@ func Handle61Alarm(ctx context.Context, client *PlatformClient, tracker *AlarmTr
 	diff := tracker.Diff(msg.EventMeta.DeviceID, codes, ts)
 	si := sc.Get(msg.EventMeta.DeviceID)
 
+	if len(diff.Added) > 0 {
+		log.Printf("[ALARM-ADDED] device=%s: %d new alarms", msg.EventMeta.DeviceID, len(diff.Added))
+		for _, hit := range diff.Added {
+			log.Printf("  - %s (%s)", hit.Code, hit.Name)
+		}
+	}
+	if len(diff.Removed) > 0 {
+		log.Printf("[ALARM-REMOVED] device=%s: %d ended alarms", msg.EventMeta.DeviceID, len(diff.Removed))
+		for _, hit := range diff.Removed {
+			log.Printf("  - %s (ended at %d)", hit.Code, hit.EndTime)
+		}
+	}
+
 	var records []Record61
 	for _, hit := range diff.Added {
 		records = append(records, buildRecord61(cfg, msg.EventMeta, si, "0", hit.Code, hit.StartTime, 0))
@@ -91,6 +104,19 @@ func Handle61Predict(ctx context.Context, client *PlatformClient, tracker *Alarm
 	ts := nowMs()
 	diff := tracker.Diff(deviceKey, codes, ts)
 	si := sc.Get(msg.EventMeta.DeviceID)
+
+	if len(diff.Added) > 0 {
+		log.Printf("[PREDICT-ADDED] device=%s: %d new predictions", msg.EventMeta.DeviceID, len(diff.Added))
+		for _, hit := range diff.Added {
+			log.Printf("  - %s (%s)", hit.Code, hit.Name)
+		}
+	}
+	if len(diff.Removed) > 0 {
+		log.Printf("[PREDICT-REMOVED] device=%s: %d ended predictions", msg.EventMeta.DeviceID, len(diff.Removed))
+		for _, hit := range diff.Removed {
+			log.Printf("  - %s (ended at %d)", hit.Code, hit.EndTime)
+		}
+	}
 
 	var records []Record61
 	for _, hit := range diff.Added {

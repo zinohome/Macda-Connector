@@ -180,6 +180,7 @@ func (p *NB67EventProcessor) checkRuleWithClear(triggerCondition bool, keepCondi
 			// 已激活：keepCondition 决定是否保持
 			if !keepCondition {
 				p.states.Delete(key)
+				p.logger.Debugf("[ALARM-CLEAR] %s: cleared (keepCondition=false)", ruleCode)
 				return false
 			}
 			return true
@@ -192,6 +193,7 @@ func (p *NB67EventProcessor) checkRuleWithClear(triggerCondition bool, keepCondi
 		fired := currentTime.Sub(state.firstSeen) >= duration
 		if fired {
 			state.triggered = true
+			p.logger.Debugf("[ALARM-TRIGGER] %s: triggered after %v (threshold %v)", ruleCode, duration, currentTime.Sub(state.firstSeen))
 		}
 		return fired
 	}
@@ -203,6 +205,9 @@ func (p *NB67EventProcessor) checkRuleWithClear(triggerCondition bool, keepCondi
 	newState := &ruleState{firstSeen: currentTime, triggered: false}
 	if duration <= 0 {
 		newState.triggered = true
+		p.logger.Debugf("[ALARM-IMMEDIATE] %s: triggered immediately (duration<=0)", ruleCode)
+	} else {
+		p.logger.Debugf("[ALARM-START] %s: monitoring (duration=%v)", ruleCode, duration)
 	}
 	p.states.Store(key, newState)
 	return duration <= 0
@@ -294,9 +299,11 @@ func (p *NB67EventProcessor) Process(ctx context.Context, msg *service.Message) 
 	prevHadHits := prevHad != nil && prevHad.(bool)
 	if len(predictHits) > 0 {
 		p.prevPredictHadHits.Store(input.DeviceID, true)
+		p.logger.Debugf("[PREDICT-STATE] %s: %d active hits", input.DeviceID, len(predictHits))
 	} else if prevHadHits {
 		// 本帧清空且上帧有命中：发送一次空列表后重置标志
 		p.prevPredictHadHits.Store(input.DeviceID, false)
+		p.logger.Debugf("[PREDICT-STATE] %s: transitioning from previous hits to 0 (sending empty list to trigger clear)", input.DeviceID)
 	}
 	needPredict := len(predictHits) > 0 || prevHadHits
 

@@ -1,3 +1,5 @@
+name: caddy
+
 version: '3.8'
 
 # =============================================================
@@ -9,7 +11,7 @@ version: '3.8'
 #     反向代理到 nb67-web:8080
 #   - 使用自签名证书（用户可在持久化目录中自行替换）
 # 前置条件：
-#   - nb67-web 容器已在 macdanet 网络中运行
+#   - nb67-web 容器已在 1panel-network 网络中运行
 #   - 运行 ./caddy/generate-certs.sh 生成初始证书
 #   - ${DATA_DIR}/caddy/config/Caddyfile 已存在（由 install.sh 复制）
 # =============================================================
@@ -38,5 +40,5 @@ services:
 networks:
   macdanet:
     external: true
-    name: macdanet
+    name: 1panel-network
     driver: bridge

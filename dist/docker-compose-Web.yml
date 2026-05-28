@@ -1,3 +1,5 @@
+name: web
+
 version: '3.8'
 
 # =============================================================
@@ -7,7 +9,7 @@ version: '3.8'
 #   - nb67-bff  : Node.js BFF（Fastify，仅内网访问）
 # 注意：
 #   - 基础设施服务（Redpanda、TimescaleDB 等）在 docker-compose-Dev.yml 中定义
-#   - 本文件假设基础设施已就绪，通过 external network macdanet 互联
+#   - 本文件假设基础设施已就绪，通过 external network 1panel-network 互联
 # =============================================================
 
 services:
@@ -38,7 +40,7 @@ services:
     container_name: nb67-bff
     hostname: nb67-bff
     restart: unless-stopped
-    # 注意：BFF 不对外暴露端口，仅在 macdanet 内网可访问
+    # 注意：BFF 不对外暴露端口，仅在 1panel-network 内网可访问
     # 如需本地调试，可临时取消注释下方 ports
     # ports:
     #   - "3000:3000"
@@ -53,7 +55,7 @@ services:
       - DATABASE_URL=postgres://postgres:passw0rd@timescaledb:5432/postgres?sslmode=disable
 
       # ── Kafka (Redpanda) 连接 ─────────────────────────────────
-      # 生产环境：使用 Docker 内部服务名（macdanet 内网）
+      # 生产环境：使用 Docker 内部服务名（1panel-network 内网）
       - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
 
       # ── 日志配置 ──────────────────────────────────────────────
@@ -74,5 +76,5 @@ services:
 networks:
   macdanet:
     external: true
-    name: macdanet
+    name: 1panel-network
     driver: bridge

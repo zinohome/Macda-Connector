@@ -46,7 +46,7 @@ dist/
 
 ```
                         ┌──────────────────────────────────────────────────────┐
-                        │                Docker Network: macdanet               │
+                        │            Docker Network: 1panel-network             │
                         │                                                      │
   [ 设备/信号源 ]  ──►  │  mock-redpanda   (信号模拟，仅调试)                  │
                         │       ↓                                              │
@@ -91,7 +91,7 @@ dist/
 ```bash
 chmod +x install.sh start.sh
 
-# 以 root 运行（默认数据目录: /data/MACDA2）
+# 以 root 运行（默认数据目录: /data/Macda2）
 sudo ./install.sh
 
 # 自定义数据目录
