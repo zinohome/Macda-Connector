@@ -32,7 +32,7 @@ IMAGES=(
     "harbor.naivehero.top:8443/macda2/redpanda-console:v3.5.2"
 
     # ── 数据流处理 (Redpanda Connect + NB67 解析器) ──────────
-    "harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.4"
+    "harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.5"
     "harbor.naivehero.top:8443/macda2/connect:latest"
 
     # ── 时序数据库 ────────────────────────────────────────────

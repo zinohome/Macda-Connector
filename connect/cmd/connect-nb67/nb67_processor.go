@@ -3,9 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/benthosdev/benthos/v4/public/service"
@@ -119,8 +123,13 @@ func (p *NB67Processor) Process(ctx context.Context, msg *service.Message) (serv
 		return service.MessageBatch{msg}, fmt.Errorf("failed to get message bytes: %w", err)
 	}
 
+	nb67Payload, err := extractNB67Payload(payload)
+	if err != nil {
+		return service.MessageBatch{msg}, fmt.Errorf("extract NB67 payload error: %w", err)
+	}
+
 	nb67 := &Nb67{}
-	io := kaitai.NewStream(bytes.NewReader(payload))
+	io := kaitai.NewStream(bytes.NewReader(nb67Payload))
 	if err := nb67.Read(io, nil, nb67); err != nil {
 		return service.MessageBatch{msg}, fmt.Errorf("NB67 parse error: %w", err)
 	}
@@ -194,7 +203,7 @@ func (p *NB67Processor) Process(ctx context.Context, msg *service.Message) (serv
 
 		ParserVersion:  "nb67-v1",
 		QualityStatus:  "OK",
-		FrameSize:      len(payload),
+		FrameSize:      len(nb67Payload),
 		ParsedAtUnixMs: now.UnixMilli(),
 		ParsedAt:       now.Format(time.RFC3339Nano),
 		Raw:            nb67,
@@ -217,4 +226,107 @@ func (p *NB67Processor) Process(ctx context.Context, msg *service.Message) (serv
 
 func (p *NB67Processor) Close(ctx context.Context) error {
 	return nil
+}
+
+func extractNB67Payload(payload []byte) ([]byte, error) {
+	trimmed := bytes.TrimSpace(payload)
+	if len(trimmed) == 0 {
+		return nil, fmt.Errorf("empty payload")
+	}
+	if trimmed[0] != '{' {
+		return payload, nil
+	}
+
+	var wrapper map[string]json.RawMessage
+	if err := json.Unmarshal(trimmed, &wrapper); err != nil {
+		return payload, nil
+	}
+
+	for _, key := range []string{"message_data", "messageData", "data", "payload"} {
+		raw, ok := wrapper[key]
+		if !ok {
+			continue
+		}
+		decoded, err := decodeMessageData(raw)
+		if err != nil {
+			return nil, fmt.Errorf("decode %s: %w", key, err)
+		}
+		return decoded, nil
+	}
+
+	return payload, nil
+}
+
+func decodeMessageData(raw json.RawMessage) ([]byte, error) {
+	var str string
+	if err := json.Unmarshal(raw, &str); err == nil {
+		return decodeMessageString(str)
+	}
+
+	var ints []int
+	if err := json.Unmarshal(raw, &ints); err == nil {
+		out := make([]byte, len(ints))
+		for i, v := range ints {
+			if v < 0 || v > 255 {
+				return nil, fmt.Errorf("invalid byte value at index %d: %d", i, v)
+			}
+			out[i] = byte(v)
+		}
+		return out, nil
+	}
+
+	return nil, fmt.Errorf("unsupported message_data type")
+}
+
+func decodeMessageString(s string) ([]byte, error) {
+	trimmed := strings.TrimSpace(s)
+	if trimmed == "" {
+		return nil, fmt.Errorf("empty message_data")
+	}
+
+	if parsed, err := parseByteArrayString(trimmed); err == nil {
+		return parsed, nil
+	}
+
+	compact := strings.ReplaceAll(trimmed, " ", "")
+	compact = strings.ReplaceAll(compact, "-", "")
+	compact = strings.ReplaceAll(compact, "0x", "")
+	compact = strings.ReplaceAll(compact, "0X", "")
+	if len(compact)%2 == 0 && compact != "" {
+		if hexBytes, err := hex.DecodeString(compact); err == nil {
+			return hexBytes, nil
+		}
+	}
+
+	if base64Bytes, err := base64.StdEncoding.DecodeString(trimmed); err == nil {
+		return base64Bytes, nil
+	}
+	if base64Bytes, err := base64.RawStdEncoding.DecodeString(trimmed); err == nil {
+		return base64Bytes, nil
+	}
+
+	return []byte(trimmed), nil
+}
+
+func parseByteArrayString(s string) ([]byte, error) {
+	if !(strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]")) {
+		return nil, fmt.Errorf("not array syntax")
+	}
+	inner := strings.TrimSpace(s[1 : len(s)-1])
+	if inner == "" {
+		return []byte{}, nil
+	}
+	parts := strings.Split(inner, ",")
+	out := make([]byte, len(parts))
+	for i, part := range parts {
+		n, err := strconv.Atoi(strings.TrimSpace(part))
+		if err != nil {
+			return nil, fmt.Errorf("invalid integer at index %d: %w", i, err)
+		}
+		if n < 0 || n > 255 {
+			return nil, fmt.Errorf("invalid byte value at index %d: %d", i, n)
+		}
+		out[i] = byte(n)
+	}
+	return out, nil
 }
