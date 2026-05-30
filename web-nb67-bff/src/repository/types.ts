@@ -68,6 +68,7 @@ export interface FactRawTable {
 
 export interface FactEventTable {
     event_time: Date;
+    ingest_time: Date;
     line_id: number | null;
     train_id: number | null;
     carriage_id: number | null;
@@ -77,6 +78,7 @@ export interface FactEventTable {
     fault_name: string | null;
     severity: number | null;
     status: string | null;
+    recovery_time: Date | null;
     payload_json: any | null;
 }
 

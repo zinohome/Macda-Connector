@@ -69,9 +69,9 @@ type EventMeta struct {
 
 // PredictHit 预警命中条目（基于算法规则）。
 type PredictHit struct {
-	Code                     string `json:"code"`                               // e.g. "HVAC301"
-	Name                     string `json:"name"`                               // 中文名称
-	Severity                 int    `json:"severity"`                           // 3=高 2=中 1=低
+	Code                     string `json:"code"`                                 // e.g. "HVAC301"
+	Name                     string `json:"name"`                                 // 中文名称
+	Severity                 int    `json:"severity"`                             // 3=高 2=中 1=低
 	TriggerConditionSnapshot string `json:"trigger_condition_snapshot,omitempty"` // 触发时刻配置快照，防止历史记录随配置变更而变
 }
 
@@ -532,7 +532,6 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 	efThresh := csRawThreshold("WARN_EF_CURRENT", 18)     // 通风机 PHM 3.6
 	cfThresh := csRawThreshold("WARN_CF_CURRENT", 23)     // 冷凝风机 PHM 3.7
 	exufThresh := csRawThreshold("WARN_EXUF_CURRENT", 23) // 废排风机 PHM 3.8
-	fanDur := csDuration("WARN_EF_CURRENT", 10*time.Minute)
 	efClearThresh := csClearThreshold("WARN_EF_CURRENT", efThresh)
 	cfClearThresh := csClearThreshold("WARN_CF_CURRENT", cfThresh)
 	exufClearThresh := csClearThreshold("WARN_EXUF_CURRENT", exufThresh)
@@ -542,7 +541,8 @@ func (p *NB67EventProcessor) buildPredictHits(raw map[string]any, carriageID int
 		isOverI := rawBool(raw, cfbkField) && rawInt(raw, iField) > threshold
 		// 保持激活：电流仍高于消除阈值（滞回区间内不反复触发/消除）
 		keepI := rawBool(raw, cfbkField) && rawInt(raw, iField) > clearThreshold
-		if p.checkRuleWithClear(isOverI, keepI, fanDur, deviceID, code, currentTime) {
+		warnDur := csDuration(warnCode, 10*time.Minute)
+		if p.checkRuleWithClear(isOverI, keepI, warnDur, deviceID, code, currentTime) {
 			hits = append(hits, PredictHit{Code: code, Name: name, Severity: 3,
 				TriggerConditionSnapshot: csTriggerConditionText(warnCode)})
 		}

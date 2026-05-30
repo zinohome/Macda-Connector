@@ -26,9 +26,14 @@ func coachName(carriageID int) string {
 	return strconv.Itoa(carriageID)
 }
 
-// Handle61Alarm processes a signal-alarm message: diffs against active state,
-// then POSTs start/end records to the platform.
+// Handle61Alarm processes a signal-alarm message.
+// 按当前业务要求，报警/故障不再上报平台，仅记录状态变化日志。
 func Handle61Alarm(ctx context.Context, client *PlatformClient, tracker *AlarmTracker, sc *StationCache, cfg Config, data []byte) {
+	_ = ctx
+	_ = client
+	_ = sc
+	_ = cfg
+
 	var msg SubEventMsg
 	if err := json.Unmarshal(data, &msg); err != nil {
 		log.Printf("[WARN] 6.1 alarm: bad json: %v", err)
@@ -47,7 +52,6 @@ func Handle61Alarm(ctx context.Context, client *PlatformClient, tracker *AlarmTr
 
 	ts := nowMs()
 	diff := tracker.Diff(msg.EventMeta.DeviceID, codes, ts)
-	si := sc.Get(msg.EventMeta.DeviceID)
 
 	if len(diff.Added) > 0 {
 		log.Printf("[ALARM-ADDED] device=%s: %d new alarms", msg.EventMeta.DeviceID, len(diff.Added))
@@ -60,21 +64,6 @@ func Handle61Alarm(ctx context.Context, client *PlatformClient, tracker *AlarmTr
 		for _, hit := range diff.Removed {
 			log.Printf("  - %s (ended at %d)", hit.Code, hit.EndTime)
 		}
-	}
-
-	var records []Record61
-	for _, hit := range diff.Added {
-		records = append(records, buildRecord61(cfg, msg.EventMeta, si, "0", hit.Code, hit.StartTime, 0))
-	}
-	for _, hit := range diff.Removed {
-		records = append(records, buildRecord61(cfg, msg.EventMeta, si, "0", hit.Code, hit.StartTime, hit.EndTime))
-	}
-
-	if len(records) == 0 {
-		return
-	}
-	if err := client.PostJSON(ctx, cfg.FaultRecordURL, records); err != nil {
-		log.Printf("[ERROR] 6.1 alarm POST failed: %v", err)
 	}
 }
 

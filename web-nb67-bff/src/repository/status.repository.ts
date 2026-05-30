@@ -108,6 +108,7 @@ export class StatusRepository {
             // 实时故障去重：同一车厢同一编码只保留最新触发的一条（降序取第一条）
             .distinctOn(['train_id', 'carriage_id' as any, 'fault_code'])
             .where('event_type', '=', 'alarm')
+            .where('recovery_time', 'is', null)
             .orderBy('train_id')
             .orderBy('carriage_id' as any)
             .orderBy('fault_code')
@@ -162,6 +163,7 @@ export class StatusRepository {
             // 按列车、车厢、故障码去重，只保留最新触发的一条（降序取第一条）
             .distinctOn(['train_id', 'carriage_id' as any, 'fault_code'])
             .where('event_type', '=', 'predict')
+            .where('recovery_time', 'is', null)
             .orderBy('train_id')
             .orderBy('carriage_id' as any)
             .orderBy('fault_code')
