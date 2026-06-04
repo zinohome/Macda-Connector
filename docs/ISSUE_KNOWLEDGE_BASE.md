@@ -53,12 +53,57 @@
 [2026-05-27] #13 - 历史报警页面缺少机组信息/unit_name未在select中 - BFF/status.repository
 [2026-05-27] #14 - 预警无法消除/clear_value未加载/无滞回逻辑 - config_store/nb67_event_processor
 [2026-05-27] #32 - dist镜像版本同步/从零重部署 - dist/部署
+[2026-06-03] RET-40 #20 #21 - 预警重复/不消除/频率0误报/并发整改 - lifecycle表+storage-adapter状态机+BFF/ground-reporter
 
 ---
 
 ## 三、历史 Issue 处理记录
 
 > 最新记录在最前。每条记录包含：问题描述、根因、修复方法、测试验证、经验总结。
+
+### [2026-06-03] RET-40 #20 #21 - 预警系统整改：一条预警一行 (Phase 1-7)
+
+**问题描述**（用户连续 N 周反馈，多次修复无效）：
+- 现象 A：同一时刻同一条预警在数据库/前端**重复多次**
+- 现象 B：满足消除条件后，预警在数据库/前端**仍显示活跃**（#20）
+- 现象 C：压缩机不运行（频率=0）时仍触发制冷预警（#21）
+- 现象 D：进程重启后，已 active 的预警被当作新 open 整批重发给平台
+
+**根因**：
+1. `hvac.fact_event` 主键 `(event_time, device_id, fault_code)` 是事件流模型，nb67-connect 每帧（1Hz）重跑预警规则 → 一条 30s 预警写 30 行。这就是 "同时刻重复" 的物理来源。
+2. `fact_event.recovery_time` 字段在全仓代码里**从未被写入**。BFF 查询里加的 `WHERE recovery_time IS NULL` 等价于死过滤，是安慰剂。
+3. ground-reporter 的 `AlarmTracker` 是内存 map，重启即丢，导致平台重发风暴。
+4. 冷媒泄漏 `_c/_v` 后缀映射成两个 warn_code，物理同一条预警却落两行。
+5. #21 现象 A 在 `e846948` 已修（`f1==f2 && f1>0` + 3min 持续判定），但**没有回归测试**，每次担心被改坏。
+
+**修复方法**：Phase 1-7 共 5 个 commit、3 个镜像版本（v2.5.25/26）。
+- Phase 1 (`ffc4e0c`): 新建 `hvac.warning_lifecycle` 表 + 部分唯一索引 `UNIQUE(device_id, fault_code) WHERE end_time IS NULL` 兜底重复
+- Phase 2+3 (`03a93d5`): `storage-adapter/lifecycle_writer.go` 状态机消费 signal-predict，做 per-(device, fault_code) diff，状态变化才写 DB。新增 `WRITE_FACT_EVENT=false` 开关，与 connect-event-writer 并行不冲突。启动时 `lifecycle.Recover(ctx)` 从 DB 重建 active 集合
+- Phase 4: `web-nb67-bff/src/repository/status.repository.ts` `getRealtimeWarnings` 改查 `warning_lifecycle WHERE end_time IS NULL`，删除 distinctOn 与 recovery_time 死过滤
+- Phase 5: `connect/cmd/connect-nb67/nb67_event_processor_test.go` 新增 3 个回归测试锁定 #21 现象 A 的当前正确行为
+- Phase 6: `ground-reporter/alarm_tracker.go` 新增 `RecoverFromLifecycle(ctx, pool)`，启动时从 lifecycle 拉活跃集合，避免重启风暴
+- Phase 7 (`ae708ae`): `storage-adapter/types.go` EventMeta line_id/train_id 改 json.Number 兼容 nb67 字符串输出，发布 v2.5.26 修正
+- 部署 (`19c76cc`): docker-compose-Data.yml 新增 `lifecycle-writer` 容器，独立 consumer group `macda-lifecycle-writer-v1`
+
+**测试验证**：
+- Phase 1 验收：6 个 SQL 用例（首次/重复拦/标记结束后重开/并发事务）全通过
+- Phase 3 单测：`TestLifecycleDiff_ContinuousFrames` (100 帧同 code 仅 1 次 open) / `TestLifecycleDiff_HitToEmptyFrame` / `TestLifecycleDiff_ConcurrentDifferentDevices` / `TestInferWarnCode` / `TestInferUnitID`
+- Phase 5 单测：3 个制冷规则回归测试
+- Phase 7 端到端（生产 redpanda + timescaledb）：
+  - 注入 2 个 hit → DB 2 行 open
+  - 重复同 key 帧 → 不新增，last_seen_time 推进
+  - 空帧 → 2 行 end_time 写入
+  - 再注入同 code → 新建 1 行 active，老行保持 closed
+
+**经验总结**：
+- "同一条预警重复" 类问题，**第一反应是查表的唯一约束设计**，不要从查询端去重打补丁。这种 bug 反复修不好的根因都是数据模型错了，查询端补丁只是治标。
+- 在 PostgreSQL 把不可重复约束写进 DDL（部分唯一索引）比写在应用层可靠 10 倍——并发场景下应用层 `select then insert` 有 TOCTOU 风险，DB 约束没有。
+- 状态机改造高频写入路径时，用 **双轨过渡**（旧表保留 + 新表并行）而不是一刀切，把"代码改对"/"DB 改对"/"消费者改对"/"前端改对"的风险解耦。
+- nb67_event_processor 的 `EventMeta.LineID` 是 `string`（来自 json.Number），storage-adapter 的 EventMeta 之前定义为 int32 导致 JSON unmarshal silently fail——**跨服务 schema 务必用 json.Number 兼容字符串和数字两种风格**。
+- 多 worktree 场景下 `main` 分支被另一个 worktree 占用时，用 `git push origin <feature-branch>:main` 直推绕过；或者在持有 main 的 worktree 里 `git pull --ff-only`。
+- `docker inspect <container> --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}'` 可以反查正在运行的容器对应哪份 compose 文件。
+
+
 
 ### [2026-05-27] #12 #13 #14 - trainNo 5位/历史预警机组信息/预警无法消除
 
