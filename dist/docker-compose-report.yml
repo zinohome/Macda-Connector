@@ -2,12 +2,14 @@ name: report
 
 services:
   ground-reporter:
-    image: harbor.naivehero.top:8443/macda2/ground-reporter:v2.5.24
+    image: harbor.naivehero.top:8443/macda2/ground-reporter:v2.5.25
     container_name: ground-reporter
     hostname: ground-reporter
     restart: unless-stopped
     environment:
       - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
+      # Phase 6: 启动时从 warning_lifecycle 拉活跃集合, 避免重启后整批重发 open 给平台
+      - PG_DSN=postgres://postgres:passw0rd@timescaledb:5432/postgres?sslmode=disable
       # 各协议章节上报接口（本地测试指向 mock-platform；联调时改为真实地址）
       - FAULT_RECORD_URL=http://mock-platform:8188/gate/METRO-PHM/api/faultRecordsSubsystem/saveRecord
       - SYS_STATUS_URL=http://mock-platform:8188/gate/METRO-SELFCHECK-SUBSYSTEM/api/faultRecordsSubsystem/saveStatus

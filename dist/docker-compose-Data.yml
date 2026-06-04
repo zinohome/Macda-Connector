@@ -342,9 +342,8 @@ services:
 
   # Pipeline Stage 4 (Plan B): 使用 Go 语言原生的极致性能写入 (备用方案)
   storage-adapter:
-    # 鉴于需要在别处构建镜像，此处注释掉 build，改用外部构建好的 image:
-    # 手动在此镜像目录下执行: docker build -t harbor.naivehero.top:8443/macda2/storage-adapter:v2.1.2 .
-    image: harbor.naivehero.top:8443/macda2/storage-adapter:v2.1.2
+    # 手动构建: docker build -t harbor.naivehero.top:8443/macda2/storage-adapter:v2.5.26 .
+    image: harbor.naivehero.top:8443/macda2/storage-adapter:v2.5.26
     container_name: storage-adapter
     restart: unless-stopped
     environment:
@@ -352,10 +351,33 @@ services:
       - KAFKA_TOPICS=signal-storage,signal-alarm,signal-predict,signal-life
       - PG_DSN=postgres://postgres:passw0rd@timescaledb:5432/postgres?sslmode=disable
       - LOG_LEVEL=INFO
-    # 暂时将此高配版留存，当 Plan A 的 Connect 方案跑满瓶颈时切换使用。不启用时可通过 docker stop 暂停
     profiles: [ "plan_b" ]
     depends_on:
       connect-storage-writer:
+        condition: service_healthy
+      timescaledb:
+        condition: service_started
+    networks:
+      - macdanet
+
+  # Phase 2-3: 预警生命周期写入器
+  # 仅订阅 signal-predict, 对每个 device 做状态机 diff, 把状态变化落 hvac.warning_lifecycle。
+  # 与 connect-event-writer (Plan A) 并行运行, 不接管 fact_event 写入 (WRITE_FACT_EVENT=false)。
+  # 启动时从 warning_lifecycle WHERE end_time IS NULL 拉活跃集合 (lifecycle.Recover), 重启不丢状态。
+  lifecycle-writer:
+    image: harbor.naivehero.top:8443/macda2/storage-adapter:v2.5.26
+    container_name: lifecycle-writer
+    restart: unless-stopped
+    environment:
+      - KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
+      - KAFKA_TOPICS=signal-predict
+      - KAFKA_GROUP=macda-lifecycle-writer-v1
+      - PG_DSN=postgres://postgres:passw0rd@timescaledb:5432/postgres?sslmode=disable
+      - WRITE_FACT_EVENT=false
+      - WRITE_FACT_RAW=false
+      - LOG_LEVEL=INFO
+    depends_on:
+      connect-event-builder:
         condition: service_healthy
       timescaledb:
         condition: service_started
