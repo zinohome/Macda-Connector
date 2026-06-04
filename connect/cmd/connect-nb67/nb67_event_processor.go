@@ -63,8 +63,11 @@ type EventMeta struct {
 	CarriageID    int    `json:"carriage_id"`
 	DeviceID      string `json:"device_id"`
 	EventTimeText string `json:"event_time_text"`
-	IngestTime    string `json:"ingest_time"`
-	ProcessTime   string `json:"process_time"`
+	// EventTimeValid 由 nb67-parser.yaml 判定（Bug C 修复后含 hour/minute/second 全校验）。
+	// 下游写入器（event-writer/storage-writer/lifecycle-writer）据此决定是否回退 ingest_time。
+	EventTimeValid bool   `json:"event_time_valid"`
+	IngestTime     string `json:"ingest_time"`
+	ProcessTime    string `json:"process_time"`
 }
 
 // PredictHit 预警命中条目（基于算法规则）。
@@ -108,12 +111,13 @@ type EventOutput struct {
 // parsedInput 是从上游 signal-parsed 消息解析的输入结构。
 // 仅保留事件构建所需字段，Raw 字段来自 nb67_parser 输出的 raw 对象。
 type parsedInput struct {
-	LineID        json.Number    `json:"line_id"`
-	TrainID       json.Number    `json:"train_id"`
-	CarriageID    json.Number    `json:"carriage_id"`
-	DeviceID      string         `json:"device_id"`
-	EventTimeText string         `json:"event_time_text"`
-	IngestTime    string         `json:"ingest_time"`
+	LineID         json.Number    `json:"line_id"`
+	TrainID        json.Number    `json:"train_id"`
+	CarriageID     json.Number    `json:"carriage_id"`
+	DeviceID       string         `json:"device_id"`
+	EventTimeText  string         `json:"event_time_text"`
+	EventTimeValid bool           `json:"event_time_valid"`
+	IngestTime     string         `json:"ingest_time"`
 	Raw           map[string]any `json:"raw"`
 }
 
@@ -261,14 +265,15 @@ func (p *NB67EventProcessor) Process(ctx context.Context, msg *service.Message) 
 
 	// 构建事件元数据
 	meta := EventMeta{
-		SchemaVersion: "nb67.event",
-		LineID:        input.LineID.String(),
-		TrainID:       input.TrainID.String(),
-		CarriageID:    func() int { n, _ := input.CarriageID.Int64(); return int(n) }(),
-		DeviceID:      input.DeviceID,
-		EventTimeText: input.EventTimeText,
-		IngestTime:    input.IngestTime,
-		ProcessTime:   time.Now().In(beijingLoc).Format(time.RFC3339Nano),
+		SchemaVersion:  "nb67.event",
+		LineID:         input.LineID.String(),
+		TrainID:        input.TrainID.String(),
+		CarriageID:     func() int { n, _ := input.CarriageID.Int64(); return int(n) }(),
+		DeviceID:       input.DeviceID,
+		EventTimeText:  input.EventTimeText,
+		EventTimeValid: input.EventTimeValid,
+		IngestTime:     input.IngestTime,
+		ProcessTime:    time.Now().In(beijingLoc).Format(time.RFC3339Nano),
 	}
 
 	// 【核心修复】：根据 RUNTIME 环境选择时间源

@@ -41,42 +41,53 @@ export class StatusRepository {
         // 在聚合前同步屏蔽状态
         await this.syncMasks();
 
-        const records = await db
-            .with('latest_status', (db) => db
-                .selectFrom('hvac.fact_raw')
-                .select(['train_id', 'device_id', 'payload_json'])
-                .distinctOn('device_id')
-                .orderBy('device_id')
-                .orderBy(this.timeCol as any, 'desc')
-            )
-            .selectFrom('latest_status')
-            .select([
-                'train_id as train_no',
+        // alarm_count 仍来自 fact_raw 最新帧的物理比特位（语义：当前帧瞬时报警状态）
+        // warning_count 改为来自 hvac.warning_lifecycle 活跃行数（Bug B 修复 2026-06-04）
+        // → 与 /api/rest/RealtimeWarning 列表数据源一致，
+        //   前端"预警数"和"实时预警"表格不会再出现一边 0 一边 1 的诡异不一致。
+        const [records, lifecycle] = await Promise.all([
+            db
+                .with('latest_status', (db) => db
+                    .selectFrom('hvac.fact_raw')
+                    .select(['train_id', 'device_id', 'payload_json'])
+                    .distinctOn('device_id')
+                    .orderBy('device_id')
+                    .orderBy(this.timeCol as any, 'desc')
+                )
+                .selectFrom('latest_status')
+                .select([
+                    'train_id as train_no',
+                    // 告警 (Alarm): 统计物理比特位，但排除掉"已被删除(屏蔽)"的位点
+                    sql<number>`SUM(
+                        (SELECT count(*) FROM jsonb_each_text(payload_json->'raw')
+                         WHERE (key ILIKE 'Bflt%' OR key ILIKE 'Blp%' OR key ILIKE 'Bsc%' OR key ILIKE 'Boc%')
+                         AND value = 'true'
+                         AND NOT EXISTS (
+                             SELECT 1 FROM hvac.dim_alarm_mask m
+                             WHERE m.device_id = latest_status.device_id AND m.fault_code = key
+                         ))
+                    )`.as('alarm_count'),
+                ])
+                .groupBy('train_id')
+                .execute(),
+            // 预警 (Warning): 活跃 lifecycle 行数，per train
+            db
+                .selectFrom('hvac.warning_lifecycle' as any)
+                .select(['train_id', sql<number>`count(*)`.as('warn_count')])
+                .where('end_time', 'is', null)
+                .groupBy('train_id' as any)
+                .execute() as Promise<Array<{ train_id: number; warn_count: number }>>,
+        ]);
 
-                // 1. 告警 (Alarm): 统计物理比特位，但排除掉“已被删除(屏蔽)”的位点
-                sql<number>`SUM(
-                    (SELECT count(*) FROM jsonb_each_text(payload_json->'raw') 
-                     WHERE (key ILIKE 'Bflt%' OR key ILIKE 'Blp%' OR key ILIKE 'Bsc%' OR key ILIKE 'Boc%') 
-                     AND value = 'true'
-                     AND NOT EXISTS (
-                         SELECT 1 FROM hvac.dim_alarm_mask m 
-                         WHERE m.device_id = latest_status.device_id AND m.fault_code = key
-                     ))
-                )`.as('alarm_count'),
-
-                // 2. 预警 (Warning)
-                sql<number>`SUM(
-                    (CASE WHEN (payload_json->'raw'->>'PresdiffU1')::int > 3000 OR (payload_json->'raw'->>'PresdiffU2')::int > 3000 THEN 1 ELSE 0 END) +
-                    (CASE WHEN (payload_json->'raw'->>'DwefOpTmU11')::bigint >= 67500000 THEN 1 ELSE 0 END)
-                )`.as('warning_count')
-            ])
-            .groupBy('train_id')
-            .execute();
+        const warnByTrain: Record<number, number> = {};
+        lifecycle.forEach((r) => {
+            warnByTrain[Number(r.train_id)] = Number(r.warn_count);
+        });
 
         return {
             vw_train_alarm_count: records.map(r => {
                 const a = Number(r.alarm_count);
-                const w = Number(r.warning_count);
+                const w = warnByTrain[Number(r.train_no)] ?? 0;
                 return {
                     train_no: r.train_no,
                     alarm_count: a,
