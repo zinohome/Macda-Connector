@@ -101,12 +101,34 @@ type Hit struct {
 	EventMeta EventMeta `json:"event_meta"`
 }
 
+// EventMeta 兼容 nb67 输出的两种数字风格：
+//   nb67_event_processor 把 line_id/train_id 作为 string 输出（来自 parsedInput.json.Number）
+//   早期/部分链路可能输出整型
+// 用 json.Number 同时接受字符串和数字。
 type EventMeta struct {
-	EventTimeText string `json:"event_time_text"`
-	LineID        int32  `json:"line_id"`
-	TrainID       int32  `json:"train_id"`
-	CarriageID    int32  `json:"carriage_id"`
-	DeviceID      string `json:"device_id"`
+	EventTimeText string      `json:"event_time_text"`
+	LineID        json.Number `json:"line_id"`
+	TrainID       json.Number `json:"train_id"`
+	CarriageID    json.Number `json:"carriage_id"`
+	DeviceID      string      `json:"device_id"`
+}
+
+// LineIDInt32 / TrainIDInt32 / CarriageIDInt32：把 json.Number 安全转 int32（0 兜底）。
+func (m EventMeta) LineIDInt32() int32     { return numberToInt32(m.LineID) }
+func (m EventMeta) TrainIDInt32() int32    { return numberToInt32(m.TrainID) }
+func (m EventMeta) CarriageIDInt32() int32 { return numberToInt32(m.CarriageID) }
+
+func numberToInt32(n json.Number) int32 {
+	if n == "" {
+		return 0
+	}
+	if i, err := n.Int64(); err == nil {
+		return int32(i)
+	}
+	if f, err := n.Float64(); err == nil {
+		return int32(f)
+	}
+	return 0
 }
 
 type pendingMessage struct {

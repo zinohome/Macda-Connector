@@ -195,9 +195,9 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 					flats = append(flats, EventFlatRecord{
 						EventTime:  meta.EventTimeText,
 						IngestTime: time.Now().Format(time.RFC3339),
-						LineID:     meta.LineID,
-						TrainID:    meta.TrainID,
-						CarriageID: meta.CarriageID,
+						LineID:     meta.LineIDInt32(),
+						TrainID:    meta.TrainIDInt32(),
+						CarriageID: meta.CarriageIDInt32(),
 						DeviceID:   meta.DeviceID,
 						EventType:  eventType,
 						FaultCode:  hit.Code,
@@ -211,9 +211,9 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 				if eventType == "predict" && topMeta.DeviceID != "" {
 					frame := PredictFrame{
 						DeviceID:      topMeta.DeviceID,
-						LineID:        topMeta.LineID,
-						TrainID:       topMeta.TrainID,
-						CarriageID:    topMeta.CarriageID,
+						LineID:        topMeta.LineIDInt32(),
+						TrainID:       topMeta.TrainIDInt32(),
+						CarriageID:    topMeta.CarriageIDInt32(),
 						EventTimeText: topMeta.EventTimeText,
 					}
 					for _, hit := range ev.Hits {
