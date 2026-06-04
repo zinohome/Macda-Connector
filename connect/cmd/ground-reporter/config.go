@@ -30,6 +30,11 @@ type Config struct {
 	// Kafka
 	KafkaBrokers []string
 
+	// Lifecycle 状态恢复：启动时从 hvac.warning_lifecycle 拉活跃集合，
+	// 避免 ground-reporter 重启后把已 active 的预警当作新 open 重发给平台。
+	// 空字符串 = 不启用 DB 恢复（保留原 in-memory 行为）。
+	PGDSN string
+
 	LogLevel string
 }
 
@@ -52,6 +57,8 @@ func loadConfig() Config {
 		DailyBatchHour:       getEnvInt("DAILY_BATCH_HOUR", 0),
 
 		KafkaBrokers: splitCSV(getEnv("KAFKA_BROKERS", "redpanda-1:9092,redpanda-2:9092,redpanda-3:9092")),
+
+		PGDSN: getEnv("PG_DSN", ""),
 
 		LogLevel: getEnv("LOG_LEVEL", "INFO"),
 	}

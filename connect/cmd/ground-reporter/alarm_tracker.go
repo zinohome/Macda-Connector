@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
+	"log"
 	"sync"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type activeAlarm struct {
@@ -107,4 +111,49 @@ func newUUID() string {
 
 func nowMs() int64 {
 	return time.Now().UnixMilli()
+}
+
+// RecoverFromLifecycle 在 ground-reporter 启动时从 hvac.warning_lifecycle 拉活跃集合
+// 重建内存 active map，避免重启后把已 active 的预警当作新 open 重发给平台。
+//
+// 注：恢复的条目 UUID 仍是新生成的（DB 表没存 platform-side UUID），但 Diff 算法
+// 只用 UUID 做"同一预警的关联标识"，平台侧用 (device, code) 作为业务键，新 UUID 不会引发重复 open。
+// 关键效果：本次启动后再次出现已恢复的 code 时，Diff 看到它"已 active"，不会发 open。
+func (t *AlarmTracker) RecoverFromLifecycle(ctx context.Context, pool *pgxpool.Pool) error {
+	rows, err := pool.Query(ctx, `
+		SELECT device_id, fault_code, start_time
+		  FROM hvac.warning_lifecycle
+		 WHERE end_time IS NULL
+	`)
+	if err != nil {
+		return fmt.Errorf("alarm tracker recover query: %w", err)
+	}
+	defer rows.Close()
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	total := 0
+	for rows.Next() {
+		var deviceID, faultCode string
+		var startTime time.Time
+		if err := rows.Scan(&deviceID, &faultCode, &startTime); err != nil {
+			return fmt.Errorf("alarm tracker recover scan: %w", err)
+		}
+		existing, ok := t.active[deviceID]
+		if !ok {
+			existing = make(map[string]*activeAlarm)
+			t.active[deviceID] = existing
+		}
+		existing[faultCode] = &activeAlarm{
+			UUID:      newUUID(),
+			StartTime: startTime.UnixMilli(),
+		}
+		total++
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("alarm tracker recover iter: %w", err)
+	}
+	log.Printf("[INFO] alarm tracker recover: %d active codes across %d devices", total, len(t.active))
+	return nil
 }

@@ -22,9 +22,15 @@ func main() {
 	}
 	defer pool.Close()
 
+	lifecycle := newLifecycleWriter(pool)
+	if err := lifecycle.Recover(ctx); err != nil {
+		log.Printf("[WARN] lifecycle recover failed (starting with empty state): %v", err)
+	}
+
 	service := &adapter{
-		cfg:  cfg,
-		pool: pool,
+		cfg:       cfg,
+		pool:      pool,
+		lifecycle: lifecycle,
 	}
 	if err := service.run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatalf("storage-adapter stopped with error: %v", err)

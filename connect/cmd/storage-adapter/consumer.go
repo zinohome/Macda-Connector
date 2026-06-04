@@ -13,8 +13,9 @@ import (
 )
 
 type adapter struct {
-	cfg  Config
-	pool *pgxpool.Pool
+	cfg       Config
+	pool      *pgxpool.Pool
+	lifecycle *LifecycleWriter
 }
 
 type saramaMessage struct {
@@ -108,21 +109,33 @@ func (h *consumerGroupHandler) Cleanup(sarama.ConsumerGroupSession) error { retu
 
 func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	batch := make([]pendingMessage, 0, h.adapter.cfg.BatchSize)
+	predictFrames := make([]PredictFrame, 0, h.adapter.cfg.BatchSize)
 	ticker := time.NewTicker(h.adapter.cfg.FlushInterval)
 	defer ticker.Stop()
 
 	flush := func() {
-		if len(batch) == 0 {
+		if len(batch) == 0 && len(predictFrames) == 0 {
 			return
 		}
-		if err := h.adapter.flushBatch(sess.Context(), batch); err != nil {
-			log.Printf("[ERROR] flush failed: %v", err)
-			return
+		if len(batch) > 0 {
+			if err := h.adapter.flushBatch(sess.Context(), batch); err != nil {
+				log.Printf("[ERROR] flush failed: %v", err)
+				return
+			}
+		}
+		// 状态机：predict frames（含空帧）独立推送给 lifecycle writer
+		if len(predictFrames) > 0 && h.adapter.lifecycle != nil {
+			lcCtx, lcCancel := context.WithTimeout(sess.Context(), 10*time.Second)
+			if err := h.adapter.lifecycle.ProcessFrames(lcCtx, predictFrames); err != nil {
+				log.Printf("[WARN] lifecycle write failed (continuing): %v", err)
+			}
+			lcCancel()
 		}
 		for _, item := range batch {
 			sess.MarkMessage(item.msg.inner, "")
 		}
 		batch = batch[:0]
+		predictFrames = predictFrames[:0]
 	}
 
 	for {
@@ -160,6 +173,9 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 					eventType = "life"
 				}
 
+				// 顶层 event_meta（适配 nb67 输出格式）；旧消息若 EventMeta 在 hit 里也兼容
+				topMeta := ev.EventMeta
+
 				flats := make([]EventFlatRecord, 0, len(ev.Hits))
 				for _, hit := range ev.Hits {
 					sev := hit.Severity
@@ -167,22 +183,53 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 						sev = *hit.Level
 					}
 
+					// hit.EventMeta 在旧 schema 中携带元数据；新 schema 走顶层
+					meta := hit.EventMeta
+					if meta.DeviceID == "" {
+						meta = topMeta
+					}
+
 					// 为了方便以后分析，payload_json 包含原始 hit 信息
 					payload, _ := json.Marshal(hit)
 
 					flats = append(flats, EventFlatRecord{
-						EventTime:  hit.EventMeta.EventTimeText,
+						EventTime:  meta.EventTimeText,
 						IngestTime: time.Now().Format(time.RFC3339),
-						LineID:     hit.EventMeta.LineID,
-						TrainID:    hit.EventMeta.TrainID,
-						CarriageID: hit.EventMeta.CarriageID,
-						DeviceID:   hit.EventMeta.DeviceID,
+						LineID:     meta.LineID,
+						TrainID:    meta.TrainID,
+						CarriageID: meta.CarriageID,
+						DeviceID:   meta.DeviceID,
 						EventType:  eventType,
 						FaultCode:  hit.Code,
 						FaultName:  hit.Name,
 						Severity:   sev,
 						Payload:    payload,
 					})
+				}
+
+				// predict 帧（含空帧）走状态机；EventMeta 来自顶层
+				if eventType == "predict" && topMeta.DeviceID != "" {
+					frame := PredictFrame{
+						DeviceID:      topMeta.DeviceID,
+						LineID:        topMeta.LineID,
+						TrainID:       topMeta.TrainID,
+						CarriageID:    topMeta.CarriageID,
+						EventTimeText: topMeta.EventTimeText,
+					}
+					for _, hit := range ev.Hits {
+						sev := hit.Severity
+						if hit.Level != nil {
+							sev = *hit.Level
+						}
+						payload, _ := json.Marshal(hit)
+						frame.Hits = append(frame.Hits, PredictHitMeta{
+							FaultCode: hit.Code,
+							FaultName: hit.Name,
+							Severity:  sev,
+							Payload:   payload,
+						})
+					}
+					predictFrames = append(predictFrames, frame)
 				}
 				batch = append(batch, pendingMessage{isEvent: true, record: flats, msg: saramaMessage{inner: msg}})
 			} else {
@@ -212,6 +259,9 @@ func (a *adapter) flushBatch(ctx context.Context, batch []pendingMessage) error 
 
 	for _, item := range batch {
 		if item.isEvent {
+			if !a.cfg.WriteFactEvent {
+				continue
+			}
 			flats := item.record.([]EventFlatRecord)
 			for _, f := range flats {
 				args, _ := f.toEventInsertArgs()
@@ -219,6 +269,9 @@ func (a *adapter) flushBatch(ctx context.Context, batch []pendingMessage) error 
 				totalEvents++
 			}
 		} else {
+			if !a.cfg.WriteFactRaw {
+				continue
+			}
 			record := item.record.(StorageRecord)
 			args, err := record.toInsertArgs(item.msg.inner.Value)
 			if err != nil {

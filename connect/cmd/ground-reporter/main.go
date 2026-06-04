@@ -8,6 +8,8 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -23,6 +25,20 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
+
+	// Phase 6: 启动时从 warning_lifecycle 恢复活跃集合（PG_DSN 非空时启用）。
+	// 避免 ground-reporter 重启后整批重发 open 事件给平台。
+	if cfg.PGDSN != "" {
+		pool, perr := pgxpool.New(ctx, cfg.PGDSN)
+		if perr != nil {
+			log.Printf("[WARN] PG pool init failed, skip lifecycle recover: %v", perr)
+		} else {
+			if rerr := tracker.RecoverFromLifecycle(ctx, pool); rerr != nil {
+				log.Printf("[WARN] alarm tracker recover failed: %v", rerr)
+			}
+			pool.Close() // 仅用于一次性恢复，不长持
+		}
+	}
 
 	// --- 6.1: signal-predict ---
 	wg.Add(1)

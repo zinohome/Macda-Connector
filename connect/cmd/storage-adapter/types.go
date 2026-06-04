@@ -87,7 +87,10 @@ type StorageRecord struct {
 }
 
 type EventRecord struct {
-	Hits []Hit `json:"hits"`
+	// EventMeta 出现在 nb67 SubEvent 顶层（包含 device_id, event_time_text 等）。
+	// 关键：空帧（hits=[]）也带 EventMeta —— 是 lifecycle close 状态机的唯一信号源。
+	EventMeta EventMeta `json:"event_meta"`
+	Hits      []Hit     `json:"hits"`
 }
 
 type Hit struct {

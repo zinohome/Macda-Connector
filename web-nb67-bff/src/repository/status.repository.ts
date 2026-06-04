@@ -157,25 +157,24 @@ export class StatusRepository {
     }
 
     static async getRealtimeWarnings(trainId?: number) {
+        // Phase 4: 直接查 warning_lifecycle，end_time IS NULL = 活跃中。
+        // 数据库部分唯一索引 UNIQUE(device_id, fault_code) WHERE end_time IS NULL 保证
+        // 同设备同 fault_code 不可能有 2 行，去重在写入端，**这里不需要 distinctOn**。
         let query = db
-            .selectFrom('hvac.fact_event')
+            .selectFrom('hvac.warning_lifecycle' as any)
             .selectAll()
-            // 按列车、车厢、故障码去重，只保留最新触发的一条（降序取第一条）
-            .distinctOn(['train_id', 'carriage_id' as any, 'fault_code'])
-            .where('event_type', '=', 'predict')
-            .where('recovery_time', 'is', null)
-            .orderBy('train_id')
+            .where('end_time', 'is', null)
+            .orderBy('train_id' as any)
             .orderBy('carriage_id' as any)
-            .orderBy('fault_code')
-            .orderBy(this.timeCol as any, 'desc')
-            .limit(200);
+            .orderBy('fault_code' as any)
+            .limit(500);
 
         if (trainId && !isNaN(trainId)) {
-            query = query.where('train_id', '=', trainId);
+            query = query.where('train_id' as any, '=', trainId);
         }
 
         const [data, configs] = await Promise.all([
-            query.execute(),
+            query.execute() as Promise<any[]>,
             db.selectFrom('hvac.warning_config' as any).selectAll().execute() as Promise<any[]>
         ]);
 
@@ -186,25 +185,27 @@ export class StatusRepository {
         });
 
         const grouped: Record<string, any[]> = {};
-        data.forEach(row => {
+        data.forEach((row: any) => {
             const code = row.fault_code;
-            if (code) {
-                // 从 HVAC 编码提取序号：HVAC307 → 307 % 100 = 7；传入完整 code 用于识别 _c/_v 后缀
-                const num = parseInt(code.replace(/[^0-9]/g, ''), 10);
+            if (!code) return;
+            // warn_code 优先用 lifecycle.warn_code（storage-adapter 写入时已映射）；
+            // 缺失时回退用 BFF 端推断，兼容老数据。
+            let warnCode: string | null = row.warn_code || null;
+            if (!warnCode) {
+                const num = parseInt(String(code).replace(/[^0-9]/g, ''), 10);
                 const seq = isNaN(num) ? -1 : num % 100;
-                const warnCode = this.hvacSeqToWarnCode(seq, code);
-                const strategy = warnCode ? (strategyMap[warnCode] || '') : '';
-
-                if (!grouped[code]) grouped[code] = [];
-                grouped[code].push({
-                    name: row.fault_name,
-                    warning_time: formatTime((row as any)[this.timeCol]),
-                    carriage_no: row.carriage_id || 0,
-                    train_no: row.train_id || 0,
-                    line_no: row.line_id || 0,
-                    strategy
-                });
+                warnCode = this.hvacSeqToWarnCode(seq, code);
             }
+            const strategy = warnCode ? (strategyMap[warnCode] || '') : '';
+            if (!grouped[code]) grouped[code] = [];
+            grouped[code].push({
+                name: row.fault_name,
+                warning_time: formatTime(row.start_time),
+                carriage_no: row.carriage_id || 0,
+                train_no: row.train_id || 0,
+                line_no: row.line_id || 0,
+                strategy
+            });
         });
         return grouped;
     }
