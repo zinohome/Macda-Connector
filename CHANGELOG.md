@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 
 
+## v2.5.27 (2026-06-05)
+
+### Bug Fixes
+- fix(event-writer): guard against dirty event_time slipping into sql_raw (`event_time_valid | true` → `| false`, regex sanity on YYYY-MM-DD HH:MM:SS bounds; silences recurring `date/time field value out of range` ERROR noise)
+
+### Chores
+- chore(dist): bump nb-parse-connect v2.5.25 → v2.5.27
+- chore(dist): sync image-save.sh / dist/README.md to current image versions (nb-parse-connect v2.5.27, storage-adapter v2.5.26, nb67-bff v2.5.26, ground-reporter v2.5.25)
+
 ## v2.5.0 (2026-05-13)
 
 ### Features
