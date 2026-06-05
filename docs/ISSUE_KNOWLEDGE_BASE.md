@@ -54,12 +54,50 @@
 [2026-05-27] #14 - 预警无法消除/clear_value未加载/无滞回逻辑 - config_store/nb67_event_processor
 [2026-05-27] #32 - dist镜像版本同步/从零重部署 - dist/部署
 [2026-06-03] RET-40 #20 #21 - 预警重复/不消除/频率0误报/并发整改 - lifecycle表+storage-adapter状态机+BFF/ground-reporter
+[2026-06-05] RET-40 followup - event-writer 脏时间戳日志噪音 - connect/config/nb67-event-writer.yaml
 
 ---
 
 ## 三、历史 Issue 处理记录
 
 > 最新记录在最前。每条记录包含：问题描述、根因、修复方法、测试验证、经验总结。
+
+### [2026-06-05] RET-40 followup - event-writer 脏时间戳日志噪音
+
+**问题描述**：connect-event-writer 在 v3 group 切换后日志里持续刷
+`date/time field value out of range: "2049-98-53 97:49:99+08:00"`。
+吞吐与落库正常（脏行被 ON CONFLICT / 解析失败拦下不入 DB），但 ERROR 等级噪音
+干扰排障。
+
+**根因**：`nb67-event-writer.yaml` 的 mapping 把 `event_time_valid` 默认值设为
+`| true`（缺失即信任），且仅依赖 parser 的 boolean 标志，没做格式 sanity。
+上游若某帧 `event_time_valid` 字段缺失（老 parser 版本残留 / 中间过渡数据），
+mapping 直接把 `2049-98-53 ...` 这种脏字符串拼 `+08:00` 送进 sql_raw，
+postgres 立即抛 `date/time field value out of range`。
+
+**修复方法**：
+- `connect/config/nb67-event-writer.yaml` 和 `dist/config/nb67-event-writer.yaml`
+  同步修改 mapping：
+  1. 默认从 `| true` 翻转为 `| false`（缺失即降级到 ingest_time，不再"假定 valid"）
+  2. 新增 `ts_format_ok` 正则校验 `^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]) ...`
+     即使 `event_time_valid=true` 也要再过这一关，杜绝 parser 漏判的脏帧
+  3. `ts_valid = (event_time_valid | false) && ts_format_ok`，任何一边不过都走 ingest_time
+- 配置经 `1panel-network` 挂载，无需重建镜像，`docker restart connect-event-writer` 即生效
+
+**测试验证**：
+- 同步 yaml 到 `/data/Macda2/connect/config/`，`docker restart connect-event-writer`
+- 容器状态：`Up (healthy)`，benthos 正常 Listening + Consuming v3 group
+- 重启后 90s 日志：0 条 error，0 条 `out of range`，0 条 warn（restart 前同窗口持续刷）
+- v3 group：STATE=Stable，MEMBERS=1，partition LAG ≈ 50（持续追平，未停消费）
+
+**经验总结**：
+- bloblang fallback `| true` 在跨版本上游数据混跑时是危险默认，**"未知则降级"**
+  比 **"未知则信任"** 安全。新增字段时 default 选 false / nullable，不要选 true。
+- benthos 的 sql_raw error 是 ERROR 等级且不可降级，所以**不要靠下游报错过滤脏数据**，
+  必须在 mapping 阶段把脏行引流到 fallback 分支，让 sql_raw 永远拿到合法值。
+- 正则 sanity 比依赖 parser 标志更可靠：parser 升级、字段重命名、上游平台直接灌数据
+  这些场景下 boolean flag 都可能失真，但 `^\d{4}-(01-12)-(01-31) (00-23):...` 永远是
+  postgres timestamp 的硬约束。
 
 ### [2026-06-03] RET-40 #20 #21 - 预警系统整改：一条预警一行 (Phase 1-7)
 

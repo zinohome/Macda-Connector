@@ -8,8 +8,8 @@ input:
       - signal-alarm
       - signal-predict
       - signal-life
-    consumer_group: macda-event-persister
-    start_from_oldest: true
+    consumer_group: macda-event-persister-v3
+    start_from_oldest: false
 
 pipeline:
   processors:
@@ -30,9 +30,25 @@ pipeline:
         format: json_array
 
     # 3. 字段平铺与标准化，防范字符串型数字的 panic 错误
+    #
+    # event_time 健壮性（Bug A 修复 2026-06-04，2026-06-05 加固）：
+    #   1) 已带时区（[+-]\d{2}:?\d{2} 或 Z 结尾） → 不重复拼 "+08:00"
+    #   2) event_time_valid=false 或字段缺失（默认 false） → 回退 ingest_time
+    #   3) 即使 event_time_valid=true，再做一次正则 sanity（月 1-12 / 日 1-31 /
+    #      时 0-23 / 分秒 0-59），杜绝 "2049-98-53 97:49:99" 这种脏帧
+    #      继续向下游 sql_raw 抛 "date/time field value out of range" 噪音错误。
     - mapping: |
-        root.event_time = (this.event_meta.event_time_text + "+08:00") | "1970-01-01T00:00:00+08:00"
-        root.ingest_time = this.event_meta.ingest_time.split("%").index(0) | now().ts_format("2006-01-02T15:04:05-07:00", "Asia/Shanghai")
+        let raw_ts = this.event_meta.event_time_text | "1970-01-01 00:00:00"
+        let has_tz = $raw_ts.re_match("([+-][0-9]{2}:?[0-9]{2}|Z)$")
+        let ts_format_ok = $raw_ts.re_match("^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])[ T]([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]")
+        let ts_valid = (this.event_meta.event_time_valid | false) && $ts_format_ok
+        let ingest = this.event_meta.ingest_time.split("%").index(0) | now().ts_format("2006-01-02T15:04:05-07:00", "Asia/Shanghai")
+        root.event_time = if $ts_valid {
+          if $has_tz { $raw_ts } else { $raw_ts + "+08:00" }
+        } else {
+          $ingest
+        }
+        root.ingest_time = $ingest
         root.line_id = this.event_meta.line_id.number() | 0
         root.train_id = this.event_meta.train_id.number() | 0
         root.carriage_id = this.event_meta.carriage_id.number() | 0
