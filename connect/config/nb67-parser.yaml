@@ -41,15 +41,7 @@ pipeline:
         # 原版只校验 month/day，hour/minute/second 不校验，
         # 导致 mock 帧 src_hour=97 这种坏字节也被当作 valid。
         # 现扩展为完整时分秒范围校验，下游写入器据此回退 ingest_time。
-        root.event_time_valid = if this.src_month >= 1 && this.src_month <= 12
-                               && this.src_day >= 1 && this.src_day <= 31
-                               && this.src_hour <= 23
-                               && this.src_minute <= 59
-                               && this.src_second <= 59 {
-          true
-        } else {
-          false
-        }
+        root.event_time_valid = if this.src_month >= 1 && this.src_month <= 12 && this.src_day >= 1 && this.src_day <= 31 && this.src_hour <= 23 && this.src_minute <= 59 && this.src_second <= 59 { true } else { false }
 
         root.quality_code = if this.quality_status == "OK" { 0 } else { 1 }
 

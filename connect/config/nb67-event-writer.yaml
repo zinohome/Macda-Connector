@@ -8,7 +8,7 @@ input:
       - signal-alarm
       - signal-predict
       - signal-life
-    consumer_group: macda-event-persister-v2
+    consumer_group: macda-event-persister-v3
     start_from_oldest: false
 
 pipeline:
