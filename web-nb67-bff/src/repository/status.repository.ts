@@ -483,14 +483,89 @@ export class StatusRepository {
             return q;
         };
 
-        // 1. 独立执行 count 查询，获取总数
+        // alarm 路径：fact_event 每帧入一行 → 历史报警页天然重复。
+        // 这里在 JS 层按 (train_id, carriage_id, fault_code) + 60s "发作岛" 去重，
+        // 同一岛取 min(event_time/ingest_time) 作触发时刻，max(timeCol) 作 recovery_time。
+        // 不动 DB schema，不影响 predict 路径（predict 走 warning_lifecycle）。
+        if (params.eventType === 'alarm') {
+            const rawAll = await buildBase()
+                .selectAll()
+                .orderBy(this.timeCol as any, 'desc')
+                .orderBy('event_time', 'desc')
+                .orderBy('fault_code', 'asc')
+                .limit(5000)
+                .execute();
+
+            const GAP_MS = 60_000;
+            const tCol = this.timeCol;
+            // 按 key + 时间正序构造发作岛
+            const asc = [...rawAll].sort((a: any, b: any) => {
+                const ka = `${a.train_id}:${a.carriage_id}:${a.fault_code}`;
+                const kb = `${b.train_id}:${b.carriage_id}:${b.fault_code}`;
+                if (ka !== kb) return ka.localeCompare(kb);
+                return new Date(a[tCol]).getTime() - new Date(b[tCol]).getTime();
+            });
+            type Island = {
+                key: string;
+                row: any;          // 第一帧（带完整字段）
+                start: Date;
+                lastSeen: Date;
+            };
+            const islands: Island[] = [];
+            let cur: Island | null = null;
+            for (const r of asc) {
+                const k = `${(r as any).train_id}:${(r as any).carriage_id}:${(r as any).fault_code}`;
+                const t = new Date((r as any)[tCol]).getTime();
+                if (cur && cur.key === k && t - cur.lastSeen.getTime() <= GAP_MS) {
+                    cur.lastSeen = new Date(t);
+                } else {
+                    cur = { key: k, row: r, start: new Date(t), lastSeen: new Date(t) };
+                    islands.push(cur);
+                }
+            }
+            // 每岛 = 一条 "alarm" 记录：start 用 islandStart；recovery_time 推断：
+            //   - 原 row.recovery_time 不为 null → 直接用
+            //   - 同 key 后面还有更新的岛（说明此岛已结束） → recovery_time = lastSeen
+            //   - 是该 key 最新一岛 且 lastSeen 距 now < 60s → 视为仍活跃，recovery_time = null
+            //   - 是该 key 最新一岛 但 lastSeen 已经超过 60s → 视为已结束，recovery_time = lastSeen
+            const nowMs = Date.now();
+            const lastIslandIdxByKey = new Map<string, number>();
+            islands.forEach((isl, idx) => lastIslandIdxByKey.set(isl.key, idx));
+            const merged = islands.map((i, idx) => {
+                let recovery: Date | null;
+                if (i.row.recovery_time != null) {
+                    recovery = i.row.recovery_time;
+                } else if (lastIslandIdxByKey.get(i.key) !== idx) {
+                    recovery = i.lastSeen;        // 此岛后面还有同 key 新岛，必定已结束
+                } else if (nowMs - i.lastSeen.getTime() > 60_000) {
+                    recovery = i.lastSeen;        // 最新岛但已超 60s 无新帧 → 视为结束
+                } else {
+                    recovery = null;              // 仍活跃
+                }
+                return {
+                    ...i.row,
+                    [tCol]: i.start,
+                    event_time: i.start,
+                    ingest_time: i.start,
+                    recovery_time: recovery,
+                    occurrence_start: i.start,
+                };
+            });
+            // 按 start_time desc 重排，分页
+            merged.sort((a: any, b: any) =>
+                new Date(b.event_time).getTime() - new Date(a.event_time).getTime());
+            const total = merged.length;
+            const list = merged.slice(offset, offset + limit);
+            console.log(`[Repository] Query Alarms (deduped): total=${total}, returned=${list.length}, page=${page}, offset=${offset}, range=[${params.startTime} - ${params.endTime}]`);
+            return { list, total };
+        }
+
+        // 非 alarm 路径（保留原行为）
         const totalResult = await buildBase()
             .select(sql<number>`count(*)`.as('count'))
             .executeTakeFirst();
         const total = Number((totalResult as any)?.count || 0);
 
-        // 2. 独立执行分页 list 查询
-        // 增加 event_time 和 fault_code 作为 tie-breakers，确保结果集顺序在分页间绝对稳定
         const list = await buildBase()
             .selectAll()
             .orderBy(this.timeCol as any, 'desc')
@@ -551,18 +626,29 @@ export class StatusRepository {
      * 获取故障统计供 Echart 渲染 (返回 vw_alarm_info_all_date)
      */
     static async getFaultStatistics() {
-        const data = await db
+        // 2026-06-09 修复：fact_event 每帧入一行，原查询取 last 5000 行让 Echart 拿到
+        // 大量重复（一条 30s 报警 = 30 行）→ 占比统计严重失真。
+        // 这里按 (fault_code, device_id, minute) 去重——同分钟内同设备同故障算 1 次——
+        // 既保留前端 "value === 1" 累加契约（每个数组项形如 {HVAC301:1}），
+        // 又把"同一报警重复出现 30 次"的伪信号过滤掉。
+        const rows = await db
             .selectFrom('hvac.fact_event')
-            .select(['fault_code'])
+            .select([
+                'fault_code',
+                sql<Date>`date_trunc('minute', ${sql.ref(this.timeCol)})`.as('minute'),
+                'device_id' as any,
+            ])
             .where('event_type', '=', 'alarm')
-            .orderBy(this.timeCol as any, 'desc')
+            .where(this.timeCol as any, '>=', sql<Date>`now() - interval '7 days'` as any)
+            .groupBy(['fault_code', 'device_id' as any, sql`date_trunc('minute', ${sql.ref(this.timeCol)})`])
+            .orderBy(sql`date_trunc('minute', ${sql.ref(this.timeCol)})`, 'desc')
             .limit(5000)
             .execute();
 
         return {
-            vw_alarm_info_all_date: data.map(r => ({
-                [r.fault_code as string]: 1
-            }))
+            vw_alarm_info_all_date: rows.map((r: any) => ({
+                [r.fault_code as string]: 1,
+            })),
         };
     }
 

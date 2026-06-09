@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 
 
+## v2.5.29 (2026-06-09)
+
+### Bug Fixes
+- fix(bff): getHistoricalEvents (eventType='alarm') 在 JS 层按 (train_id, carriage_id, fault_code) + 60s 发作岛去重，杜绝历史报警页"同一报警重复 N 行" (RET-40 followup-3 第1点)
+- fix(bff): getFaultStatistics 按 (fault_code, device_id, minute) 在 SQL 层聚合，避免 Echart 因 fact_event 帧级重复占比失真 (RET-40 followup-3 第2点)
+
+### Chores
+- chore(dist): bump nb67-bff v2.5.28→v2.5.29
 ## v2.5.28 (2026-06-09)
 
 ### Bug Fixes

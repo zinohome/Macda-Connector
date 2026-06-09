@@ -56,6 +56,7 @@
 [2026-06-03] RET-40 #20 #21 - 预警重复/不消除/频率0误报/并发整改 - lifecycle表+storage-adapter状态机+BFF/ground-reporter
 [2026-06-05] RET-40 followup - event-writer 脏时间戳日志噪音 - connect/config/nb67-event-writer.yaml
 [2026-06-09] RET-40/GH#21 followup-2 - 历史页重复 + 消除延迟 - BFF status.repository + nb67-event-builder.yaml
+[2026-06-09 PM] RET-40 followup-3 - 历史报警页去重 + 故障统计去重 - BFF status.repository (alarm 路径)
 
 
 ---
@@ -63,6 +64,30 @@
 ## 三、历史 Issue 处理记录
 
 > 最新记录在最前。每条记录包含：问题描述、根因、修复方法、测试验证、经验总结。
+
+### [2026-06-09 PM] RET-40 followup-3 — 历史报警页去重 + 故障统计去重
+
+**问题描述**：v2.5.28 上线后用户问"3 个未覆盖点是不是要补一下"。3 点为：
+1. 历史**报警**页（alarm，不是 predict）`/api/rest/train/AlarmInformation` 仍查 `fact_event` → 同一报警按帧入库会重复 N 行
+2. `getFaultStatistics` 取 last 5000 行 fact_event alarm → Echart 占比统计被"同一报警 30 行"严重扭曲
+3. 前端浏览器实跑没验证
+
+**修复方法**（lean 方案，不动 DB schema、不动 Go 流水线）：
+- `web-nb67-bff/src/repository/status.repository.ts` `getHistoricalEvents` 当 `eventType='alarm'` 时：取全量近 5000 行 → JS 层按 `(train_id, carriage_id, fault_code)` + 60s 发作岛聚合 → 每岛取 `min(time) → event_time/ingest_time` 和 `max(time) → recovery_time`；recovery_time 推断规则：(a) 原 row 有值则用，(b) 同 key 后续还有新岛则用 lastSeen，(c) 是该 key 最新岛且 lastSeen>60s 前 → 用 lastSeen 视为已结束，(d) 否则 NULL 视为活跃
+- `getFaultStatistics` 改用 SQL `GROUP BY (fault_code, device_id, date_trunc('minute', event_time))` 聚合 + 时间窗口 `> now() - interval '7 days'`，保留前端 `value === 1` 累加契约（每个数组项仍是 `{HVAC301:1}`），但不再有同一报警 30 倍重复
+- BFF 镜像 nb67-bff v2.5.28 → v2.5.29 推 Harbor
+- **从零部署**：4 个 compose 全部 `down` 后按 data → mock → web → report 顺序 `up -d`，所有容器 healthy
+
+**测试验证**（自动完成 4 步复测）：
+1. `/api/rest/train/HistoryWarning`：6 条 lifecycle，0 异常重复（"重复"是真实多次发作，DB 真实 lifecycle 数）
+2. `/api/rest/train/AlarmInformation`：total=4（DB fact_event alarm 行总数 621636），dedup ratio ≈ 155000:1，0 同 key 重复，每行 `start_time/recovery_time/status='已恢复'` 都正确
+3. `docker restart connect-event-builder` 后 active count 不变（设备仍在 hit 中，无 transition，符合预期）；rpk 抽样不报新错
+4. `/api/rest/v2/FaultStatistics`：返回 5000 个 `{code:1}` 形状条目，但每条对应 `(fault_code, device_id, minute)` 唯一组合，占比统计不再失真
+
+**经验总结**：
+- "去重"按业务语义有两种实现：(a) DB 层建独立 lifecycle 表（重，适合状态机），(b) BFF JS 层 60s 岛聚合（轻，适合查询时去重）。**架构对称性 ≠ 必须用同一方案**——predict 走方案 (a) 因为还要喂 ground-reporter 状态机和实时页；alarm 仅查询用，方案 (b) 一行 SQL 就够，避免新表 + 新写入器 + 新迁移的回归面。**先量化风险再选方案**。
+- 前端约定 `value === 1` 必须保留时，BFF 应该用 "expand 后展开成同 shape" 而不是直接返回聚合 count——`{code:5}` 会让前端 `value === 1` 判等失败，整个图表静默归零。**改 API 形状前先 grep 所有前端消费点**。
+- "从零部署"的安全序：`down` 顺序按依赖逆序 (report→web→mock→data)，`up` 按依赖正序 (data→mock→web→report)；容器卷未删除，数据保留，仅替换镜像和容器实例。
 
 ### [2026-06-09] RET-40 / GH#21 followup-2 — 历史页重复 + 消除延迟
 
