@@ -566,9 +566,15 @@ export class StatusRepository {
         };
     }
 
-    // B3: 历史预警查询 — 单独加载 warning_config 并在 JS 层映射触发条件
-    // 注意：不再使用 LEFT JOIN，因为 fact_event.fault_code（如 HVAC301）与
-    //       warning_config.warn_code（如 WARN_REFRIGERANT_LEAK）命名规范不同，JOIN 无法匹配
+    // B3: 历史预警查询 — 改查 hvac.warning_lifecycle（2026-06-05 followup）
+    //
+    // 原实现查 fact_event 会出现"一条预警显示多行"——因为 predict 每帧入库一行。
+    // 改查 warning_lifecycle：一条预警 = 一行，start_time = 触发时刻，end_time =
+    // 消除时刻（NULL 表示仍活跃），与 #20 #21 整改后的实时页面共享一张事实表。
+    //
+    // 时间过滤语义：返回**生命周期与查询窗口有重叠**的预警，即
+    //   start_time <= window_end AND (end_time IS NULL OR end_time >= window_start)
+    // 这样窗口内"已经触发但还没结束"的活跃预警也会被列出来。
     static async getHistoricalWarnings(params: {
         trainId?: number;
         carriageIds?: number[];
@@ -583,17 +589,21 @@ export class StatusRepository {
         const offset = (page - 1) * limit;
 
         const buildBase = () => {
-            let q = db
-                .selectFrom('hvac.fact_event as e')
-                .where('e.event_type' as any, '=', 'predict');
+            let q = db.selectFrom('hvac.warning_lifecycle as e' as any);
 
             if (params.startTime) {
                 const start = new Date(params.startTime);
-                if (!isNaN(start.getTime())) q = q.where(`e.${this.timeCol}` as any, '>=', start);
+                if (!isNaN(start.getTime())) {
+                    // 生命周期与窗口有重叠：end_time IS NULL 或 end_time >= window_start
+                    q = q.where((eb: any) => eb.or([
+                        eb('e.end_time' as any, 'is', null),
+                        eb('e.end_time' as any, '>=', start),
+                    ]));
+                }
             }
             if (params.endTime) {
                 const end = new Date(params.endTime);
-                if (!isNaN(end.getTime())) q = q.where(`e.${this.timeCol}` as any, '<=', end);
+                if (!isNaN(end.getTime())) q = q.where('e.start_time' as any, '<=', end);
             }
             if (params.trainId) q = q.where('e.train_id' as any, '=', params.trainId);
             if (params.carriageIds && params.carriageIds.length > 0) {
@@ -608,21 +618,56 @@ export class StatusRepository {
             .executeTakeFirst();
         const total = Number((totalResult as any)?.count || 0);
 
-        // 并行拉取事件列表和预警配置（用于触发条件描述）
-        const [rawList, warnConfigs] = await Promise.all([
+        // 并行拉取生命周期列表和预警配置（用于触发条件描述）
+        const [rawLifecycle, warnConfigs] = await Promise.all([
             buildBase()
                 .select([
-                    'e.event_time', 'e.ingest_time', 'e.train_id', 'e.carriage_id',
-                    'e.fault_code', 'e.fault_name', 'e.severity', 'e.status',
-                    'e.recovery_time' as any,
-                    'e.payload_json' as any,
+                    'e.id' as any,
+                    'e.device_id' as any,
+                    'e.line_id' as any,
+                    'e.train_id' as any,
+                    'e.carriage_id' as any,
+                    'e.unit_id' as any,
+                    'e.fault_code' as any,
+                    'e.fault_name' as any,
+                    'e.warn_code' as any,
+                    'e.severity' as any,
+                    'e.start_time' as any,
+                    'e.end_time' as any,
+                    'e.last_seen_time' as any,
+                    'e.trigger_snapshot' as any,
                 ])
-                .orderBy(`e.${this.timeCol}` as any, 'desc')
+                .orderBy('e.start_time' as any, 'desc')
                 .limit(1000)   // 宽松拉取，JS 过滤后再分页
                 .execute(),
             // 同 getRealtimeWarnings 的已验证模式：selectAll() as any[]
             (db.selectFrom('hvac.warning_config' as any).selectAll().execute() as Promise<any[]>),
         ]);
+
+        // 映射 warning_lifecycle 行 → 兼容 fact_event 老 API 的字段名
+        // 让前端无需改动即可消费；缺失列（如 ingest_time/payload_json）按需补 null/空对象。
+        const rawList = (rawLifecycle as any[]).map((r: any) => ({
+            event_time: r.start_time,       // 历史页用作"触发时刻"
+            ingest_time: r.start_time,      // 老 API 兼容
+            train_id: r.train_id,
+            carriage_id: r.carriage_id,
+            fault_code: r.fault_code,
+            fault_name: r.fault_name,
+            severity: r.severity,
+            // status: 'active' = 仍活跃；'recovered' = 已消除
+            status: r.end_time == null ? 'active' : 'recovered',
+            recovery_time: r.end_time,
+            // 老 API 的 payload_json 里有 trigger_condition_snapshot，
+            // 新链路用 trigger_snapshot 列承载；包成兼容形状给下游降级逻辑用。
+            payload_json: r.trigger_snapshot
+                ? { trigger_condition_snapshot:
+                    typeof r.trigger_snapshot === 'string'
+                        ? r.trigger_snapshot
+                        : (r.trigger_snapshot?.trigger_condition_snapshot
+                            || r.trigger_snapshot?.condition
+                            || null) }
+                : {},
+        }));
 
         // 构建 warn_code → trigger_condition（由设置页可见的 threshold_bad + duration_seconds 动态生成）
         // 与设置页保持一致：用户修改阈值后，历史页触发条件自动更新

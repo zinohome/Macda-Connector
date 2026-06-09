@@ -55,12 +55,51 @@
 [2026-05-27] #32 - dist镜像版本同步/从零重部署 - dist/部署
 [2026-06-03] RET-40 #20 #21 - 预警重复/不消除/频率0误报/并发整改 - lifecycle表+storage-adapter状态机+BFF/ground-reporter
 [2026-06-05] RET-40 followup - event-writer 脏时间戳日志噪音 - connect/config/nb67-event-writer.yaml
+[2026-06-09] RET-40/GH#21 followup-2 - 历史页重复 + 消除延迟 - BFF status.repository + nb67-event-builder.yaml
+
 
 ---
 
 ## 三、历史 Issue 处理记录
 
 > 最新记录在最前。每条记录包含：问题描述、根因、修复方法、测试验证、经验总结。
+
+### [2026-06-09] RET-40 / GH#21 followup-2 — 历史页重复 + 消除延迟
+
+**问题描述**（GitHub #21 复测发现）：
+- 现象 A：历史预警/报警页面同一条预警重复出现多行
+- 现象 B：满足消除条件后 `warning_lifecycle` 仍未消除；只有当**新预警触发**时旧预警才被一并消除，并把消除报文一起发给平台
+
+**根因**：
+1. 上一轮 #20/#21 整改时把 `getRealtimeWarnings` 改查了 `warning_lifecycle`，但 `getHistoricalWarnings` 漏改，仍查 `hvac.fact_event`。predict 每帧入库一行 → 历史页天然重复。
+2. `connect/config/nb67-event-builder.yaml` 的 signal-predict 分支 mapping：
+   ```
+   root = if this.exists("predict_event") && this.predict_event.hits.length() > 0 { this.predict_event } else { deleted() }
+   ```
+   Go 端 `nb67_event_processor.go` 的 `prevPredictHadHits` 状态机在 "上一帧有命中、本帧清空" 的过渡点会**主动发一次 hits=[] 的 predict_event** 给下游消除链路；但 yaml 这里 `hits.length() > 0` 把过渡帧整条扔掉。
+   结果：lifecycle_writer 和 ground-reporter 永远收不到"该 device 现在无预警"的信号，状态停在最后一帧；要等下一个不同 fault_code 进来时 set-diff 才把旧 code 算作 removed，那时消除报文的时间戳已经错位。
+
+**修复方法**：
+- **`web-nb67-bff/src/repository/status.repository.ts:572-621`** `getHistoricalWarnings`：
+  - selectFrom 从 `hvac.fact_event as e` 改成 `hvac.warning_lifecycle as e`
+  - 时间窗口语义改为"生命周期与窗口有重叠"：`start_time <= window_end AND (end_time IS NULL OR end_time >= window_start)`
+  - 把 lifecycle 列映射回老 API 字段：`start_time → event_time/ingest_time`，`end_time → recovery_time`，`status = end_time IS NULL ? 'active' : 'recovered'`
+  - `trigger_snapshot` 包成 `payload_json.trigger_condition_snapshot` 给下游降级逻辑用
+- **`connect/config/nb67-event-builder.yaml` + `dist/config/nb67-event-builder.yaml`** signal-predict 分支：
+  - `if this.exists("predict_event") && this.predict_event.hits.length() > 0` → `if this.exists("predict_event")`
+  - 让 Go 主动发的"过渡空帧"顺利透传，下游消除链路按真实时间戳关闭并发报文
+- 镜像：`nb67-bff:v2.5.28`、`nb-parse-connect:v2.5.28`（重建 + 推 Harbor + 同步 dist + 实地容器替换）
+
+**测试验证**：
+- `rpk topic consume signal-predict` 看到 `"hits":[]` 的过渡帧（修复前从未出现）
+- `warning_lifecycle` 表观察：connect-event-builder 重启后，所有原本 active 的行 end_time 在同秒被批量回填，`5 closed, 0 active`
+- BFF API：`POST /api/rest/train/HistoryWarning` 返回每条 lifecycle 一行，`start_time`/`end_time` 同时出现，trigger_condition 正确映射，`total=5`（DB 真实条数）
+- 6 个 connect-* 容器 + nb67-bff 全部 `Up (healthy)`
+
+**经验总结**：
+- 拆分查询路径时务必**列出所有引用旧路径的位置**——上轮整改只改了 realtime，history 漏了；这种漏改在数据模型迁移里非常常见，应养成 `grep "fact_event" web-nb67-bff/src/` 的扫尾习惯。
+- Go processor 已设计正确（含 `prevPredictHadHits` 状态机），但 yaml 层"善意的过滤"把状态机产物吃掉了。**跨语言/跨配置的状态机一定要画一遍端到端时序图**，下游过滤器要看上游 emit 语义说明书，不能凭直觉"空 hits 就 drop"。
+- `event_meta` 必须永远在 SubEvent 里——这是 lifecycle/ground-reporter 用来识别 device 的唯一锚点；如果未来真的想压缩流量，可以把 idle 周期延长到 10s 而不是每帧都发空帧，而不是直接 deleted()。
 
 ### [2026-06-05] RET-40 followup - event-writer 脏时间戳日志噪音
 

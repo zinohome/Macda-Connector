@@ -1,7 +1,7 @@
 # MACDA Connector — 部署手册
 
-> **版本**：v2.5.27  
-> **更新**：2026-06-05
+> **版本**：v2.5.28  
+> **更新**：2026-06-09
 
 ---
 
@@ -258,8 +258,8 @@ docker compose -f docker-compose-Data.yml up -d --scale connect-parser=3
 | 服务 | 镜像 |
 |------|------|
 | 前端 (Nginx) | `harbor.naivehero.top:8443/macda2/nb67-web:v2.5.20` |
-| BFF (Node.js) | `harbor.naivehero.top:8443/macda2/nb67-bff:v2.5.26` |
-| Connect 流水线 | `harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.27` |
+| BFF (Node.js) | `harbor.naivehero.top:8443/macda2/nb67-bff:v2.5.28` |
+| Connect 流水线 | `harbor.naivehero.top:8443/macda2/nb-parse-connect:v2.5.28` |
 | 存储适配器 (Plan B / lifecycle-writer) | `harbor.naivehero.top:8443/macda2/storage-adapter:v2.5.26` |
 | 地面报送服务 | `harbor.naivehero.top:8443/macda2/ground-reporter:v2.5.25` |
 | TimescaleDB | `harbor.naivehero.top:8443/macda2/timescaledb-ha:pg14-ts2.19-all` |

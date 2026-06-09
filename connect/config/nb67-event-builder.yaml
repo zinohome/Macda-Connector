@@ -35,9 +35,18 @@ output:
     pattern: fan_out
     outputs:
       # signal-predict: predict_event（故障预警命中列表）
+      #
+      # 2026-06-05 followup：不再过滤 hits.length() == 0。
+      # Go 端 nb67_event_processor 在 "上一帧有命中、本帧清空" 的过渡点会
+      # 主动发一次 hits=[] 的 predict_event（参考 prevPredictHadHits 状态机），
+      # 用来通知下游 lifecycle_writer / ground-reporter 关闭预警并向平台发消除报文。
+      # 如果在 yaml 层 deleted()，过渡帧就被截胡，导致：
+      #   - warning_lifecycle 一直留着 end_time=NULL 的旧预警
+      #   - 平台只在下次新预警触发时才"顺带"收到消除报文，时间戳错位
+      # 这里只保留 "存在 predict_event 就透传" 的最小过滤。
       - processors:
           - mapping: |
-              root = if this.exists("predict_event") && this.predict_event.hits.length() > 0 {
+              root = if this.exists("predict_event") {
                 this.predict_event
               } else {
                 deleted()

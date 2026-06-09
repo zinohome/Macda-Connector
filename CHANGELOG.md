@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 
 
+## v2.5.28 (2026-06-09)
+
+### Bug Fixes
+- fix(bff): getHistoricalWarnings 改查 hvac.warning_lifecycle，一条预警 = 一行；解决 #21 followup "历史页面同一预警重复出现"
+- fix(event-builder): yaml 不再 deleted() 掉空 hits 的 predict_event，让 Go 端发的 "had→empty" 过渡帧能到达下游；解决 #21 followup "预警满足消除条件后 warning_lifecycle 不消除 / 消除报文延迟至新预警触发时一并发送"
+
+### Chores
+- chore(dist): bump nb67-bff v2.5.26→v2.5.28, nb-parse-connect v2.5.27→v2.5.28
 ## v2.5.27 (2026-06-05)
 
 ### Bug Fixes
