@@ -107,12 +107,14 @@ func Handle61Predict(ctx context.Context, client *PlatformClient, tracker *Alarm
 		}
 	}
 
+	// GitHub #23 / RET-46 修复（2026-06-12）：
+	// 预警消除（diff.Removed）不再向平台上报报文。原因：
+	//   - 平台只关心"新出现的预警"，消除事件由本地 hvac.warning_lifecycle.end_time 承载
+	//   - 之前消除一并上报，导致平台收到 EndTime>0 的多余 6.1 报文
+	// Removed 仍在 [PREDICT-REMOVED] 日志中体现，状态机不受影响。
 	var records []Record61
 	for _, hit := range diff.Added {
 		records = append(records, buildRecord61(cfg, msg.EventMeta, si, "1", hit.Code, hit.StartTime, 0))
-	}
-	for _, hit := range diff.Removed {
-		records = append(records, buildRecord61(cfg, msg.EventMeta, si, "1", hit.Code, hit.StartTime, hit.EndTime))
 	}
 
 	if len(records) == 0 {

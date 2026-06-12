@@ -136,16 +136,36 @@ func parseOptionalTimeOrDefault(text string, fallback time.Time) time.Time {
 	return fallback
 }
 
+// cnLoc 是 Asia/Shanghai 时区。上游 event_time_text 是裸字符串（无时区，实为
+// 现场本地时间），用 time.Parse 会被默认按 UTC 解读 → 入库 TIMESTAMPTZ 比真实时刻 +8h，
+// 即 GitHub #24 / RET-46 报告的根因。修复：裸 layout 必须用 ParseInLocation。
+var cnLoc = func() *time.Location {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil || loc == nil {
+		return time.FixedZone("CST", 8*3600)
+	}
+	return loc
+}()
+
 func parseTimeText(text string) (time.Time, bool) {
-	layouts := []string{
+	// 带时区 layout：必须用 time.Parse，否则 +08:00/Z 会被 ParseInLocation 二次本地化。
+	tzLayouts := []string{
 		time.RFC3339Nano,
 		time.RFC3339,
+	}
+	for _, layout := range tzLayouts {
+		if parsed, err := time.Parse(layout, text); err == nil {
+			return parsed.UTC(), true
+		}
+	}
+	// 裸 layout：按 Asia/Shanghai 解析，再归一化为 UTC。
+	nakedLayouts := []string{
 		"2006-01-02 15:04:05",
 		"2006-1-2 15:4:5",
 		"2006-01-02T15:04:05",
 	}
-	for _, layout := range layouts {
-		if parsed, err := time.Parse(layout, text); err == nil {
+	for _, layout := range nakedLayouts {
+		if parsed, err := time.ParseInLocation(layout, text, cnLoc); err == nil {
 			return parsed.UTC(), true
 		}
 	}

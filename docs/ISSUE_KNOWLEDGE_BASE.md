@@ -42,6 +42,7 @@
 
 > 快速检索用。格式：`[日期] #Issue编号 - 问题关键词 - 所属模块`
 
+[2026-06-12] #23 #24 - warning_lifecycle 时间多 8h / 预警消除给平台发报文 / 历史预警查不到 - storage-adapter/transform.go + ground-reporter/api_6_1.go + alarm_tracker.go
 [2026-05-21] #1 - mock-platform未收到推送/ground-reporter镜像缺失 - ground-reporter/docker-compose
 [2026-05-21] #2 - 预警触发配置/历史预警描述/冷媒泄露两条件分设 - nb67_event_processor/BFF
 [2026-05-24] #3 - 预警报文location/code与alertcode文件不对应/_c/_v后缀未归一化 - ground-reporter/alertcode_map
@@ -64,6 +65,41 @@
 ## 三、历史 Issue 处理记录
 
 > 最新记录在最前。每条记录包含：问题描述、根因、修复方法、测试验证、经验总结。
+
+### [2026-06-12] RET-46 / GH#23 #24 — warning_lifecycle 时区漂移 + 预警消除上报抑制 + 重启风暴修复
+
+**问题描述**：
+- GH#24：`hvac.warning_lifecycle` 的 `start_time/end_time/last_seen_time` 比设备真实时间多 8 小时（`fact_event` 表正确）；首页"历史预警"显示的时间也跟着错。
+- GH#23 现象 A：预警消除时给平台发送了 6.1 报文（业务规则：消除不应上报）。
+- GH#23 现象 B：预警消除之后历史预警页面查不到该条目。
+- 顺手发现：`alarm_tracker.RecoverFromLifecycle` 重启恢复时与 `Handle61Predict` 的 tracker key 不一致，会引发"重启后已活跃 predict 当作新 Added 再发一次 open"的重发风暴。
+
+**根因**：
+1. `connect/cmd/storage-adapter/transform.go:parseTimeText` 用 `time.Parse` 解析无时区裸字符串（`"2026-05-28 16:28:46"`）→ Go 默认按 **UTC** 解读 → 入库 TIMESTAMPTZ 比真实时刻 +8h。`fact_event` 没事是因为 `nb67-event-writer.yaml` 的 bloblang 在拼 SQL 前显式补了 `+08:00`。
+2. `connect/cmd/ground-reporter/api_6_1.go:Handle61Predict` 对 `diff.Removed` 也 `buildRecord61` 并 POST 给 `cfg.FaultRecordURL`。
+3. GH#23 现象 B 是 GH#24 的次生症状：`status.repository.ts:getHistoricalWarnings` 的窗口判定 `start_time <= window_end`，当 `start_time` 多 8h 时，已消除（end_time 非 NULL）的行被时间窗排除（`end_time IS NULL` OR-branch 不再兜底）。
+4. `alarm_tracker.go:RecoverFromLifecycle` 用 `deviceID` 作 key，但 `Handle61Predict` 用 `"predict:" + deviceID` 作 key → 重建路径根本不命中。
+
+**修复方法**：
+- `connect/cmd/storage-adapter/transform.go`：抽出 `cnLoc = Asia/Shanghai`；`parseTimeText` 拆成"带时区 layout 走 `time.Parse`"+"裸 layout 走 `time.ParseInLocation(layout, text, cnLoc)`"，统一归一化为 UTC。
+- `connect/cmd/storage-adapter/transform_test.go`（新增）：5 个 case 覆盖裸字符串解析为 UTC 08:28 / 带 `+08:00` 仍为 UTC 08:28 / `Z` 不被改坏。
+- `connect/cmd/ground-reporter/api_6_1.go`：删掉 `for _, hit := range diff.Removed { records = append(...) }`，保留 `[PREDICT-REMOVED]` 日志，加注释说明业务规则。
+- `connect/cmd/ground-reporter/alarm_tracker.go`：`RecoverFromLifecycle` 入键加 `"predict:"` 前缀对齐 `Handle61Predict`。
+- 镜像：`ground-reporter v2.5.18 → v2.5.30`、`storage-adapter v2.1.2 → v2.5.30` 推 Harbor；同步 `/opt/1panel/docker/compose/{report,data}/docker-compose.yml`、`dist/docker-compose-{report,Data}.yml`、`dist/image-save.sh`、`dist/README.md`。
+- `dist/migration/RET-46-backfill-warning-lifecycle-tz.sql`（新增）：脏数据一次性回填脚本（三列各减 8 小时；`WHERE created_at < <部署 cutoff>` 限定，避免重复回退）。
+
+**测试验证**：
+- `go test ./connect/cmd/storage-adapter/...` ✓（含 5 个新增 timezone case）
+- `go test ./connect/cmd/ground-reporter/...` ✓
+- `go build ./connect/cmd/{storage-adapter,ground-reporter}/...` ✓
+- 镜像构建 + 推 Harbor ✓（ground-reporter:v2.5.30、storage-adapter:v2.5.30）
+- 端到端复测（注入触发/消除帧验证平台 mock 收报、查 DB 时间一致、重启 ground-reporter 不发 open）— **本机 Macda 栈 (`/data/MACDA2/`) 当前未部署**，需在真实生产机执行后回填 + 复测；步骤见结果评论。
+
+**经验总结**：
+1. Go 的 `time.Parse` 对无时区 layout 默认按 UTC 解读 —— **裸时间戳跨语言/跨配置必须显式带时区**（要么上游补 `+08:00`，要么解析时 `ParseInLocation`）。两条路径混用最容易留这类隐藏 bug。
+2. **同一类数据走多条写入路径时，时区处理必须每条路径都验证**：本次 `fact_event`（bloblang +08:00）正确，`warning_lifecycle`（Go parseTimeText）错。Phase 2/3 引入双轨时漏检了 Go 路径。
+3. **状态机的恢复路径要逐字段对齐工作路径的 key 规则**：`RecoverFromLifecycle` 用 `deviceID`、`Handle61Predict` 用 `"predict:"+deviceID`，类型层根本没机会发现 —— Go 拼字符串的 key 必须有"key builder"函数，禁止散落 `tracker.active[deviceID]` 字面量。
+4. **历史脏数据回填脚本必须能精确限定到"修复部署之前"**，否则重复跑会把已修复的行再回退；`created_at` 作为不可变审计列是天然的 cutoff 锚点。
 
 ### [2026-06-09 PM] RET-40 followup-3 — 历史报警页去重 + 故障统计去重
 

@@ -140,10 +140,15 @@ func (t *AlarmTracker) RecoverFromLifecycle(ctx context.Context, pool *pgxpool.P
 		if err := rows.Scan(&deviceID, &faultCode, &startTime); err != nil {
 			return fmt.Errorf("alarm tracker recover scan: %w", err)
 		}
-		existing, ok := t.active[deviceID]
+		// GitHub #23 / RET-46 修复（2026-06-12）：
+		// Handle61Predict 用 "predict:" + deviceID 作为 tracker key（见 api_6_1.go），
+		// 此处恢复时必须用相同前缀，否则重启后已活跃 predict 不会命中 tracker → 重新
+		// 触发 diff.Added → 给平台重发 open 报文（症状 D：重启风暴）。
+		key := "predict:" + deviceID
+		existing, ok := t.active[key]
 		if !ok {
 			existing = make(map[string]*activeAlarm)
-			t.active[deviceID] = existing
+			t.active[key] = existing
 		}
 		existing[faultCode] = &activeAlarm{
 			UUID:      newUUID(),
