@@ -58,6 +58,7 @@
 [2026-06-05] RET-40 followup - event-writer 脏时间戳日志噪音 - connect/config/nb67-event-writer.yaml
 [2026-06-09] RET-40/GH#21 followup-2 - 历史页重复 + 消除延迟 - BFF status.repository + nb67-event-builder.yaml
 [2026-06-09 PM] RET-40 followup-3 - 历史报警页去重 + 故障统计去重 - BFF status.repository (alarm 路径)
+[2026-06-16] RET-47 / GH#25 - 机组运行状态通风机/冷凝风机误显示停机 - web-nb67-web/RunState.vue
 
 
 ---
@@ -65,6 +66,32 @@
 ## 三、历史 Issue 处理记录
 
 > 最新记录在最前。每条记录包含：问题描述、根因、修复方法、测试验证、经验总结。
+
+### [2026-06-16] RET-47 / GH#25 — 首页"运行状态"通风机/冷凝风机误显示停机
+
+**问题描述**：
+- 后端推送 `CfbkEfU11:true, CfbkEfU21:true`（通风机运行），前端首页"运行状态"卡片却显示**停机**（红色）。
+- 冷凝风机同样问题。压缩机正常。
+
+**根因**：
+- `web-nb67-web/src/views/trainInfo/RunState.vue` 的 `findKeyInObj` 精确候选只生成 `EfU1` / `CfbkEfU1` 等，**缺少带"双数字后缀"的候选**（真实字段是 `CfbkEfU11`/`CfbkEfU12`，同机组下有两台风机）。
+- 精确候选 miss 后退化为"扁平化子串包含 + Object.keys 首匹配"的模糊匹配，结果被 `BocfltEfU11` 等告警/保护类字段截胡，把它的 0/false 当作通风机状态。
+- comp_u 之所以正常，是因为它单独走 `comp_u${unitIdx}${row.key.slice(-1)}` 分支拼成 `comp_u11`/`comp_u21`，精确命中。
+
+**修复方法**（仅改 `web-nb67-web/src/views/trainInfo/RunState.vue`）：
+1. `findKeyInObj` 模糊兜底：先选 `Cfbk*` / `cfbk_*` 前缀的字段，最后才回退到首匹配，避免被告警类字段截胡。
+2. 在 `isStatus` 分支为 `ef`/`cf` 单独构造候选集 `Cfbk${Head}U${unitIdx}{1,2}` + 对应 snake_case 形式。
+3. 按用户口径"**任一运行即运行**"：两台风机的值 `some(isRunVal)` 为 true 即显示运行。
+4. comp_u 分支保持不变。
+
+**测试验证**：
+- 本地 Node 脚本模拟数据（CfbkEfU11=true, CfbkEfU12=false → 运行；CfbkCfU11=false, CfbkCfU12=true → 运行）通过。
+- `npm run build` 通过（11.11s），无新增告警。
+
+**经验总结**：
+- 前端字段匹配的模糊兜底必须按字段语义优先（运行反馈走 `Cfbk` 前缀），不能依赖 `Object.keys` 隐含顺序。
+- "一行一类设备 → 一格一状态"的展示口径，当后端实际存在多个同类设备实例时，必须明确聚合规则（任一运行/全部运行/取首台），不要默认取第一个。
+- 新增同型号传感器/执行器（同机组下编号 1/2/…）时，检查所有走 `{key}_u${unitIdx}` 拼接的前端代码，是否需要扩展候选集。
 
 ### [2026-06-12] RET-46 / GH#23 #24 — warning_lifecycle 时区漂移 + 预警消除上报抑制 + 重启风暴修复
 

@@ -104,9 +104,13 @@ const getVal = (carIdx, pos, row) => {
         for (const k of possible) {
             if (carData[k] !== undefined) return k;
         }
-        // 模糊匹配：忽略下划线并转小写进行包含测试
+        // 模糊匹配：忽略下划线并转小写进行包含测试；优先选择 Cfbk* 前缀的运行反馈字段
         const flatBase = base.toLowerCase().replace(/_/g, '');
-        return Object.keys(carData).find(k => k.toLowerCase().replace(/_/g, '').includes(flatBase));
+        const keys = Object.keys(carData);
+        const matches = keys.filter(k => k.toLowerCase().replace(/_/g, '').includes(flatBase));
+        return matches.find(k => k.startsWith('Cfbk'))
+            || matches.find(k => k.toLowerCase().startsWith('cfbk_'))
+            || matches[0];
     };
 
     if (row.isGlobal) {
@@ -131,7 +135,30 @@ const getVal = (carIdx, pos, row) => {
         const displayVal = needsScale ? (Number(val) / 10).toFixed(1) : val
         return `${displayVal}${row.suffix}`
     } else if (row.isStatus) {
-        // 状态类：构造基础 Key
+        const isRunVal = (v) => v != null && (v == 1 || v === true || String(v).toLowerCase() === 'true')
+
+        // 通风机/冷凝风机：同机组下有两台风机（后缀 1/2），任一运行即显示"运行"
+        if (row.key === 'ef' || row.key === 'cf') {
+            const head = row.key === 'ef' ? 'Ef' : 'Cf'
+            const candidates = [
+                `Cfbk${head}U${unitIdx}1`,            // CfbkEfU11
+                `Cfbk${head}U${unitIdx}2`,            // CfbkEfU12
+                `cfbk_${row.key}_u${unitIdx}1`,       // cfbk_ef_u11
+                `cfbk_${row.key}_u${unitIdx}2`,       // cfbk_ef_u12
+                `CFBK_${row.key.toUpperCase()}_U${unitIdx}1`,
+                `CFBK_${row.key.toUpperCase()}_U${unitIdx}2`,
+            ]
+            const vals = candidates.map(k => carData[k]).filter(v => v !== undefined && v !== null)
+            if (vals.length === 0) {
+                const fallbackKey = findKeyInObj(`${row.key}_u${unitIdx}`)
+                const v = carData[fallbackKey]
+                if (v === undefined || v === null) return '-'
+                return isRunVal(v) ? '运行' : '停机'
+            }
+            return vals.some(isRunVal) ? '运行' : '停机'
+        }
+
+        // 压缩机：保留原有 comp_u11/comp_u21 拼装
         let baseKey = row.key.startsWith('comp_u')
             ? `comp_u${unitIdx}${row.key.slice(-1)}`
             : `${row.key}_u${unitIdx}`;
@@ -140,9 +167,7 @@ const getVal = (carIdx, pos, row) => {
         const val = carData[key];
 
         if (val === undefined || val === null) return '-'
-        // 允许数字 1, 布尔值 true, 字符串 "true" (忽略大小写)
-        const isRun = val == 1 || val === true || String(val).toLowerCase() === 'true';
-        return isRun ? '运行' : '停机'
+        return isRunVal(val) ? '运行' : '停机'
     } else {
         // 数值类：如新风阀、回风阀
         const key = findKeyInObj(`${row.key}_u${unitIdx}`);
