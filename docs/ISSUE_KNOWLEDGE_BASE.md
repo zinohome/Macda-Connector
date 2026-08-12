@@ -42,6 +42,7 @@
 
 > 快速检索用。格式：`[日期] #Issue编号 - 问题关键词 - 所属模块`
 
+[2026-08-12] #26 - 生产环境现场预警无法及时消除 / lifecycle sweeper 兜底 - storage-adapter/lifecycle_writer.go + main.go + config.go + docker-compose-Data.yml
 [2026-06-12] #23 #24 - warning_lifecycle 时间多 8h / 预警消除给平台发报文 / 历史预警查不到 - storage-adapter/transform.go + ground-reporter/api_6_1.go + alarm_tracker.go
 [2026-05-21] #1 - mock-platform未收到推送/ground-reporter镜像缺失 - ground-reporter/docker-compose
 [2026-05-21] #2 - 预警触发配置/历史预警描述/冷媒泄露两条件分设 - nb67_event_processor/BFF
@@ -66,6 +67,41 @@
 ## 三、历史 Issue 处理记录
 
 > 最新记录在最前。每条记录包含：问题描述、根因、修复方法、测试验证、经验总结。
+
+### [2026-08-12] #26 — 生产环境现场预警无法及时消除（lifecycle sweeper 兜底）
+
+**问题描述**：
+- 生产环境某条预警报出后，即使达到消除条件也不会及时关闭；必须等到**同一车厢再次触发新预警**，原先条目才被顺带更新 `end_time`。
+- 测试环境（`docker-compose-mock.yml` + 33ms 帧重放）功能表现正常。
+
+**根因**：
+`hvac.warning_lifecycle` 的 close 语义完全依赖 `nb67_event_processor.go` 的 `prevPredictHadHits` 状态机在 **"上一帧有命中、本帧清空"** 的边沿主动发一次 `hits=[]` 的过渡帧（详见 `dist/connect/config/nb67-event-builder.yaml` 2026-06-05 注释）。而这个过渡帧只在 `Handle()` 被下一条 signal-parsed 消息驱动时才能产出。
+
+- **mock 环境**：redpanda-connect `generate` 输入以 33ms 恒定间隔重放同一固定帧，等价于稳定 30 Hz 心跳，`Handle()` 一直被调用 → 状态一变化立刻有过渡帧 → close 帧秒级到达。
+- **生产环境**：真实车厢按 NB67 协议**事件/周期推送**，帧到达是稀疏且可能中断的。一旦车厢在满足消除条件后停发（工况恢复/车厢下线/RTC 抖动），`Handle()` 再也不被调用 → 过渡帧永远不产出 → `lifecycleCloseSQL` 从未执行 → `end_time` 永久为 NULL。
+
+**验证证据**（在生产 timescaledb 上执行的只读 SQL）：
+- 查询 `end_time IS NULL AND last_seen_time < now() - INTERVAL '2 minutes'` 返回 20 行，`silent_for` 从 2h37m 到 15h12m，`start_time` 最早到 2026-07-23（僵尸行挂了 20 天）。
+- 抓 `signal-predict` topic 最近 500 条：`"hits":[]` 出现次数 = **0**（过渡帧根本没被产出）。
+
+**修复方法**（最小侵入，只改 storage-adapter，不动 nb67_event_processor / 协议 / 前端）：
+- `connect/cmd/storage-adapter/lifecycle_writer.go`：新增 `lifecycleSweepSQL` 常量、`RunSweeper(ctx, interval, grace)` 后台循环、`sweepOnce(ctx, grace)` 单次执行、`SweepClosed` 返回结构、`applySweepClosed(closed)` 同步内存 active map。sweeper SQL 用 `UPDATE ... WHERE end_time IS NULL AND last_seen_time < now() - $1::interval RETURNING device_id, fault_code` 一次完成 "关闭 + 回收 close 列表"。
+- `connect/cmd/storage-adapter/config.go`：新增 `LifecycleSweeperInterval` / `LifecycleSweeperGrace`，通过环境变量 `LIFECYCLE_SWEEPER_INTERVAL_SEC` (默认 30) / `LIFECYCLE_SWEEPER_GRACE_SEC` (默认 120) 配置。
+- `connect/cmd/storage-adapter/main.go`：`Recover()` 之后 `go lifecycle.RunSweeper(ctx, cfg.LifecycleSweeperInterval, cfg.LifecycleSweeperGrace)`。
+- `dist/docker-compose-Data.yml`：`storage-adapter` 与 `lifecycle-writer` 两处镜像 tag `v2.5.30` → `v2.5.31`；`lifecycle-writer` 显式声明 `LIFECYCLE_SWEEPER_INTERVAL_SEC=30 / LIFECYCLE_SWEEPER_GRACE_SEC=120`。
+- **符合 DDL 意图**：`dist/init-db/08-migration-20260603.sql` 中 `last_seen_time` 列的 COMMENT 早已写明 "若连续 N 秒未刷新，可由清扫器兜底将 end_time = last_seen_time"——本次实现的就是这个预留清扫器，语义完全一致。
+
+**测试验证**：
+- 新增 3 个内存单测（`lifecycle_writer_test.go`）：`TestApplySweepClosed_RemovesFromMemory` / `TestApplySweepClosed_ThenNextFrame_TreatsAsOpen` / `TestApplySweepClosed_EmptyInput` / `TestApplySweepClosed_UnknownDevice`。
+- `go build ./...` + `go test ./...` 全绿。
+- 部署后 15 分钟验证：`SELECT count(*) FROM hvac.warning_lifecycle WHERE end_time IS NULL AND last_seen_time < now() - INTERVAL '5 minutes';` 期望 = 0。
+- 存量僵尸行一次性回填：`UPDATE hvac.warning_lifecycle SET end_time = last_seen_time WHERE end_time IS NULL AND last_seen_time < now() - INTERVAL '1 hour';`
+
+**经验总结**：
+- **事件驱动的状态机 close 一定要有 wall-clock 兜底**，不能 100% 依赖 "下一帧到达" 才推进 close 分支——真实设备事件流的稀疏性是隐藏杀手。
+- **mock 数据源不能只是"高频重放同一帧"**——mock 的 30 Hz 心跳天然把 "边沿检测" 变成了 tick，会掩盖任何依赖 "下一帧" 才生效的 bug。今后 mock 场景应至少覆盖一份 "稀疏 + 中断" 的对照数据。
+- DDL 的 COMMENT 里如果写了 "可由清扫器兜底"，务必检查代码里 sweeper 是否真的实现——本次 sweeper 从 2026-06-03 migration 08 落表时就已经预留了 `last_seen_time` 语义，但代码侧一直没实现，直到 issue #26 才补齐。
+- 关于时区遗留：`nb67_event_processor.go:287` 的 `time.Parse` 未走 `ParseInLocation` **不是 bug**——它只用于 `checkRule` 里的 `firstSeen` 相减，两侧偏差抵消。且当前所有 compose 显式 `RUNTIME=DEV`，走的是 RFC3339 分支，PRD 分支根本不会执行。**不用改**。
 
 ### [2026-06-16] RET-47 / GH#25 — 首页"运行状态"通风机/冷凝风机误显示停机
 

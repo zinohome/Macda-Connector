@@ -342,8 +342,8 @@ services:
 
   # Pipeline Stage 4 (Plan B): 使用 Go 语言原生的极致性能写入 (备用方案)
   storage-adapter:
-    # 手动构建: docker build -t harbor.naivehero.top:8443/macda2/storage-adapter:v2.5.30 .
-    image: harbor.naivehero.top:8443/macda2/storage-adapter:v2.5.30
+    # 手动构建: docker build -t harbor.naivehero.top:8443/macda2/storage-adapter:v2.5.31 .
+    image: harbor.naivehero.top:8443/macda2/storage-adapter:v2.5.31
     container_name: storage-adapter
     restart: unless-stopped
     environment:
@@ -365,7 +365,7 @@ services:
   # 与 connect-event-writer (Plan A) 并行运行, 不接管 fact_event 写入 (WRITE_FACT_EVENT=false)。
   # 启动时从 warning_lifecycle WHERE end_time IS NULL 拉活跃集合 (lifecycle.Recover), 重启不丢状态。
   lifecycle-writer:
-    image: harbor.naivehero.top:8443/macda2/storage-adapter:v2.5.30
+    image: harbor.naivehero.top:8443/macda2/storage-adapter:v2.5.31
     container_name: lifecycle-writer
     restart: unless-stopped
     environment:
@@ -376,6 +376,11 @@ services:
       - WRITE_FACT_EVENT=false
       - WRITE_FACT_RAW=false
       - LOG_LEVEL=INFO
+      # issue #26 兜底：后台清扫器 close 停摆超时的活跃预警。
+      # INTERVAL 太小会增加 DB 负载，太大会拉长 "预警消除延迟"；
+      # GRACE 必须显著大于生产车厢正常帧间隔的 P99，避免误关正在活跃的预警。
+      - LIFECYCLE_SWEEPER_INTERVAL_SEC=30
+      - LIFECYCLE_SWEEPER_GRACE_SEC=120
     depends_on:
       connect-event-builder:
         condition: service_healthy

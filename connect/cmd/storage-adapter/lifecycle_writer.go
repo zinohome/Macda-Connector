@@ -61,6 +61,19 @@ SELECT device_id, fault_code
   FROM hvac.warning_lifecycle
  WHERE end_time IS NULL;
 `
+
+	// lifecycleSweepSQL 由后台 sweeper 周期性执行，把 last_seen_time 停摆超过 grace 的活跃行
+	// 主动 close，end_time := last_seen_time（符合 DDL 08-20260603 中 last_seen_time 列的
+	// COMMENT 语义："若连续 N 秒未刷新，可由清扫器兜底将 end_time = last_seen_time"）。
+	// RETURNING 用于回收被关闭的 (device_id, fault_code) 以同步内存 active map，
+	// 避免下次同 code 帧到来时 diff 判成 touch 却在 DB 侧无匹配行。
+	lifecycleSweepSQL = `
+UPDATE hvac.warning_lifecycle
+   SET end_time = last_seen_time
+ WHERE end_time IS NULL
+   AND last_seen_time < now() - $1::interval
+RETURNING device_id, fault_code;
+`
 )
 
 // PredictHitMeta 是 lifecycle 关心的最小 hit 信息。
@@ -310,6 +323,94 @@ func inferUnitID(faultCode string) *int16 {
 		return nil
 	}
 	return &u
+}
+
+// SweepClosed 是 RunSweeper 一次扫描返回的被关闭条目，
+// 便于内存 active map 同步（也供单测断言 sweep 效果）。
+type SweepClosed struct {
+	DeviceID  string
+	FaultCode string
+}
+
+// RunSweeper 是一个阻塞式后台循环，按 interval 周期性调用 sweepOnce，
+// 直到 ctx 取消。用法：main.go 里 `go lifecycle.RunSweeper(ctx, ...)`。
+//
+// grace 是 "活跃行 last_seen_time 落后 wall clock 多久后视为需要兜底 close" 的阈值，
+// 必须显著大于生产车厢正常帧间隔的 P99，避免误关正在活跃的预警。
+//
+// 该 sweeper 是对 issue #26 根因的兜底修复：
+//   现有 close 语义完全依赖 nb67_event_processor 的 prevPredictHadHits 状态机
+//   在 "上一帧有命中、本帧清空" 的边沿主动发一次 hits=[] 过渡帧。生产上真实车厢
+//   停发 / 断线 / 车厢下线时，这条过渡帧永远不产生 → warning_lifecycle 里
+//   end_time 永久为 NULL → 前端一直显示 "活跃预警" 直到同车厢下一次触发。
+//   sweeper 打破这一硬依赖：只要 last_seen_time 停摆足够久，即使 close 帧从未到达，
+//   也在 grace 秒后把 end_time 补齐。
+func (w *LifecycleWriter) RunSweeper(ctx context.Context, interval, grace time.Duration) {
+	if interval <= 0 || grace <= 0 {
+		log.Printf("[WARN] lifecycle sweeper disabled (interval=%v grace=%v)", interval, grace)
+		return
+	}
+	log.Printf("[INFO] lifecycle sweeper started: interval=%v grace=%v", interval, grace)
+	tick := time.NewTicker(interval)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("[INFO] lifecycle sweeper stopped")
+			return
+		case <-tick.C:
+			closed, err := w.sweepOnce(ctx, grace)
+			if err != nil {
+				log.Printf("[WARN] lifecycle sweep: %v", err)
+				continue
+			}
+			if len(closed) > 0 {
+				w.applySweepClosed(closed)
+				log.Printf("[INFO] lifecycle sweep: closed %d stale warnings (grace=%v)", len(closed), grace)
+			}
+		}
+	}
+}
+
+// sweepOnce 执行一次 UPDATE ... RETURNING 并返回被 close 的条目。
+// 分离出来便于单测（RunSweeper 循环侧不便直接测）。
+func (w *LifecycleWriter) sweepOnce(ctx context.Context, grace time.Duration) ([]SweepClosed, error) {
+	// pgx 的 $N::interval 需要字符串形式；用秒粒度避免 duration.String() 的 "1h30m0s"
+	// 之类 postgres 不认识的写法。
+	graceStr := fmt.Sprintf("%d seconds", int(grace.Seconds()))
+	rows, err := w.pool.Query(ctx, lifecycleSweepSQL, graceStr)
+	if err != nil {
+		return nil, fmt.Errorf("sweep query: %w", err)
+	}
+	defer rows.Close()
+	var closed []SweepClosed
+	for rows.Next() {
+		var c SweepClosed
+		if err := rows.Scan(&c.DeviceID, &c.FaultCode); err != nil {
+			return nil, fmt.Errorf("sweep scan: %w", err)
+		}
+		closed = append(closed, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sweep iter: %w", err)
+	}
+	return closed, nil
+}
+
+// applySweepClosed 把 sweeper 关闭的 (device, code) 从内存 active map 里删掉，
+// 与 DB 保持一致；否则同一 code 下一帧到来时会被判成 touch，UPDATE 无匹配行、
+// 无害但会持续 log noise。
+func (w *LifecycleWriter) applySweepClosed(closed []SweepClosed) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, c := range closed {
+		if set, ok := w.active[c.DeviceID]; ok {
+			delete(set, c.FaultCode)
+			if len(set) == 0 {
+				delete(w.active, c.DeviceID)
+			}
+		}
+	}
 }
 
 // sortFramesByTime 按 EventTimeText 字符串升序排序（RFC3339 字典序 == 时间序）。

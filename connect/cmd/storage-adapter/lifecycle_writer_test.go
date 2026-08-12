@@ -187,3 +187,83 @@ func (w *LifecycleWriter) applyMemDelta(deviceID string, toOpen []string, toClos
 		delete(prev, c)
 	}
 }
+
+// TestApplySweepClosed_RemovesFromMemory 验证 sweeper 关闭 DB 行后，
+// 内存 active map 里对应 (device, code) 也被同步删除；
+// 否则同一 code 下一帧到来时会被 diff 判为 touch，UPDATE 无匹配行，日志刷屏。
+// 这是 issue #26 sweeper 兜底方案的内存一致性保障。
+func TestApplySweepClosed_RemovesFromMemory(t *testing.T) {
+	w := &LifecycleWriter{active: map[string]map[string]struct{}{}}
+	// 预置：DEV_A 活跃 HVAC112 + HVAC209，DEV_B 活跃 HVAC301
+	w.applyMemDelta("DEV_A", []string{"HVAC112", "HVAC209"}, nil)
+	w.applyMemDelta("DEV_B", []string{"HVAC301"}, nil)
+
+	// 模拟 sweeper 从 DB RETURNING 回来的关闭列表：
+	//   - DEV_A/HVAC112 被 sweeper close
+	//   - DEV_B/HVAC301 被 sweeper close（DEV_B 应彻底从 map 中消失）
+	w.applySweepClosed([]SweepClosed{
+		{DeviceID: "DEV_A", FaultCode: "HVAC112"},
+		{DeviceID: "DEV_B", FaultCode: "HVAC301"},
+	})
+
+	// DEV_A 剩 HVAC209
+	if _, ok := w.active["DEV_A"]["HVAC112"]; ok {
+		t.Errorf("DEV_A/HVAC112 应已从 active map 移除")
+	}
+	if _, ok := w.active["DEV_A"]["HVAC209"]; !ok {
+		t.Errorf("DEV_A/HVAC209 未被 sweeper 关闭，应仍在 active map 中")
+	}
+
+	// DEV_B 只有一条 code，全部关掉后 map 里 DEV_B 键应被清理
+	if _, ok := w.active["DEV_B"]; ok {
+		t.Errorf("DEV_B 的所有 code 都被 close，DEV_B 键应从 active map 删除，got %v", w.active["DEV_B"])
+	}
+}
+
+// TestApplySweepClosed_ThenNextFrame_TreatsAsOpen 验证 sweeper 关闭后，
+// 同 device 同 code 的新一帧应被 diff 判成 OPEN（等价于全新预警），
+// 而不是被错判成 TOUCH 打空——这是 sweeper 与 diff 状态机协同的正确性要求。
+func TestApplySweepClosed_ThenNextFrame_TreatsAsOpen(t *testing.T) {
+	w := &LifecycleWriter{active: map[string]map[string]struct{}{}}
+	// 帧 1：DEV_C 命中 HVAC112 → open
+	toOpen, _, _ := w.computeDiff("DEV_C", []string{"HVAC112"})
+	if len(toOpen) != 1 {
+		t.Fatalf("frame1 open=%d, want 1", len(toOpen))
+	}
+	w.applyMemDelta("DEV_C", toOpen, nil)
+
+	// sweeper 兜底 close 掉 DEV_C/HVAC112
+	w.applySweepClosed([]SweepClosed{{DeviceID: "DEV_C", FaultCode: "HVAC112"}})
+
+	// 帧 2：DEV_C 再次命中 HVAC112 —— 应视为全新 open，而非 touch
+	toOpen, toClose, toTouch := w.computeDiff("DEV_C", []string{"HVAC112"})
+	if len(toOpen) != 1 {
+		t.Errorf("post-sweep frame open=%d, want 1 (应视为全新预警)", len(toOpen))
+	}
+	if len(toClose) != 0 || len(toTouch) != 0 {
+		t.Errorf("post-sweep frame close/touch = %d/%d, want 0/0", len(toClose), len(toTouch))
+	}
+}
+
+// TestApplySweepClosed_EmptyInput 保证空输入是 no-op、不 panic。
+func TestApplySweepClosed_EmptyInput(t *testing.T) {
+	w := &LifecycleWriter{active: map[string]map[string]struct{}{}}
+	w.applyMemDelta("DEV_D", []string{"HVAC112"}, nil)
+	w.applySweepClosed(nil)
+	w.applySweepClosed([]SweepClosed{})
+	if _, ok := w.active["DEV_D"]["HVAC112"]; !ok {
+		t.Errorf("空 sweep 输入不应影响任何 active 状态")
+	}
+}
+
+// TestApplySweepClosed_UnknownDevice 保证 sweeper 关闭的行如果内存里没有对应记录（例如
+// 进程重启后 Recover 之前的窗口），不 panic、不做无意义操作。
+func TestApplySweepClosed_UnknownDevice(t *testing.T) {
+	w := &LifecycleWriter{active: map[string]map[string]struct{}{}}
+	w.applySweepClosed([]SweepClosed{
+		{DeviceID: "GHOST_DEV", FaultCode: "HVAC999"},
+	})
+	if len(w.active) != 0 {
+		t.Errorf("未知 device 的 sweep close 不应产生任何 active map 条目, got %v", w.active)
+	}
+}
